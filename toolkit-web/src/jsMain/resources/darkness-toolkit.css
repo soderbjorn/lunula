@@ -1,0 +1,5350 @@
+/* darkness-toolkit.css
+ * Shipped stylesheet for the darkness-toolkit web components.
+ * Inject via injectDarknessToolkitStyles() at app boot. */
+
+/* ── Viewport sizing chain ───────────────────────────────────
+   The AppFrame uses height: 100% and relies on its host element
+   resolving to a real pixel height. Stamp the chain here so apps
+   that ship a plain <body><div id="app"></div></body> shell don't
+   have to re-discover that html/body need height + the host needs
+   100vh — without this the bottom bar and main pane would size to
+   intrinsic content height (a common regression after refactors).
+   Apps that need a different sizing model can override these
+   selectors after injecting the stylesheet. */
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+}
+
+/* ── App frame (top-level shell) ─────────────────────────────
+   Composed by `renderAppFrame()` in shell/AppFrame.kt. Establishes a
+   vertical flex column with the top-bar row on top and a body row that
+   fills the remaining height; the body is itself a horizontal flex row
+   with optional sidebars hugging the main content. Min-width/min-height: 0
+   on the growing children lets inner panes' width:100%/height:100% resolve
+   correctly on first paint. */
+.dt-app-frame {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--t-surface-base, #1e1e1e);
+    color: var(--t-text-primary, #e6e6e6);
+    /* Chrome font cascades to every shell element (topbar, tabs, sidebar,
+       pane headers, bottom bar). Pane content opts back out via the rule on
+       `.dt-pane-content` so host editors (notegrow's MainScreen, termtastic's
+       xterm) stay on whatever font they choose. Hosts that don't load a
+       global stylesheet still get a sane default everywhere in the chrome. */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+        Ubuntu, sans-serif;
+    font-size: 13px;
+
+    /* ── Layout tokens (--dt-*) ────────────────────────────────
+       Apps may override these at `.dt-app-frame` scope to retune chrome
+       density. Token values are FUNCTIONAL — never aesthetic — so a
+       new app should rarely need to change any of them; the default
+       set encodes the toolkit's single agreed-upon look. */
+    --dt-frame-pad: 8px;                /* .dt-app-frame-main padding & gap */
+    --dt-frame-radius: 6px;             /* .dt-pane border-radius */
+    --dt-topbar-h: 48px;                /* .dt-topbar min-height */
+    --dt-topbar-pad-x: 20px;            /* .dt-topbar horizontal padding */
+    --dt-topbar-pad-y: 8px;             /* .dt-topbar vertical padding (top & bottom) */
+    --dt-tab-radius: 6px;               /* .dt-tab border-radius */
+    --dt-tab-pad: 6px 14px;             /* .dt-tab padding */
+    /* `.dt-tab` font-size is inherited from `.dt-tabbar`, which reads
+       `--dt-font-tabbar-size` (falling through to
+       `--dt-font-sidebar-size`). No tab-specific size token. */
+    --dt-tab-gap: 14px;                 /* .dt-tabbar-strip gap */
+    --dt-pane-header-pad: 9px 8px 9px 10px; /* .dt-pane-header padding */
+    --dt-pane-title-size: 11px;         /* .dt-pane-title font-size */
+    /* Per-pane inset around every `.dt-pane-floating`. Each pane reserves
+       this much space on all four sides, so two adjacent panes end up
+       with `2 * --dt-pane-gutter` between them and an edge pane sits this
+       far from the content-area boundary. Replaces the previous
+       `.dt-pane-root` inner padding, which only spaced the outer edges. */
+    --dt-pane-gutter: 4px;              /* .dt-pane-floating inset on all sides */
+    --dt-sidebar-row-pad: 4px 12px 4px 22px; /* .dt-sidebar-row padding */
+}
+.dt-app-frame-topbar {
+    flex: 0 0 auto;
+}
+.dt-app-frame-body {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: row;
+    min-height: 0;
+}
+.dt-app-frame-sidebar-left,
+.dt-app-frame-sidebar-right {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+.dt-app-frame-main {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    /* Same tone as topbar/bottombar so the 4px frame around the main
+       pane reads as one continuous chrome band wrapping the topbar,
+       sides, and bottombar — rather than a third "recessed body" tone. */
+    background: var(--t-surface-base, #1e1e1e);
+    padding: var(--dt-frame-pad, 8px);
+    gap: var(--dt-frame-pad, 8px);
+}
+.dt-app-frame-bottombar {
+    flex: 0 0 auto;
+    /* Span the full frame width regardless of which sidebars are open in
+       the body row above. `position: relative` + a non-auto z-index keeps
+       the bar above any z-indexed body content (floating panes, sidebar
+       slide-in transitions). */
+    width: 100%;
+    position: relative;
+    z-index: 5;
+}
+
+/* ── Bottom status bar ───────────────────────────────────── */
+.dt-bottombar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    /* Tightened vertical padding (was 6px) so the bar reads as a slim
+       status row at its 22px min-height — the manual-resize feature
+       can still grow it via the host's [BottomBarSpec.maxHeightPx]. */
+    padding: 2px 16px;
+    min-height: 22px;
+    /* Match the topbar's chrome surface exactly — same fallback chain as
+       .dt-topbar above so the bottom row reads as the same chrome
+       material as the tab strip, not a separate footer. */
+    background: var(--t-surface-base, var(--t-chrome-titlebar, #1e1e1e));
+    color: var(--t-chrome-titleText, var(--t-text-secondary, #b8b8b8));
+    /* No top border — chrome surfaces themselves provide enough
+       delineation; the hairline reads as a "sizing line" against the
+       flat chrome and adds visual noise. */
+    border-top: 1px solid transparent;
+    /* Cover the whole frame width — defensive in case .dt-app-frame-bottombar
+       is sized to its content elsewhere (e.g. a host that re-mounts the
+       footer outside the frame). */
+    width: 100%;
+    box-sizing: border-box;
+    font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+.dt-bottombar-leading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dt-bottombar-trailing {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+/* ── Top bar ───────────────────────────────────────────────── */
+/* Ported from termtastic .app-header — vertical padding lets tabs sit
+   slightly above the chrome edge so their `margin-bottom: -1px` overlap
+   reads as a connected tab/content seam. */
+/* Chrome font stack — explicit on `.dt-topbar` so the topbar/tabs render
+   in the toolkit's UI font even when the host body has set a monospace
+   font globally (notegrow's editor needs monospace; the topbar should
+   not inherit it). */
+.dt-topbar {
+    display: flex;
+    align-items: stretch;
+    gap: 16px;
+    /* 20px horizontal breathing room; symmetric 8px top + bottom padding
+       so the centered tab pills get equal air above and below the chrome
+       edge. Vertical: 48px chrome row — bumped up from 40px after the
+       40px row read as too tight around the pill tabs. The drag gesture
+       (BarController) can still grow/shrink past this when the host's
+       [TopBarSpec.maxHeightPx] allows. */
+    padding: var(--dt-topbar-pad-y, 8px) var(--dt-topbar-pad-x, 20px);
+    min-height: var(--dt-topbar-h, 48px);
+    /* Use `--t-surface-base` (the darkest surface in the palette) so the
+       chrome reads as a deep frame around the lighter pane chrome below.
+       Falls back to `--t-chrome-titlebar` for themes that haven't set the
+       surface scale, then to a neutral dark. */
+    background: var(--t-surface-base, var(--t-chrome-titlebar, #161616));
+    color: var(--t-chrome-titleText, #e6e6e6);
+    /* No bottom border + no drop shadow — chrome surfaces themselves
+       delineate the topbar from the body adequately, and the hairline
+       reads as a "sizing line" against the flat chrome below. */
+    border-bottom: 1px solid transparent;
+    box-shadow: none;
+    flex-shrink: 0;
+    z-index: 10;
+    position: relative;
+    font-family: var(--dt-font-sidebar, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif);
+    font-size: var(--dt-font-sidebar-size, inherit);
+}
+.dt-topbar-leading {
+    display: flex;
+    align-items: center;
+    /* Pin the leading cluster (sidebar toggle) to the topbar's content-top
+       so it stays aligned with row 1 of the tabs and the trailing icons
+       when the tab strip wraps onto multiple rows. Without this,
+       `.dt-topbar`'s `align-items: stretch` made it full-height and the
+       inner `align-items: center` floated the toggle to the vertical
+       middle of the now-taller topbar. */
+    align-self: flex-start;
+}
+
+/* ── Native traffic-light reservation (Electron hiddenInset, macOS) ──
+   When the host runs as an Electron BrowserWindow on macOS with
+   `titleBarStyle: "hiddenInset"` (a "custom titlebar"), the OS still
+   floats the red/yellow/green window-control buttons over the upper-
+   left corner of the web content. Without compensation, the topbar's
+   leading content (sidebar toggle, first tab) sits underneath them and
+   becomes unclickable.
+
+   The toolkit reserves ~80 px of leading padding when the host opts in
+   by setting BOTH body classes:
+     * `dt-electron-mac`     — set by autoApplyElectronMacBodyClass()
+     * `dt-custom-titlebar`  — set by the host app whenever its window
+                               is currently using `hiddenInset`
+   Gating on both keeps non-mac Electron (window controls on the right)
+   and the default macOS chrome (title bar above the web content) from
+   getting unwanted whitespace.
+
+   The reservation is *suppressed* while the third class is present:
+     * `dt-mac-fullscreen`   — set by the host app via
+                               setDtMacFullscreenBodyClass(true) whenever
+                               its window is in macOS native fullscreen
+   macOS hides the traffic-light cluster entirely in native fullscreen,
+   so the 80 px would render as dead whitespace and the leading content
+   would be visibly off-center. The `:not(.dt-mac-fullscreen)` clause
+   drops the rule for the duration of the fullscreen state. Hosts that
+   never wire the fullscreen helper simply never set the class, and the
+   rule keeps its pre-fullscreen-aware behaviour. */
+body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
+    padding-left: 80px;
+}
+
+/* ── Window drag region (Electron frameless / custom titlebar) ──
+   With the native frame hidden (`titleBarStyle: "hiddenInset"` or
+   `frame: false`), the OS no longer provides a draggable title bar.
+   The web content has to volunteer one via `-webkit-app-region: drag`
+   or the user can't move the window at all. Mark the topbar as the
+   drag region; interactive children (buttons, inputs, `.dt-tab` —
+   which is a role="tab" div, not a <button>) opt back out with
+   `no-drag` so clicks still register. Wrapper containers stay drag,
+   so empty space inside the tab strip and around icon buttons is a
+   usable drag handle.
+
+   Applied unconditionally because `-webkit-app-region` is a no-op in
+   a plain browser and harmless when an Electron host uses the native
+   frame (the OS title bar still works; the topbar just becomes an
+   additional drag handle). */
+.dt-topbar {
+    -webkit-app-region: drag;
+    app-region: drag;
+}
+.dt-topbar button,
+.dt-topbar input,
+.dt-topbar select,
+.dt-topbar textarea,
+.dt-topbar a,
+.dt-topbar [role="button"],
+.dt-topbar .dt-tab {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+}
+.dt-topbar-tabstrip {
+    display: flex;
+    /* Top-align the tab bar so the first row stays anchored to the
+       topbar's content-top when the strip wraps onto multiple rows.
+       Earlier `align-items: center` floated the whole tabbar (and with it
+       row 1) toward the middle of the now-taller topbar, leaving the
+       trailing icon row visually adrift between rows 1 and 2. With
+       flex-start, row 1 sits flush against the topbar's padding-top,
+       matching the trailing icons (which now use `align-self: flex-start`
+       for the same reason). Single-row case is unaffected — the strip is
+       short and just sits at the 8px topbar padding-top either way. */
+    align-items: flex-start;
+    gap: 4px;
+    flex-grow: 1;
+    min-width: 0;
+}
+.dt-topbar-tab {
+    padding: 6px 12px;
+    background: transparent;
+    color: var(--t-text-primary, #e6e6e6);
+    border: 0;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+}
+.dt-topbar-tab.dt-selected {
+    background: var(--t-surface-raised, rgba(255, 255, 255, 0.06));
+}
+.dt-topbar-trailing {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    /* Don't stretch to fill the topbar's height — shrink to icon-button
+       height and pin to the top of the topbar's content area so the icon
+       row stays anchored to row 1 of the tabs when the tab strip wraps.
+       Without this, `.dt-topbar`'s `align-items: stretch` made trailing
+       full height, and the inner `align-items: center` floated the icons
+       to the vertical middle of the now-taller topbar — visibly off the
+       first tab row. */
+    align-self: flex-start;
+}
+
+/* Generic topbar icon button — used by the toolkit's
+   `buildTopbarIconButton` factory and any app-supplied trailing button
+   that wants to match the toolkit's chrome. */
+.dt-topbar-icon-button {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: var(--t-text-secondary, #b8b8b8);
+    cursor: pointer;
+    /* Centred 30×30 hit area so every icon (16-unit OR 24-unit viewbox)
+       sits at the same baseline as the tab strip. Matches termtastic's
+       `.header-actions > .icon-button` 30×30 spec verbatim so chrome rows
+       line up vertically across the family. */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border-radius: 4px;
+    line-height: 0;
+    transition: background 0.12s, color 0.12s;
+}
+.dt-topbar-icon-button > svg {
+    /* Force every icon SVG to render at 16×16 regardless of its declared
+       viewBox dimensions, so the optical size matches across the row. */
+    width: 16px;
+    height: 16px;
+    display: block;
+}
+.dt-topbar-icon-button:hover {
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.08));
+    color: var(--t-text-primary, #e6e6e6);
+}
+/* Active state — corresponding pane is currently open. Earlier attempts
+   used `color: --t-accent-primary` (sometimes plus `bg: accent-primarySoft`),
+   but on light themes whose tabs-section accent lands near the cream/white
+   surface, the icon stroke became invisible against the topbar.
+   Bulletproof fix: paint a SOLID accent chip and draw the icon in
+   `accent-onPrimary`. The resolver guarantees `accent.onPrimary` is the
+   scheme's bg (which contrasts with fg-derived `accent.primary` by
+   construction), so the icon stroke always reads. The active state now
+   visually says "selected pill" regardless of theme. */
+.dt-topbar-icon-button.dt-active {
+    color: var(--t-accent-onPrimary, var(--t-surface-base, #1e1e1e));
+    background: var(--t-accent-primary, var(--t-text-primary, #e6e6e6));
+    box-shadow: none;
+}
+.dt-topbar-icon-button.dt-active:hover {
+    color: var(--t-accent-onPrimary, var(--t-surface-base, #1e1e1e));
+    background: var(--t-accent-primary, var(--t-text-primary, #e6e6e6));
+    filter: brightness(1.08);
+}
+
+/* ── Tab bar ──────────────────────────────────────────────── */
+/* Standalone tab strip primitive used inside .dt-topbar-tabstrip
+   (or anywhere else in the app frame). Owns multi-row wrapping (when
+   more tabs are present than fit on one row), drag/drop indicators,
+   close/add affordances, and inline rename. */
+.dt-tabbar {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    /* Falls through to the sidebar font when the user hasn't picked a
+       tabbar-specific override (Settings sidebar leaves the var unset
+       in that case). */
+    font-family: var(--dt-font-tabbar, var(--dt-font-sidebar, inherit));
+    /* Default tab size: 14px, matching the toolkit's chrome look. The
+       picker fallback chain prefers a tabbar-specific size, then the
+       sidebar size (so a single "Sidebar size" pick scales tabs too),
+       then the literal default. Children (`.dt-tab`) inherit this so
+       the "Tab bar size" picker takes effect end-to-end. */
+    font-size: var(--dt-font-tabbar-size, var(--dt-font-sidebar-size, 14px));
+}
+/* Multi-line tab strip: when more tabs are present than fit on one row,
+   wrap to additional rows instead of scrolling horizontally. `flex: 1 1 auto`
+   so the strip takes all width the parent grants it before wrapping — without
+   this, the intrinsic single-line width keeps it narrow and tabs wrap too
+   eagerly. Column gap matches the legacy `--dt-tab-gap`; row gap is tighter
+   so stacked rows read as one zone rather than separate strips. */
+.dt-tabbar-strip {
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    /* Stack wrapped rows from the top of the strip instead of distributing
+       them across its full height. Combined with the parent `.dt-topbar-tabstrip`
+       using `align-items: flex-start`, row 1 sits flush with the topbar's
+       content-top and aligns with the trailing icon row. */
+    align-content: flex-start;
+    column-gap: var(--dt-tab-gap, 14px);
+    row-gap: 4px;
+    min-width: 0;
+}
+/* Tab styling: fully-rounded pills (no folder-shape "merge into content"
+   trick — the topbar isn't visually connected to a content surface here
+   so the seam wouldn't read as a seam anyway). Inactive uses a raised
+   surface tone + subtle border; active flips to accent text + accent
+   ring (see `.dt-tab.dt-selected`). */
+.dt-tab {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: var(--dt-tab-pad, 6px 14px);
+    background: var(--t-surface-raised, rgba(255, 255, 255, 0.06));
+    color: var(--t-text-secondary, #b8b8b8);
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.10));
+    border-radius: var(--dt-tab-radius, 6px);
+    cursor: pointer;
+    font-family: inherit;
+    /* font-size inherits from `.dt-tabbar`, which reads
+       `--dt-font-tabbar-size` (with fall-through to
+       `--dt-font-sidebar-size`) — set by the Settings panel
+       "Tab bar size" / "Sidebar size" pickers. */
+    font-weight: 500;
+    user-select: none;
+    white-space: nowrap;
+    /* Don't shrink — overflowing tabs wrap to a new row instead. */
+    flex-shrink: 0;
+    max-width: 220px;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.dt-tab:hover {
+    color: var(--t-text-primary, #e6e6e6);
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.10));
+}
+/* The active tab is a fully-closed rounded pill outlined in the accent
+   colour on all four sides (termtastic parity). Unlike inactive tabs
+   (which use rounded TOP corners + `margin-bottom: -1px` to merge into
+   the content area), the active tab cancels that negative margin and
+   rounds all corners so the bottom of the ring is visible. The inset
+   box-shadow thickens the ring to ~2px without changing border-width
+   (which would shift adjacent inactive tabs sideways). */
+.dt-tab.dt-selected {
+    /* The accent shows up as the ring (border + inset box-shadow) only;
+       the label tracks the host's main body text colour so the active
+       tab reads at the same hue as the content the tab is showing
+       (notegrow's editor body, the demo's pane label, etc.) rather
+       than at a brighter chrome-titleText shade that would tint the
+       selection. `--t-terminal-fg` is the body token notegrow's editor
+       and the toolkit demo's pane content both use; it falls back
+       through `--t-text-primary` for hosts that don't define it. Same
+       active-treatment rule applies to `.dt-sidebar-row.dt-active`
+       and `.dt-sidebar-section.active-tab`'s header. */
+    background: var(--t-surface-sunken, var(--t-surface-base, #161616));
+    color: var(--t-terminal-fg, var(--t-text-primary, #e6e6e6));
+    border: 1px solid var(--t-active-accent, var(--t-accent-primary, #ff8a3d));
+    border-radius: var(--dt-tab-radius, 6px);
+    margin-bottom: 0;
+    box-shadow: inset 0 0 0 1px var(--t-active-accent, var(--t-accent-primary, #ff8a3d));
+    font-weight: 700;
+    z-index: 1;
+}
+
+/* ── Tab-bar overflow `⋮` menu (TabBarOverflowMenu.kt) ────── */
+/* Ported from termtastic .tab-bar-menu*. The button lives inline in the
+   bar; the dropdown list is mounted on document.body so the bar's
+   horizontal scroll doesn't clip it. */
+.dt-tabbar-menu {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    /* Top-align the `⋮` button so it tracks the first row of tabs when the
+       strip wraps. Previously `flex-end` pinned it to the last row,
+       leaving it visually adrift from the trailing icon cluster. */
+    align-self: flex-start;
+    flex-shrink: 0;
+    margin: 0 0 -1px 4px;
+}
+.dt-tabbar-menu-button {
+    appearance: none;
+    background: transparent;
+    border: none;
+    color: var(--t-text-secondary, #b8b8b8);
+    font: inherit;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 10px;
+    border-radius: 6px 6px 0 0;
+    letter-spacing: 1px;
+    transition: color 120ms ease-in-out, background-color 120ms ease-in-out;
+}
+.dt-tabbar-menu-button:hover,
+.dt-tabbar-menu.dt-open .dt-tabbar-menu-button {
+    color: var(--t-text-primary, #e6e6e6);
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.10));
+}
+.dt-tabbar-menu-list {
+    display: none;
+    /* Fixed-position so the bar's overflow-x:auto doesn't clip; JS places
+       it at the button's bottom-right rect on open. */
+    position: fixed;
+    top: 0;
+    left: 0;
+    min-width: 200px;
+    background: var(--t-surface-base, #252526);
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.18));
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    padding: 4px;
+    z-index: 1000;
+    color: var(--t-text-primary, #e6e6e6);
+    /* The menu list is mounted on document.body (not inside .dt-app-frame)
+       so `font-family: inherit` would resolve to the host's body font, which
+       can be missing entirely. Spell the chrome font out so the menu always
+       renders in the toolkit's UI font. */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+        Ubuntu, sans-serif;
+    font-size: 13px;
+}
+.dt-tabbar-menu-list.dt-open {
+    display: block;
+}
+.dt-tabbar-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--t-text-primary, #e6e6e6);
+    cursor: pointer;
+}
+/* Fixed-width icon column so labels in the menu line up vertically even
+   when some rows have icons and others don't (the empty span still
+   reserves the slot). 14×14 matches the inline SVG sizes shipped by
+   `TabBarOverflowMenu.kt`. */
+.dt-tabbar-menu-item-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    color: var(--t-text-secondary, #b8b8b8);
+}
+.dt-tabbar-menu-item-icon svg {
+    width: 14px;
+    height: 14px;
+    display: block;
+}
+.dt-tabbar-menu-item-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dt-tabbar-menu-item:hover {
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.10));
+}
+.dt-tabbar-menu-item:hover .dt-tabbar-menu-item-icon {
+    color: var(--t-text-primary, #e6e6e6);
+}
+.dt-tabbar-menu-separator {
+    height: 1px;
+    background: var(--t-border-subtle, rgba(255, 255, 255, 0.10));
+    margin: 4px 2px;
+}
+.dt-tabbar-menu-heading {
+    padding: 4px 10px 2px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--t-text-secondary, #b8b8b8);
+    user-select: none;
+    pointer-events: none;
+}
+.dt-tabbar-menu-item.dt-active {
+    color: var(--t-accent-primary, #ff8a3d);
+    font-weight: 700;
+    box-shadow: inset 0 0 0 2px var(--t-accent-primary, #ff8a3d);
+}
+
+/* ── Layout-preset preview-tile dropdown ─────────────────────
+   Anchored under the topbar's "Layout" button by JS in
+   TopBarActions.kt#openLayoutPresetGrid. 3-column grid of mini SVG
+   diagrams instead of text rows — termtastic-style. Each tile renders
+   as many boxes as the active tab has panes; slot 0 (the active pane's
+   destination) is painted with the accent so the user can see at a
+   glance which slot their focused pane lands in. */
+.dt-layout-preset-grid {
+    position: fixed;
+    z-index: 1000;
+    display: grid;
+    grid-template-columns: repeat(3, min-content);
+    gap: 4px;
+    padding: 6px;
+    background: var(--t-surface-base, #252526);
+    /* Stronger rectangular border so the popover separates from the
+       topbar. The previous 1px subtle border blended into the chrome on
+       themes whose surface colour was close to the topbar's background;
+       a definite outline on top of the box-shadow makes the popover
+       read as its own surface regardless of theme. */
+    border: 1px solid var(--t-border-strong, var(--t-border-prominent, rgba(255, 255, 255, 0.45)));
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    /* Termtastic's #layout-menu max-* clamps so the full 21-tile palette
+       still fits on small viewports without spilling off-screen. */
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+}
+.dt-layout-preset-tile {
+    appearance: none;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--t-text-secondary, #b8b8b8);
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    line-height: 0;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.dt-layout-preset-tile:hover {
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.08));
+    border-color: var(--t-border-subtle, rgba(255, 255, 255, 0.20));
+    color: var(--t-text-primary, #e6e6e6);
+}
+/* Active preset — the layout currently driving this tab's geometry.
+   Painted with the accent ring (matches the sidebar row's dt-active
+   treatment) so the user can see at a glance "this one is on" and
+   that clicking it again will toggle it off. The aria-pressed="true"
+   attribute on the tile carries the same meaning for screen readers. */
+.dt-layout-preset-tile.is-active {
+    border-color: var(--t-active-accent, var(--t-accent-primary, #ff8a3d));
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.06));
+    box-shadow: inset 0 0 0 1px var(--t-active-accent, var(--t-accent-primary, #ff8a3d));
+    color: var(--t-text-primary, #e6e6e6);
+}
+.dt-layout-preset-tile.is-active:hover {
+    /* Stronger tint on hover — invites the toggle-off click without
+       losing the accent ring. */
+    background: var(--t-surface-overlay-strong, rgba(255, 255, 255, 0.12));
+}
+.dt-layout-preset-tile svg {
+    display: block;
+}
+.dt-layout-preview {
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 3px;
+}
+.dt-layout-preview-primary {
+    fill: var(--t-accent-primary, var(--termtastic-orange, #f4b869));
+    stroke: none;
+}
+.dt-layout-preview-secondary {
+    fill: var(--t-accent-primary, var(--termtastic-orange, #f4b869));
+    opacity: 0.55;
+    stroke: none;
+}
+.dt-layout-preview-other {
+    fill: var(--t-text-secondary, #888);
+    opacity: 0.5;
+    stroke: none;
+}
+.dt-layout-preset-empty {
+    grid-column: 1 / -1;
+    padding: 12px 16px;
+    font-size: 12px;
+    color: var(--t-text-secondary, #888);
+    text-align: center;
+}
+.dt-tab.dt-dragging {
+    opacity: 0.5;
+}
+/* Drop-target indicators: a 2px vertical bar on the leading or
+   trailing edge of the hovered tab, signalling where the dragged
+   tab will land on drop. */
+.dt-tab.dt-drop-before::before,
+.dt-tab.dt-drop-after::after {
+    content: "";
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    width: 2px;
+    background: var(--t-accent-primary, currentColor);
+    border-radius: 1px;
+    pointer-events: none;
+}
+.dt-tab.dt-drop-before::before { left: -3px; }
+.dt-tab.dt-drop-after::after { right: -3px; }
+.dt-tab-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dt-tab-label-input {
+    /* `font: inherit` propagates the tab pill's font-size (driven by
+       the "Tab bar size" / "Sidebar size" pickers) so the rename input
+       matches the tab text it's replacing. */
+    font: inherit;
+    color: var(--t-text-primary, #e6e6e6);
+    background: var(--t-surface, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.18));
+    border-radius: 3px;
+    padding: 1px 5px;
+    outline: none;
+    min-width: 0;
+    width: 140px;
+}
+.dt-tab-trailing-badge {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+.dt-tab-close {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: var(--t-text-secondary, #b3b3b3);
+    font: inherit;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 1px 5px;
+    border-radius: 3px;
+    transition: background-color 120ms ease-in-out, color 120ms ease-in-out;
+}
+.dt-tab-close:hover {
+    background: var(--t-border-subtle, rgba(255, 255, 255, 0.16));
+    color: var(--t-text-primary, #e6e6e6);
+}
+.dt-tab-add {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: var(--t-text-secondary, #b3b3b3);
+    font: inherit;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+.dt-tab-add:hover {
+    background: var(--t-surface-raised, rgba(255, 255, 255, 0.06));
+    color: var(--t-text-primary, #e6e6e6);
+}
+
+/* ── Sidebar shells ───────────────────────────────────────── */
+.dt-sidebar {
+    display: flex;
+    flex-direction: column;
+    /* Fill the parent column-flex slot's height so the sidebar background
+       covers the full vertical space — even when the inner section list
+       is short. Without `flex-grow: 1` the sidebar shrinks to its content
+       height, leaving the area below painted by the parent app-frame's
+       surface (a visibly different shade) and giving inner overflow:auto
+       containers like `.dt-theme-manager-body` no concrete height to
+       scroll within.
+
+       `min-height: 0` (paired with the default `flex-shrink: 1`) lets the
+       sidebar shrink to its slot height when content is *taller* than
+       the slot — without it a tall section list would grow `.dt-sidebar`
+       past the slot, leaving descendant overflow:auto containers
+       (`.dt-sidebar-content`, `.dt-settings-sidebar-sections`,
+       `.dt-theme-manager-body`) with no remaining-space to compute
+       against, so no scrollbar would appear and the bottom rows of the
+       Appearance panel would be unreachable. Width is a cross-axis
+       concern here (the slot is `flex-direction: column`) and is set
+       inline by `Sidebar.kt`; the slot's own width is protected by
+       `.dt-app-frame-sidebar-right { flex: 0 0 auto }` in the body
+       row-flex, so allowing vertical shrink does not affect width. */
+    flex-grow: 1;
+    min-height: 0;
+    /* Inherit the topbar's chrome surface so the sidebar reads as a
+       contiguous chrome with the topbar above it (termtastic pattern) —
+       falls back to the legacy `--t-sidebar-bg` then a hardcoded value. */
+    background: var(--t-sidebar-bg, var(--t-chrome-titlebar, #161616));
+    color: var(--t-sidebar-text, #d6d6d6);
+    font-family: var(--dt-font-sidebar, -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", sans-serif);
+    /* Default sidebar-row size: 12px. Children (`.dt-sidebar-row`)
+       inherit this so the Settings panel "Sidebar size" picker takes
+       effect end-to-end. */
+    font-size: var(--dt-font-sidebar-size, 12px);
+    overflow: hidden;
+    /* `position: relative` anchors the absolutely-positioned resize handle
+       (when `isResizable=true`) to the sidebar's inside edge. */
+    position: relative;
+    /* Width transition supports host-driven slide-in/out (mount at width:0,
+       rAF up to target width). The resize-handle drag suppresses this
+       transition inline so dragging tracks the cursor without easing. */
+    transition: width 200ms ease;
+}
+.dt-sidebar.dt-hidden {
+    display: none;
+}
+.dt-sidebar-left {
+    /* No separator line — the sidebar surface and the frame-main
+       surface differ enough on their own to read as distinct regions,
+       and a hairline against the flat chrome reads as visual noise. */
+    border-right: 1px solid transparent;
+}
+.dt-sidebar-right {
+    border-left: 1px solid transparent;
+}
+.dt-sidebar-header {
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--t-sidebar-textDim, #888);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.dt-sidebar-content {
+    flex-grow: 1;
+    overflow: auto;
+    /* Critical: a flex child that wants `overflow: auto` to activate must
+       have `min-height: 0` so the parent flex algorithm doesn't grow the
+       child to fit content (which would push the scroll up the tree to a
+       parent that may not allow it). Without this the theme-manager grid
+       just overflows the viewport and there's no scrollbar. */
+    min-height: 0;
+    /* Flex column so children can size via `flex: 1 1 auto` instead of
+       chained `height: 100%`. The percentage-height chain breaks on
+       Chromium when the parent's height comes from a flex-grow rather
+       than an explicit value — the inner theme-manager body then has no
+       definite height to scroll within. Flex column sidesteps the issue
+       and is backward-compatible with the collapsible-section consumer
+       (each section is itself a flex column item that sizes to content). */
+    display: flex;
+    flex-direction: column;
+}
+
+/* Resize handle — a thin invisible strip on the sidebar's inside edge that
+   becomes a visible 1-px line on hover and accent-coloured while dragging.
+   Width is generous (8px) so the hit target is comfortable, but the visible
+   line sits flush against the sidebar's edge so the chrome reads clean. */
+.dt-sidebar-resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    cursor: col-resize;
+    background: transparent;
+    z-index: 5;
+}
+.dt-sidebar-resize-handle-right {
+    /* Inside edge of a left sidebar — flush with the inside-right edge,
+       no bleed into the main column. The previous 3px bleed was a sub-
+       pixel rounding hedge but it caused the leftmost 3px of every pane
+       (including the pane title bar) to capture sidebar-resize gestures
+       on mousedown, which read to users as "clicking my pane grew the
+       sidebar". Collapsed sidebars get their own bleeding handle below. */
+    right: 0;
+}
+.dt-sidebar-resize-handle-left {
+    /* Inside edge of a right sidebar; mirrors the left rule. */
+    left: 0;
+}
+.dt-sidebar-resize-handle::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: transparent;
+    transition: background 120ms ease;
+}
+.dt-sidebar-resize-handle-right::after {
+    /* Hairline 2px inside the visible right edge, matching the prior
+       visual position now that the handle no longer bleeds 3px past it. */
+    left: 6px;
+}
+.dt-sidebar-resize-handle-left::after {
+    right: 6px;
+}
+.dt-sidebar-resize-handle:hover::after {
+    /* Paint a faint hairline on hover so the user has a visible cue
+       that the strip is grabbable. At rest the handle stays
+       invisible — only when the cursor is actually over it does the
+       affordance appear. */
+    background: var(--t-border-default, #444);
+}
+/* Drag-to-restore affordance: when SidebarController has collapsed the
+   sidebar to 0 width (placeholder state), keep the handle's hairline
+   painted at all times so the user has a visual cue that the strip is
+   still draggable. Mirrors `.dt-bar-collapsed > .dt-bar-resize-handle`
+   for the horizontal axis. */
+.dt-sidebar-collapsed {
+    /* The resize handle hangs past the bar's inside edge via
+       `right: -3px` (or `left: -3px`). With the open sidebar's default
+       `overflow: hidden` that protrusion gets clipped — when the bar is
+       collapsed to 0 width, the entire 8px handle is inside the clip
+       region and the user has no grabbable area to drag back. Lift the
+       clip while collapsed so the handle's protruding strip becomes
+       reachable, mirroring how `.dt-topbar` / `.dt-bottombar` (which
+       carry no overflow rule) keep their handles grabbable when dragged
+       to zero height. The bar holds no content in this state, so there
+       is nothing to clip. */
+    overflow: visible;
+    /* Promote the collapsed sidebar to its own stacking context above
+       the next flex sibling (.dt-app-frame-main, which has its own
+       background fill — see line ~54). Without this, even though the
+       resize handle has `z-index: 20` relative to the sidebar, the
+       `.dt-sidebar` itself (`position: relative; z-index: auto`) does
+       NOT form a stacking context, so the handle's z-index is compared
+       at the .dt-app-frame-body level — and `.dt-app-frame-main`'s
+       opaque background, painted later in document order, ends up
+       hit-testing on top of the handle's protrusion. Setting a non-auto
+       z-index here makes the collapsed sidebar (with its protruding
+       handle) reliably win clicks in the strip just past the window
+       edge. */
+    position: relative;
+    z-index: 20;
+}
+/* When the sidebar is fully collapsed the bar itself is 0 px wide, so a
+   handle that hangs only 3 px past its inside edge ends up overlapping
+   the OS window's resize gutter on the very-leftmost / very-rightmost
+   pixels — Electron / native window chrome wins those events and the
+   user perceives the page-edge drag as a window resize rather than a
+   sidebar drag. Widen the handle and shift it well clear of the window
+   edge so the page-level cursor unambiguously hits the toolkit handle.
+
+   The shift has to be larger than the OS resize hit zone PLUS the area
+   the editor's own paint covers. -14 and -30 both still failed in
+   practice (notegrow Electron, frame:true). Pushing the leading edge
+   30px past the sidebar's collapsed edge gives a comfortable 14-px-wide
+   strip at window x: [30, 44] for a left sidebar — well clear of any
+   plausible native gutter and well into a region where the page's own
+   hit-testing decisively wins. */
+.dt-sidebar-collapsed > .dt-sidebar-resize-handle {
+    width: 14px;
+    z-index: 1;
+}
+.dt-sidebar-collapsed > .dt-sidebar-resize-handle-right {
+    /* Left sidebar collapsed: push the whole hit-target into the editor
+       column so the OS window edge stays uncontested. The handle's
+       leading (left) edge sits 30px in from the window edge. */
+    right: -44px;
+}
+.dt-sidebar-collapsed > .dt-sidebar-resize-handle-left {
+    /* Right sidebar mirror. */
+    left: -44px;
+}
+/* Re-anchor the visible hairline so it paints flush with where the
+   collapsed sidebar's edge would be (i.e. the inner edge of the wider
+   hit-target) rather than floating in the middle of the strip. */
+.dt-sidebar-collapsed > .dt-sidebar-resize-handle-right::after {
+    left: 0;
+}
+.dt-sidebar-collapsed > .dt-sidebar-resize-handle-left::after {
+    right: 0;
+}
+.dt-sidebar-collapsed > .dt-sidebar-resize-handle::after {
+    /* Always-on hairline when the sidebar is collapsed. Without it the
+       sidebar is 0px wide and the user has no visible cue that
+       drag-to-restore is available. */
+    background: var(--t-border-default, #444);
+}
+.dt-sidebar-resize-handle.dt-dragging::after {
+    /* While actually dragging, paint the accent so the user has clear
+       visual feedback that the gesture is engaged. */
+    background: var(--t-accent-primary, #ff8a3d);
+    width: 2px;
+}
+.dt-sidebar-resize-handle-right.dt-dragging::after {
+    left: 2.5px;
+}
+.dt-sidebar-resize-handle-left.dt-dragging::after {
+    right: 2.5px;
+}
+
+/* Vertical-axis resize handle for horizontal bars (top/bottom).
+   Same gesture treatment as the sidebar handle, just rotated 90°.
+   Position the bar with `position: relative` (.dt-topbar / .dt-bottombar
+   already do) so the absolute handle anchors correctly. */
+.dt-bar-resize-handle {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 8px;
+    cursor: row-resize;
+    background: transparent;
+    z-index: 5;
+}
+.dt-bar-resize-handle-bottom {
+    /* Inside edge of a top bar — drag to grow/shrink height downward. */
+    bottom: -3px;
+}
+.dt-bar-resize-handle-top {
+    /* Inside edge of a bottom bar — drag to grow/shrink height upward. */
+    top: -3px;
+}
+.dt-bar-resize-handle::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: transparent;
+    transition: background 120ms ease;
+}
+.dt-bar-resize-handle-bottom::after {
+    top: 3px;
+}
+.dt-bar-resize-handle-top::after {
+    bottom: 3px;
+}
+.dt-bar-resize-handle:hover::after {
+    /* Faint hairline on hover so the bar's resize affordance is
+       discoverable. Stays transparent when the cursor isn't over it. */
+    background: var(--t-border-default, #444);
+}
+/* Collapsed bar: paint the hairline at all times so the user has a
+   visible cue that the strip is still grabbable (the bar itself is
+   0px tall, so without paint there's nothing to click). */
+.dt-bar-collapsed > .dt-bar-resize-handle::after {
+    background: var(--t-border-default, #444);
+}
+.dt-bar-resize-handle.dt-dragging::after {
+    /* Accent fill while dragging — clear visual feedback that the
+       gesture is engaged. */
+    background: var(--t-accent-primary, #ff8a3d);
+    height: 2px;
+}
+.dt-bar-resize-handle-bottom.dt-dragging::after {
+    top: 2.5px;
+}
+.dt-bar-resize-handle-top.dt-dragging::after {
+    bottom: 2.5px;
+}
+
+/* Collapsible section — chevron header + child list. Stacks naturally
+   inside `.dt-sidebar-content` so multiple sections can share the column. */
+.dt-sidebar-section {
+    display: flex;
+    flex-direction: column;
+    border-bottom: 1px solid var(--t-border-subtle, transparent);
+}
+.dt-sidebar-section:last-child {
+    border-bottom: none;
+}
+.dt-sidebar-section-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px 4px;
+    background: transparent;
+    color: var(--t-sidebar-textDim, var(--t-text-tertiary, #7a7a7a));
+    border: 0;
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    width: 100%;
+}
+.dt-sidebar-section-header[disabled] {
+    cursor: default;
+}
+.dt-sidebar-section-header:hover:not([disabled]) {
+    color: var(--t-sidebar-text, #d6d6d6);
+}
+/* Active-tab indicator: when the host marks a section with the
+   `.active-tab` class, the section header keeps its normal text colour.
+   The active *pane* row inside the section is what carries the accent
+   ring (`.dt-sidebar-row.dt-active`); doubling up by tinting the tab
+   name itself reads as two competing "selected" cues for one entry. */
+.dt-sidebar-section.active-tab > .dt-sidebar-section-header {
+    color: var(--t-sidebar-text, #d6d6d6);
+    background: transparent;
+    border-radius: 6px;
+}
+.dt-sidebar-section-chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 12px;
+    height: 12px;
+    transition: transform 120ms ease;
+    flex-shrink: 0;
+}
+.dt-sidebar-section.dt-closed .dt-sidebar-section-chevron {
+    transform: rotate(-90deg);
+}
+.dt-sidebar-section-title {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dt-sidebar-section-trailing {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+.dt-sidebar-section-children {
+    display: flex;
+    flex-direction: column;
+}
+.dt-sidebar-section.dt-closed .dt-sidebar-section-children {
+    display: none;
+}
+
+/* Default-row helper produced by the `SidebarRow(...)` factory. Hosts that
+   need bespoke row layout build their own elements; this is just the common
+   icon-plus-label case styled. */
+.dt-sidebar-row {
+    /* Reset native button defaults — SidebarRow renders a <div> by
+       default but apps may also pass <button> elements; both should pick
+       up the same chrome. */
+    appearance: none;
+    background: transparent;
+    border: 0;
+    text-align: left;
+    font-family: inherit;
+    color: var(--t-sidebar-text, #d6d6d6);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: var(--dt-sidebar-row-pad, 4px 12px 4px 22px);
+    cursor: pointer;
+    /* font-size inherits from `.dt-sidebar`, which reads
+       `--dt-font-sidebar-size` — set by the Settings panel
+       "Sidebar size" picker. */
+    line-height: 1.4;
+    user-select: none;
+    border-radius: 4px;
+    margin: 0 4px;
+    transition: background 0.12s, color 0.12s;
+}
+.dt-sidebar-row:hover {
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.06));
+    color: var(--t-text-primary, #fff);
+}
+.dt-sidebar-row.dt-active {
+    /* Active row is marked by the 1px inset accent ring only — the row
+       label keeps its normal sidebar-text colour so the accent reads
+       cleanly as a "selection rectangle" without doubling as a text
+       tint. No filled background either; the ring alone is the cue. */
+    color: var(--t-sidebar-text, #d6d6d6);
+    background: transparent;
+    font-weight: 600;
+    border-radius: 6px;
+    box-shadow: inset 0 0 0 1px var(--t-active-accent, var(--t-accent-primary, #ff8a3d));
+}
+/* Anchor the ::before to the row, not the sidebar. */
+.dt-sidebar-row { position: relative; }
+.dt-sidebar-row-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    color: var(--t-sidebar-textDim, #888);
+    flex-shrink: 0;
+}
+.dt-sidebar-row.dt-active .dt-sidebar-row-icon {
+    color: inherit;
+}
+.dt-sidebar-row-badge {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+.dt-sidebar-row-label {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+/* RTL variant — the label clips from the LEFT so long path-style strings
+   (notegrow's zoom path, file-tree paths) keep the rightmost segment
+   visible. Mirrors `.dt-pane-title.dt-pane-title-rtl`. */
+.dt-sidebar-row-label.dt-sidebar-row-label-rtl {
+    direction: rtl;
+    text-align: left;
+}
+/* Trailing pane-index badge in the sidebar row. Mirrors `.dt-pane-index`:
+   never clips, anchors to the trailing edge, and partners with the
+   row-label's `.dt-sidebar-row-label-rtl` start-clip so the row's
+   informative tail stays visible alongside the badge. */
+.dt-sidebar-row-index {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    /* Matches `.dt-pane-index` so the encircled glyph is comfortably
+       legible at a glance instead of shrinking into the row's dim band. */
+    font-size: 15px;
+    line-height: 1;
+    color: var(--t-sidebar-textDim, #888);
+    opacity: 0.85;
+    user-select: none;
+    -webkit-user-select: none;
+    direction: ltr;
+}
+.dt-sidebar-row.dt-active .dt-sidebar-row-index {
+    /* Inherit the active-row text colour so the badge tracks the rest of
+       the row when selected, instead of staying dim against an active
+       ring. */
+    color: inherit;
+    opacity: 1;
+}
+
+/* Drag-to-reorder feedback for sidebar pane rows. The leading-edge
+   `.dt-sidebar-row-handle` is the drag source; sibling rows act as
+   drop targets and show a 2px insertion bar on the leading or trailing
+   edge depending on cursor Y vs. row midpoint. The handle fades in on
+   row hover so the row stays visually a normal clickable item until
+   the user explicitly aims for the grip. Native HTML5 drag handles
+   the ghost. */
+.dt-sidebar-row-handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 10px;
+    height: 14px;
+    /* Tuck under the row's left padding so revealing the handle on
+       hover doesn't push the icon/label sideways — the grip slots
+       into existing whitespace rather than reflowing the row. */
+    margin-left: -8px;
+    color: var(--t-sidebar-textDim, #888);
+    flex-shrink: 0;
+    cursor: grab;
+    opacity: 0;
+    transition: opacity 0.12s;
+}
+.dt-sidebar-row-handle:active { cursor: grabbing; }
+.dt-sidebar-row:hover .dt-sidebar-row-handle,
+.dt-sidebar-row:focus-within .dt-sidebar-row-handle {
+    opacity: 1;
+}
+.dt-sidebar-row-handle svg { width: 10px; height: 10px; display: block; }
+.dt-sidebar-row.dt-sidebar-row-dragging {
+    opacity: 0.45;
+}
+.dt-sidebar-row.dt-sidebar-row-drop-before::before,
+.dt-sidebar-row.dt-sidebar-row-drop-after::after {
+    content: "";
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    height: 2px;
+    background: var(--t-active-accent, var(--t-accent-primary, #ff8a3d));
+    pointer-events: none;
+    border-radius: 1px;
+}
+.dt-sidebar-row.dt-sidebar-row-drop-before::before { top: -1px; }
+.dt-sidebar-row.dt-sidebar-row-drop-after::after { bottom: -1px; }
+
+/* ── Pane layout ──────────────────────────────────────────── */
+/* Root container LayoutRenderer mounts into. Establishes the relative
+   positioning context for every absolutely-positioned `.dt-pane-floating`
+   child. No inner padding: each pane reserves its own gutter on all four
+   sides (see `--dt-pane-gutter` on `.dt-pane-floating`), so the spacing
+   between any two adjacent panes and between an edge pane and the
+   content-area boundary comes from the panes themselves. */
+.dt-pane-root {
+    display: block;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    box-sizing: border-box;
+    background: var(--t-surface-base, #1e1e1e);
+    position: relative;
+}
+
+/* Leaf pane: a column with a sticky chrome header + scrollable content.
+   Critical: min-width/min-height: 0 so flex children can shrink below their
+   intrinsic content width. Without it the pane's intrinsic width fights the
+   inner content's width:100% on first paint, collapsing text to one
+   character per line until the next layout pass (e.g. window resize). */
+.dt-pane {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    border-radius: var(--dt-frame-radius, 6px);
+    background: var(--t-chrome-titlebar, #1e1e1e);
+    /* Outline reservation: panes paint a transparent outline always so the
+       focused state (`.dt-pane-focused`) flips its colour without altering
+       layout. `outline-offset: -2px` keeps the ring inside the pane's
+       rounded corners, which matters when adjacent panes touch in a split. */
+    outline: 2px solid transparent;
+    outline-offset: -2px;
+    transition: outline-color 120ms ease-in-out;
+}
+.dt-pane.dt-pane-focused {
+    outline-color: var(--t-active-accent, var(--t-accent-primary, #4f8cff));
+}
+/* Floating overlay panes (PaneLayout.floatingPanes). Drawn on top of the
+   split tree, positioned by inline `--dt-fp-x / -y / -w / -h` percentages
+   set per-pane by the renderer; stacked by `--dt-fp-z`. The drop shadow
+   visually separates them from the split tree underneath; click-to-front
+   is wired in LayoutRenderer.kt. */
+.dt-pane.dt-pane-floating {
+    position: absolute;
+    /* Geometry vars (`--dt-fp-*`) describe the pane's logical slot in the
+       layout. The `--dt-pane-gutter` inset shrinks the painted box on
+       every side so adjacent panes (whose logical slots meet at a
+       shared boundary) end up with `2 * --dt-pane-gutter` of empty
+       chrome between them, and a pane that touches the content-area
+       edge sits one gutter inward. The resize separators in
+       `PaneSeparators.kt` are still anchored to the logical boundary,
+       which now lands in the middle of the visible gap — exactly where
+       the user expects the drag affordance to be. */
+    left:   calc(var(--dt-fp-x, 8%)  + var(--dt-pane-gutter, 4px));
+    top:    calc(var(--dt-fp-y, 8%)  + var(--dt-pane-gutter, 4px));
+    width:  calc(var(--dt-fp-w, 45%) - var(--dt-pane-gutter, 4px) * 2);
+    height: calc(var(--dt-fp-h, 55%) - var(--dt-pane-gutter, 4px) * 2);
+    z-index: var(--dt-fp-z, 1);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+    /* Geometry transition so maximize/restore + minimize visibly slide to
+       their new size instead of snapping. Matches termtastic's
+       `.floating-pane` rule (220ms cubic-bezier). The `dt-pane-no-anim`
+       class disables the transition for the duration of a live drag/resize
+       so the pane tracks the cursor frame-by-frame without lag. */
+    transition:
+        left 220ms cubic-bezier(.2, .8, .2, 1),
+        top 220ms cubic-bezier(.2, .8, .2, 1),
+        width 220ms cubic-bezier(.2, .8, .2, 1),
+        height 220ms cubic-bezier(.2, .8, .2, 1),
+        opacity 160ms ease,
+        transform 220ms cubic-bezier(.2, .8, .2, 1);
+}
+.dt-pane.dt-pane-floating.dt-pane-no-anim {
+    transition: none;
+}
+/* Closing-pane ghost: a chrome replica appended at the closed pane's
+   last-known geometry. The renderer adds `.dt-pane-closing-active` on
+   the next animation frame after mount; this rule sets the target
+   `transform: scale(0)` + `opacity: 0`, and the existing transitions
+   on `.dt-pane.dt-pane-floating` (transform 220ms, opacity 160ms)
+   animate the shrink-into-screen. `setTimeout` removes the element
+   from the DOM once the transition is done. */
+.dt-pane.dt-pane-floating.dt-pane-closing-ghost {
+    pointer-events: none;
+}
+.dt-pane.dt-pane-floating.dt-pane-closing-ghost.dt-pane-closing-active {
+    transform: scale(0);
+    opacity: 0;
+}
+/* Maximized floating pane: ignore stored geometry, fill the container
+   minus a small inset for breathing room, force above every other float.
+   Mirrors termtastic's `.floating-pane.maximized` rule. */
+.dt-pane.dt-pane-floating.dt-maximized {
+    left: 4px;
+    top: 4px;
+    width: calc(100% - 8px);
+    height: calc(100% - 8px);
+    z-index: 1000 !important;
+}
+.dt-pane-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    /* Padding gives the title strip enough vertical weight to read as a
+       distinct chrome strip rather than a thin band. The lit gradient top
+       lifts the band visually; `--t-chrome-titlebar` is the resting tone. */
+    padding: var(--dt-pane-header-pad, 9px 8px 9px 10px);
+    flex-shrink: 0;
+    overflow: hidden;
+    color: var(--t-chrome-titleText, var(--t-text-secondary, #b0b0b0));
+    /* Three-stop gradient: lit highlight at the top, mid tone, then a slight
+       shadow at the bottom — gives the titlebar a subtle bevel that reads
+       across themes whose `--t-text-primary` is itself dark. The bottom 1px
+       border provides delineation from the content even on themes where the
+       gradient bottom and content background coincide. */
+    background: linear-gradient(
+        180deg,
+        color-mix(in oklab, var(--t-chrome-titlebar, #1e1e1e), var(--t-text-primary, #fff) 18%) 0%,
+        var(--t-chrome-titlebar, #1e1e1e) 60%,
+        color-mix(in oklab, var(--t-chrome-titlebar, #1e1e1e), #000 12%) 100%
+    );
+    border-bottom: 1px solid color-mix(
+        in oklab,
+        var(--t-chrome-titlebar, #1e1e1e),
+        #000 22%
+    );
+}
+/* Focused-pane titlebar override. When the theme assigns
+   `Sections.ActiveChrome` to a scheme, ThemeCssVars.applyUiSettings writes
+   raw bg/fg from that scheme into `--t-chrome-titlebar-active` /
+   `--t-chrome-titleText-active`. The rule below repaints `.dt-pane-header`
+   on the focused pane with those values (no mix-softening — the active
+   bar should read saturated and prominent). When the var is absent the
+   `var(... , fallback)` second arg keeps the pane visually identical to
+   inactive panes — themes that haven't opted in (e.g. every Neon theme)
+   see no change. The leading icon and any inline children inherit the
+   flipped color so the entire titlebar reads as one band. */
+.dt-pane.dt-pane-focused .dt-pane-header {
+    color: var(--t-chrome-titleText-active, var(--t-chrome-titleText, var(--t-text-secondary, #b0b0b0)));
+    background: linear-gradient(
+        180deg,
+        color-mix(in oklab, var(--t-chrome-titlebar-active, var(--t-chrome-titlebar, #1e1e1e)), var(--t-text-primary, #fff) 6%) 0%,
+        var(--t-chrome-titlebar-active, var(--t-chrome-titlebar, #1e1e1e)) 60%,
+        color-mix(in oklab, var(--t-chrome-titlebar-active, var(--t-chrome-titlebar, #1e1e1e)), #000 8%) 100%
+    );
+    border-bottom: 1px solid color-mix(
+        in oklab,
+        var(--t-chrome-titlebar-active, var(--t-chrome-titlebar, #1e1e1e)),
+        #000 22%
+    );
+}
+.dt-pane.dt-pane-focused .dt-pane-header-icon,
+.dt-pane.dt-pane-focused .dt-pane-title {
+    color: var(--t-chrome-titleText-active, var(--t-chrome-titleText, var(--t-text-secondary, #b0b0b0)));
+}
+/* Per-pane content-type icon (file / git / terminal / link) rendered at
+   the start of the header. Doubles as the cross-tab drag handle when the
+   pane spec opts in via `isDraggable` — the cursor + grab class come
+   from the JS-side wiring (PaneHeader.wireHeaderIconDragSource). */
+.dt-pane-header-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    color: var(--t-chrome-titleText, var(--t-text-secondary, #b0b0b0));
+}
+.dt-pane-header-icon[draggable="true"]:active {
+    cursor: grabbing;
+}
+.dt-pane-header-icon svg {
+    width: 14px;
+    height: 14px;
+    display: block;
+}
+/* Optional leading slot (status spinner, connection dot, custom icon).
+   Stays its intrinsic size; never grows or shrinks the title. */
+.dt-pane-leading-badge {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+.dt-pane-title {
+    /* Shrink-to-fit (no flex-grow) so a trailing `.dt-pane-index` badge
+       can nestle right next to the last character of the title text
+       instead of being pushed across the row by a grown title element.
+       Actions still pin to the trailing edge via their own `margin-left:
+       auto`, so empty space lands between the badge and the action strip
+       rather than between the title text and the badge. */
+    flex: 0 1 auto;
+    min-width: 0;
+    font-size: var(--dt-pane-title-size, 11px);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    user-select: none;
+    -webkit-user-select: none;
+    /* Inherit so a draggable header's grab cursor extends across the title
+       text in the middle, not just the empty bands above/below it. The
+       armed-for-rename and breadcrumb-link rules below still override. */
+    cursor: inherit;
+}
+/* Right-aligned (RTL) truncation: clip from the LEFT so the rightmost
+   characters stay visible. Used for path-like titles (notegrow's bullet
+   trails, file browsers, etc.). The element's `title` attribute carries
+   the full string so users can hover for the complete value. */
+.dt-pane-title.dt-pane-title-rtl {
+    direction: rtl;
+    text-align: left;
+}
+/* Breadcrumb-mode title. The host supplies a `titleSegments` list and the
+   toolkit renders each segment as a span separated by inert `/` spans.
+   The row is left-anchored — segments lay out from the left edge of the
+   title area and trailing segments clip when the row overflows. The
+   full path stays in the element's `title` tooltip for users who need
+   the parts that get clipped. */
+.dt-pane-title.dt-pane-title-breadcrumbs {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: baseline;
+    justify-content: flex-start;
+    gap: 4px;
+    overflow: hidden;
+    /* Override the plain-mode ellipsis: we don't want a `…` on the flex
+       container itself — overflowing segments simply clip. */
+    text-overflow: clip;
+}
+.dt-pane-breadcrumb-segment {
+    flex: 0 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* Inert `/` between segments. Doesn't shrink so the visual rhythm stays
+   intact even when neighbouring segments clip. */
+.dt-pane-breadcrumb-separator {
+    flex: 0 0 auto;
+    opacity: 0.55;
+    user-select: none;
+    -webkit-user-select: none;
+}
+/* Clickable ancestor segment. Underline-on-hover matches the rest of the
+   chrome's link affordance; pointer cursor signals navigability. */
+.dt-pane-breadcrumb-segment-link {
+    cursor: pointer;
+}
+.dt-pane-breadcrumb-segment-link:hover {
+    color: var(--t-text-primary, #e6e6e6);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+/* Leaf segment — the only one that participates in the rename gesture
+   when the host opts in via `PaneHeaderSpec.renameLeafSegment`. Shares
+   the default segment shrink behaviour so the row stays left-anchored:
+   if the path overflows, the trailing leaf clips like any other
+   segment, matching the user's left-align preference. */
+.dt-pane-breadcrumb-segment-leaf {
+    flex: 0 1 auto;
+}
+/* Hover-arm visual for the inline-rename gesture: 1s after mouseenter the
+   title gets `.dt-pane-title-armed`, which switches the cursor so the user
+   knows the next click will start editing. We deliberately don't change
+   the title's background colour — the title spans most of the chrome row,
+   so any overlay bg reads as "the toolbar background got swapped" instead
+   of "this element is interactive". The cursor change + the themed
+   data-dt-tooltip hint are the discoverability surface. */
+.dt-pane-title.dt-pane-title-armed,
+.dt-pane-breadcrumb-segment-leaf.dt-pane-title-armed {
+    cursor: text;
+}
+/* Themed-tooltip support for the breadcrumb-leaf rename hint, mirroring
+   the `.dt-pane-title[data-dt-tooltip]` rule below. Only applies when
+   the host opts in via `PaneHeaderSpec.renameLeafSegment = true`; the
+   default breadcrumb leaf carries no `data-dt-tooltip`, so this block
+   is dormant for navigation-only consumers like notegrow. */
+.dt-pane-breadcrumb-segment-leaf[data-dt-tooltip] {
+    position: relative;
+}
+.dt-pane-breadcrumb-segment-leaf[data-dt-tooltip]:hover::after {
+    content: attr(data-dt-tooltip);
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 10;
+    padding: 3px 7px;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: normal;
+    white-space: nowrap;
+    color: var(--t-text-primary, #e6e6e6);
+    background: var(--t-surface-overlay, rgba(20, 20, 20, 0.95));
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.18));
+    border-radius: 3px;
+    pointer-events: none;
+}
+/* Themed tooltip for `.dt-pane-title[data-dt-tooltip]`. Replaces the
+   native browser `title` tooltip (which renders as the unthemed OS chip)
+   so the rename hint reads as part of the dark chrome. Pure CSS via
+   ::after on hover; positioned just below the title so it doesn't fight
+   with the truncation ellipsis. */
+.dt-pane-title[data-dt-tooltip] {
+    position: relative;
+}
+.dt-pane-title[data-dt-tooltip]:hover::after {
+    content: attr(data-dt-tooltip);
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 10;
+    padding: 3px 7px;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: normal;
+    white-space: nowrap;
+    color: var(--t-text-primary, #e6e6e6);
+    background: var(--t-surface-overlay, rgba(20, 20, 20, 0.95));
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.18));
+    border-radius: 3px;
+    pointer-events: none;
+    /* RTL titles invert direction on the parent — neutralise here so the
+       tooltip text reads left-to-right. */
+    direction: ltr;
+}
+/* Inline-rename input. Replaces the title element in place; the host's
+   re-render (or Esc cancel) restores the title. */
+.dt-pane-title-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--t-text-primary, #e6e6e6);
+    background: var(--t-surface-base, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.18));
+    border-radius: 3px;
+    padding: 1px 5px;
+    outline: none;
+}
+/* Trailing icon-button strip. The toolkit ships no icons — every action
+   carries its own SVG inline via PaneAction.iconHtml.
+   `margin-left: auto` pins the strip to the trailing edge of the header
+   even when the title is capped (e.g. termtastic's `max-width: 60%`
+   path-truncation override). Without this, leftover flex space lands at
+   the main-axis end and the action group drifts toward the middle. */
+.dt-pane-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+    margin-left: auto;
+    /* Sit above `.dt-pane-corner-resize-tr` (z-index 4), whose 14×14 hit box
+       at the pane's top-right corner otherwise overlaps the rightmost action
+       button (typically Close) and steals its click. The grip has only a
+       mousedown handler that rejects out-of-box presses, so clicks landing
+       in the overlap region are silently dropped — visible as a Close button
+       that "does nothing" on non-maximized panes (maximized panes skip resize
+       grips, which is why the same click works there). */
+    position: relative;
+    z-index: 5;
+}
+.dt-pane-action {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    /* Match `.dt-pane-header-icon` (leading icon) — `--t-chrome-titleText`
+       is the colour the chrome scheme designed for legibility against the
+       chrome titlebar. Plain `--t-text-secondary` here would only see the
+       main scheme's value from `:root` (Pass 2 only overlays prefixed
+       `--t-chrome-*` vars), which on themes where chrome differs from
+       main (e.g. Emerald Garden Light: chrome = Forest Panel, main = Mint
+       Chip) leaves these icons unreadable against the dark chrome. */
+    color: var(--t-chrome-titleText, var(--t-text-secondary, #b0b0b0));
+    line-height: 0;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background-color 120ms ease-in-out, color 120ms ease-in-out;
+}
+.dt-pane-action:hover {
+    background: var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    color: var(--t-chrome-titleText, var(--t-text-primary, #e6e6e6));
+}
+.dt-pane-action.dt-active {
+    /* The icon stays in the chrome-titleText colour so it remains legible
+       against the chrome titlebar even when the main scheme's
+       `--t-accent-primary` (which Pass 2 doesn't recolour for chrome) is
+       low-contrast against the chrome surface — e.g. Mint Chip's pale
+       accent over Forest Panel chrome on Emerald Garden Light. The
+       active state is communicated by a persistent backdrop (matching
+       the hover background) so the button stays visually distinct from
+       the resting siblings regardless of accent legibility. */
+    color: var(--t-chrome-titleText, var(--t-accent-primary, #4f8cff));
+    background: var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+}
+.dt-pane-action svg {
+    display: block;
+}
+/* Pane-index badge (encircled digit / letter — ①..⑨, Ⓐ..Ⓩ). Rendered
+   immediately after the title text in DOM order so it reads as part of
+   the title. `flex: 0 0 auto` keeps it un-clippable; the title shrinks
+   first (`flex: 0 1 auto` + `text-overflow: ellipsis`) when the header
+   is narrow. The actions strip — when present — carries `margin-left:
+   auto` and pins to the trailing edge, so the badge stays adjacent to
+   the title text with empty space falling between badge and actions. */
+.dt-pane-index {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    /* Glyph is already encircled — no extra border. Sized noticeably
+       above the title's 11px so the encircled character is comfortably
+       legible at a glance. */
+    font-size: 15px;
+    line-height: 1;
+    /* Same chrome-titleText fallback as `.dt-pane-header-icon` and
+       `.dt-pane-action` — the encircled glyph sits on the chrome
+       titlebar, so it needs the chrome scheme's legibility colour
+       rather than the main scheme's `--t-text-secondary` (which on
+       themes like Emerald Garden Light would render too low-contrast
+       against Forest Panel chrome). */
+    color: var(--t-chrome-titleText, var(--t-text-secondary, #b0b0b0));
+    opacity: 0.85;
+    user-select: none;
+    -webkit-user-select: none;
+    /* Kept LTR even when the title is RTL, so the glyph itself doesn't
+       flip its visual order. */
+    direction: ltr;
+}
+/* Visual gap inserted between two action groups (e.g. up/home navigation
+   and maximize/close window controls) via PaneActions.separator(). Not a
+   button; not focusable. */
+.dt-pane-action-separator {
+    display: inline-block;
+    flex: 0 0 auto;
+    width: 10px;
+    pointer-events: none;
+}
+/* Spacer between app-supplied trailing topbar extras and the toolkit's
+   standard cluster (Layout · NewPane · ThemeToggle · ThemeMgr). Inert;
+   not focusable. The flex `gap: 4px` on the trailing container already
+   separates adjacent buttons; this adds another ~6px so the boundary
+   between app and toolkit territory is visually distinct. */
+.dt-topbar-trailing-divider {
+    display: inline-block;
+    flex: 0 0 auto;
+    width: 6px;
+    pointer-events: none;
+}
+/* Drag/drop visuals. Cross-tab pane drops set `.dt-pane-dragging` on the
+   source while the gesture is in flight (cleared on dragend). */
+.dt-pane.dt-pane-dragging {
+    opacity: 0.5;
+}
+/* Headers that opt into HTML5 drag get a grab cursor on hover so the
+   gesture is discoverable. */
+.dt-pane-header[draggable="true"] {
+    cursor: grab;
+}
+.dt-pane-header[draggable="true"]:active {
+    cursor: grabbing;
+}
+/* Inset the content body 4px from the sides and bottom so the chrome
+   titlebar colour reads as a frame around it — termtastic-style rounded
+   window. The header sits flush at the top so its gradient meets the cell
+   edge.
+
+   `overflow: hidden` because every pane consumer (terminal-inner,
+   file browser, git view, notegrow editor, …) manages its own internal
+   scrolling. Letting the slot also scroll produces a second, outer
+   scrollbar stacked next to the consumer's own — see termtastic issue:
+   "panes have two vertical scrollbars". Plain-website consumers that
+   want native scroll on the slot can override to `auto` per-pane. */
+.dt-pane-content {
+    /* `display: flex` so children that opt into `flex: 1` (e.g.
+       termtastic's `.terminal-cell`, notegrow's editor root) actually
+       fill the slot's current height. Without it the slot resizes
+       with the pane chrome but children only render at their natural
+       initial size — visible as a "stuck" inner frame after dragging
+       a pane edge bigger. */
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    margin: 0 4px 4px;
+    border-radius: 4px;
+    background: var(--t-surface-base, #1e1e1e);
+}
+
+/* Corner resize grips on floating panes. Mounted on all four corners of
+   every non-maximized pane regardless of focus, so the user can grab any
+   corner of any pane to resize it directly. Each handle anchors the
+   OPPOSITE corner (the renderer's wireFloatingCornerResize handles the
+   geometry). Handles are invisible at rest so they don't compete with
+   content; hovering any one handle (or actively dragging) reveals all
+   four on that pane via :has(). */
+.dt-pane-corner-resize {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--t-text-tertiary, rgba(255, 255, 255, 0.55));
+    z-index: 4;
+    opacity: 0;
+    transition: opacity 120ms ease, color 120ms ease;
+}
+.dt-pane-corner-resize-tl { left: 2px;  top: 2px;    cursor: nwse-resize; }
+.dt-pane-corner-resize-tr { right: 2px; top: 2px;    cursor: nesw-resize; }
+.dt-pane-corner-resize-bl { left: 2px;  bottom: 2px; cursor: nesw-resize; }
+.dt-pane-corner-resize-br { right: 2px; bottom: 2px; cursor: nwse-resize; }
+/* Invisible hit zone extending into the pane interior, so coming near the
+   corner is enough to reveal the handles. Hovering ::before counts as
+   hovering the parent for :hover purposes. inset is top/right/bottom/left.
+   z-index:-1 puts ::before behind the handle's SVG within the handle's
+   stacking context, so the resize cursor still wins inside the visible
+   14x14 box; the proximity zone (outside that box) shows the default
+   cursor via cursor:auto and doesn't accept drags (renderer's mousedown
+   rejects clicks outside the handle box). */
+.dt-pane-corner-resize::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    cursor: auto;
+}
+.dt-pane-corner-resize-tl::before { inset: -2px -18px -18px -2px; }
+.dt-pane-corner-resize-tr::before { inset: -2px -2px -18px -18px; }
+.dt-pane-corner-resize-bl::before { inset: -18px -18px -2px -2px; }
+.dt-pane-corner-resize-br::before { inset: -18px -2px -2px -18px; }
+/* Hovering any handle (or dragging one) reveals all four siblings. */
+.dt-pane:has(.dt-pane-corner-resize:hover) .dt-pane-corner-resize,
+.dt-pane:has(.dt-pane-corner-resize.dt-dragging) .dt-pane-corner-resize {
+    opacity: 0.75;
+}
+.dt-pane-corner-resize:hover,
+.dt-pane-corner-resize.dt-dragging {
+    color: var(--t-accent-primary, #ff8a3d);
+    opacity: 1;
+}
+/* The pane needs a positioning context for the absolutely-positioned
+   corner grip. */
+.dt-pane { position: relative; }
+
+/* Invisible draggable separator bars between adjacent panes. Recomputed
+   from scratch by [LayoutRenderer.render] -> mountSeparators on every
+   render, so they always sit exactly on the shared edges of the current
+   layout. Hidden at rest (no background, no border); only the resize
+   cursor reveals their presence on hover. A faint highlight on hover /
+   active drag confirms the gesture is happening.
+
+   Geometry vars (--dt-sep-*) are fed by mountSeparators:
+     --dt-sep-pos    : the bar's fixed-axis position (x for V, y for H)
+     --dt-sep-start  : the bar's start along its long axis
+     --dt-sep-len    : the bar's length along its long axis
+
+   The bar overhangs 4px on each side of the actual edge so users don't
+   need to land the cursor pixel-perfect. */
+.dt-pane-separator {
+    position: absolute;
+    z-index: 999;
+    background: transparent;
+    transition: background-color 120ms ease;
+}
+.dt-pane-separator-v {
+    top: var(--dt-sep-start);
+    left: var(--dt-sep-pos);
+    height: var(--dt-sep-len);
+    width: 8px;
+    transform: translateX(-4px);
+    cursor: col-resize;
+}
+.dt-pane-separator-h {
+    left: var(--dt-sep-start);
+    top: var(--dt-sep-pos);
+    width: var(--dt-sep-len);
+    height: 8px;
+    transform: translateY(-4px);
+    cursor: row-resize;
+}
+.dt-pane-separator:hover,
+.dt-pane-separator.dt-dragging {
+    background: color-mix(in srgb, var(--t-accent-primary, #ff8a3d) 18%, transparent);
+}
+.dt-pane-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    color: var(--t-text-tertiary, #888);
+    font-size: 13px;
+}
+/* Tab-level empty state shipped via renderEmptyTabPlaceholder — used when
+   an active tab has zero panes (e.g. just after the user closed the last
+   one). Centered headline + primary action button. Mirrors termtastic's
+   `.empty-tab` rule. */
+.dt-empty-tab {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    color: var(--t-text-secondary, #b0b0b0);
+    text-align: center;
+}
+.dt-empty-tab-message {
+    font-size: 22px;
+    font-weight: 500;
+    opacity: 0.85;
+}
+.dt-empty-tab-button {
+    appearance: none;
+    background: var(--t-surface-base, #252526);
+    color: var(--t-text-primary, #e6e6e6);
+    border: 1px solid var(--t-border-default, rgba(255, 255, 255, 0.12));
+    border-radius: 8px;
+    padding: 14px 28px;
+    font-family: inherit;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 120ms ease-in-out, border-color 120ms ease-in-out;
+}
+.dt-empty-tab-button:hover {
+    background: var(--t-surface-raised, #2d2d30);
+    border-color: var(--t-text-secondary, #b0b0b0);
+}
+
+/* Default empty-state shipped via renderEmptyPanePlaceholder — centered,
+   dim, single-line. Subtle dotted border so the user reads the area as a
+   "drop zone / future content" rather than a render glitch. */
+.dt-pane-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    padding: 24px;
+    box-sizing: border-box;
+    color: var(--t-text-tertiary, #888);
+    font-size: 12px;
+    user-select: none;
+    border: 1px dashed var(--t-border-subtle, rgba(255, 255, 255, 0.08));
+    border-radius: 4px;
+    background: transparent;
+}
+.dt-pane-empty-caption {
+    opacity: 0.7;
+}
+
+/* ── Pane kebab popover ───────────────────────────────────────
+   Rendered by `openPaneMenu(anchor, spec)` and appended to <body>; the
+   helper sets `position: fixed` and the inline `left`/`top` itself, so
+   the rules here only style the surface and rows. */
+.dt-pane-menu {
+    /* Sit above `.dt-pane.dt-pane-floating.dt-maximized` (z-index: 1000)
+       so a kebab popover anchored to a maximized pane's header isn't
+       eclipsed by the pane itself. Stays below modal/overlay layers
+       (10000+) so confirm dialogs and the theme manager still cover it. */
+    z-index: 1001;
+    min-width: 184px;
+    padding: 4px;
+    background: var(--t-surface-overlay, #2a2a2a);
+    color: var(--t-text-primary, #e6e6e6);
+    border: 1px solid var(--t-border-default, rgba(255, 255, 255, 0.12));
+    border-radius: 6px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+    user-select: none;
+    -webkit-user-select: none;
+    font-family: inherit;
+    font-size: 12px;
+}
+.dt-pane-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 10px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 100ms ease-in-out;
+}
+.dt-pane-menu-item:hover:not(:disabled) {
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.08));
+}
+.dt-pane-menu-item:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+.dt-pane-menu-item.dt-pane-menu-item-active {
+    color: var(--t-accent-primary, #4f8cff);
+}
+.dt-pane-menu-item.dt-pane-menu-item-danger {
+    color: var(--t-text-danger, #ff6b6b);
+}
+.dt-pane-menu-item-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    color: var(--t-text-secondary, #b0b0b0);
+}
+.dt-pane-menu-item.dt-pane-menu-item-danger .dt-pane-menu-item-icon,
+.dt-pane-menu-item.dt-pane-menu-item-active .dt-pane-menu-item-icon {
+    color: currentColor;
+}
+.dt-pane-menu-item-icon svg {
+    display: block;
+}
+.dt-pane-menu-item-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.dt-pane-menu-separator {
+    height: 1px;
+    margin: 4px 6px;
+    background: var(--t-border-subtle, rgba(255, 255, 255, 0.1));
+}
+
+/* ── Confirm dialog ───────────────────────────────────────── */
+.dt-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+.dt-modal {
+    /* Mirrors termtastic's `.pane-modal.confirm-modal`: compact width band,
+       ~18px/20px padding, raised surface, default border. The chrome font
+       stack is set explicitly because the modal is appended to <body>,
+       outside the .dt-app-frame whose `font-family` would otherwise cascade. */
+    background: var(--t-surface-raised, #1e1e1e);
+    color: var(--t-text-primary, #e6e6e6);
+    border: 1px solid var(--t-border-default, rgba(255, 255, 255, 0.12));
+    border-radius: 8px;
+    box-shadow: var(--t-toolbar-shadow, 0 8px 24px rgba(0, 0, 0, 0.45));
+    padding: 18px 20px 20px;
+    min-width: 300px;
+    max-width: 420px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+        Ubuntu, sans-serif;
+}
+.dt-modal-title {
+    /* Termtastic uses 15px/600 for the confirm-modal title. Color is
+       pinned because the modal is appended to <body> and host stylesheets
+       (notegrow's markdown rendering, for example) sometimes paint h2 in
+       a content-text colour that bleeds into the modal title. */
+    margin: 0 0 10px 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--t-text-primary, #d4d4d4);
+}
+.dt-modal-message {
+    /* Termtastic confirm-message: 13px / 1.45 line-height, primary text. */
+    margin: 0 0 16px 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--t-text-primary, #d4d4d4);
+}
+/* Inline emphasis used in confirm messages (e.g. <strong>pane name</strong>)
+   inherits the modal's text colour. Without this, host stylesheets that
+   paint <strong> in a markdown-emphasis colour leak into the dialog. */
+.dt-modal-message strong,
+.dt-modal-message b,
+.dt-modal-message em,
+.dt-modal-message i {
+    color: inherit;
+}
+.dt-modal-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+.dt-modal-btn {
+    /* Termtastic .confirm-btn: 7px/18px padding, 6px radius, 13px font. */
+    padding: 7px 18px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+    border: 1px solid var(--t-border-default, #3c3c3c);
+    appearance: none;
+}
+.dt-modal-btn-cancel {
+    background: var(--t-surface-base, #252526);
+    color: var(--t-text-primary, #d4d4d4);
+}
+.dt-modal-btn-cancel:hover {
+    background: var(--t-surface-raised, #2d2d30);
+}
+.dt-modal-btn-confirm {
+    background: var(--t-accent-primary, #4f8cff);
+    color: var(--t-accent-onPrimary, #ffffff);
+    border-color: transparent;
+    font-weight: 600;
+}
+.dt-modal-btn-confirm:hover {
+    filter: brightness(1.12);
+}
+.dt-modal-btn-confirm:focus {
+    outline: 2px solid var(--t-accent-primary, #4f8cff);
+    outline-offset: 2px;
+}
+.dt-modal-btn-confirm.dt-destructive {
+    background: var(--t-semantic-danger, #b33a36);
+}
+
+/* ── Theme manager sidebar (right-side panel) ─────────────── */
+/* Fills its host container (typically a `.dt-sidebar-right` slot whose width
+   is owned by the host app). The sidebar handles open/close animation —
+   the panel itself just paints. */
+.dt-theme-manager {
+    width: 100%;
+    /* Sized via flex inside the column-flex sidebar slot. `height: 100%`
+       used to live here, but in the nested chain (sidebar > sidebar-content
+       > mountTarget > theme-manager) the percentage doesn't always resolve
+       — the panel collapses to content height, and the inner body's
+       `overflow-y: auto` never activates. `flex: 1 1 auto` + `min-height: 0`
+       lets the panel claim the slot's vertical space deterministically and
+       gives the body a definite height to scroll inside. */
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--t-sidebar-bg, #252526);
+    border-left: 1px solid var(--t-border-subtle, #333);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    color: var(--t-sidebar-text, #d4d4d4);
+    font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    opacity: 0;
+    transition: opacity 160ms ease;
+}
+/* When the theme manager is mounted inside the toolkit's sidebar slot,
+   the slot must NOT also scroll: the manager's body owns the scroll, and
+   a second outer scroll region pushes the header off-screen along with
+   the list (the "weird" scroll the user sees on long scheme lists). */
+.dt-sidebar-content:has(.dt-theme-manager) {
+    overflow: hidden;
+}
+.dt-theme-manager.dt-open {
+    opacity: 1;
+}
+.dt-theme-manager-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 2;
+    appearance: none;
+    background: none;
+    border: none;
+    color: var(--t-text-secondary, #999);
+    font-size: 22px;
+    cursor: pointer;
+    padding: 4px 8px;
+    line-height: 1;
+}
+.dt-theme-manager-close:hover {
+    color: var(--t-text-primary, #d4d4d4);
+}
+.dt-theme-manager-header {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 18px 20px 12px;
+    border-bottom: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.08));
+    background: var(--t-surface-raised, rgba(255, 255, 255, 0.03));
+}
+.dt-theme-manager-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--t-text-primary, #d4d4d4);
+    padding-right: 28px;
+}
+.dt-theme-manager-tabs {
+    display: flex;
+    gap: 4px;
+}
+.dt-theme-manager-tab {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--t-text-secondary, #c8c8c8);
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.dt-theme-manager-tab:hover {
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.06));
+    color: var(--t-text-primary, #d4d4d4);
+}
+.dt-theme-manager-tab.dt-selected {
+    background: var(--t-accent-primary, #4f8cff);
+    color: var(--t-accent-onPrimary, #fff);
+    border-color: transparent;
+}
+/* Settings tab — vertical stack of titled sections, each with a
+   wrap-flex row of pill-shaped choice buttons. Mirrors termtastic's
+   `.settings-*` rules so notegrow + termtastic look identical. */
+.dt-settings-form {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.dt-settings-section {
+    margin-bottom: 20px;
+}
+.dt-settings-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--t-sidebar-textDim, var(--t-text-secondary, #999));
+    margin-bottom: 8px;
+}
+.dt-settings-button-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.dt-settings-size-row {
+    gap: 4px;
+}
+.dt-settings-choice-btn {
+    appearance: none;
+    background: var(--t-surface-overlay, var(--t-surface-raised, #252526));
+    border: 1px solid var(--t-border-subtle, #3c3c3c);
+    color: var(--t-text-primary, #d4d4d4);
+    font: inherit;
+    font-size: 12px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 80ms ease, border-color 80ms ease;
+}
+.dt-settings-choice-btn:hover {
+    background: var(--t-border-subtle, rgba(255, 255, 255, 0.06));
+}
+.dt-settings-choice-btn.dt-selected {
+    border-color: var(--t-accent-primary, #4f8cff);
+    color: var(--t-accent-primary, #4f8cff);
+    background: var(--t-border-subtle, rgba(255, 255, 255, 0.04));
+    font-weight: 600;
+}
+.dt-settings-size-row .dt-settings-choice-btn {
+    padding: 5px 10px;
+    min-width: 42px;
+    text-align: center;
+}
+.dt-settings-font-row .dt-settings-choice-btn {
+    padding: 6px 12px;
+    text-align: center;
+}
+
+.dt-theme-manager-body {
+    /* `flex-basis: 0` (rather than `auto`) is critical: with `auto` the body's
+       hypothetical size is its content's intrinsic height, which on a long
+       theme list adds up to many hundreds of pixels and the flex algorithm
+       lets the body grow to that — even with `min-height: 0` — instead of
+       constraining to the panel's free space. Forcing basis to 0 makes the
+       body claim only the leftover slot height; anything taller scrolls. */
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 14px 18px 18px;
+    /* Block layout so children stack naturally without flex's basis
+       negotiation. Switching back to block also dodges Chromium's quirk
+       where a flex column with `overflow-y: auto` can clip rather than
+       scroll on resize. */
+    display: block;
+    box-sizing: border-box;
+}
+.dt-theme-manager-back-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+.dt-theme-manager-back-btn {
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    color: var(--t-text-primary, #d4d4d4);
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s, border-color 0.12s;
+}
+.dt-theme-manager-back-btn:hover {
+    background: var(--t-surface-raised, rgba(255, 255, 255, 0.08));
+    border-color: var(--t-border-strong, rgba(255, 255, 255, 0.22));
+}
+.dt-theme-manager-back-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--t-text-primary, #d4d4d4);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dt-theme-manager-editor-host {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* ── Theme/scheme grid: filters, group headers, grid ──────── */
+.dt-theme-manager-filters {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+.dt-theme-manager-chip {
+    background: transparent;
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    color: var(--t-text-secondary, #c8c8c8);
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.dt-theme-manager-chip:hover {
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.06));
+}
+.dt-theme-manager-chip.dt-selected {
+    background: var(--t-accent-primary, #4f8cff);
+    color: var(--t-accent-onPrimary, #fff);
+    border-color: transparent;
+}
+.dt-theme-manager-group-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--t-text-tertiary, #999);
+    margin: 14px 0 8px;
+}
+.dt-theme-manager-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+/* ── Theme/scheme cards ───────────────────────────────────── */
+.dt-theme-card {
+    position: relative;
+    background: var(--t-surface-raised, rgba(255, 255, 255, 0.02));
+    border: 1.5px solid transparent;
+    border-radius: 10px;
+    padding: 30px 8px 10px;
+    cursor: pointer;
+    transition: border-color 0.12s, transform 0.1s, background 0.12s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    min-height: 120px;
+}
+.dt-theme-card:hover {
+    border-color: var(--t-border-strong, rgba(255, 255, 255, 0.2));
+}
+.dt-theme-card.dt-selected {
+    border-color: var(--t-accent-primary, #4f8cff);
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.05));
+}
+.dt-theme-card-silhouette {
+    display: block;
+    width: 100%;
+    flex-shrink: 0;
+    pointer-events: none;
+}
+.dt-theme-card-name {
+    font-size: 12px;
+    color: var(--t-text-primary, #d4d4d4);
+    text-align: center;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.25;
+    width: 100%;
+}
+.dt-theme-card-star {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    background: var(--star-bg, var(--t-surface-overlay, rgba(0, 0, 0, 0.28)));
+    border: none;
+    color: var(--star-fg, var(--t-text-secondary, #ddd));
+    font-size: 14px;
+    line-height: 1;
+    padding: 2px 5px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: color 0.12s, background 0.12s;
+}
+.dt-theme-card-star.dt-active {
+    color: var(--star-active-fg, var(--t-accent-primary, #ffc857));
+}
+.dt-theme-card-star:hover {
+    background: var(--star-bg-hover, var(--t-surface-sunken, rgba(0, 0, 0, 0.5)));
+    color: var(--star-active-fg, var(--t-accent-primary, #ffc857));
+}
+.dt-theme-card-kebab {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: var(--kebab-bg, var(--t-surface-overlay, rgba(0, 0, 0, 0.28)));
+    border: none;
+    color: var(--kebab-fg, var(--t-text-secondary, #ddd));
+    font-size: 14px;
+    line-height: 1;
+    padding: 2px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+}
+.dt-theme-card-kebab:hover {
+    background: var(--kebab-bg-hover, var(--t-surface-sunken, rgba(0, 0, 0, 0.5)));
+    color: var(--kebab-fg-hover, var(--t-text-primary, #fff));
+}
+
+/* New tile (create theme/scheme) and empty-state */
+.dt-new-tile {
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.04));
+    border: 2px dashed var(--t-border-strong, rgba(255, 255, 255, 0.18));
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 120px;
+    padding: 8px;
+    margin-top: 0;
+}
+.dt-new-tile-plus {
+    font-size: 18px;
+    color: var(--t-text-tertiary, #888);
+    line-height: 1;
+}
+.dt-new-tile-label {
+    font-size: 13px;
+    color: var(--t-text-secondary, #c8c8c8);
+}
+.dt-theme-manager-empty {
+    padding: 20px 0;
+    color: var(--t-text-tertiary, #888);
+    font-size: 13px;
+    text-align: center;
+    border: 1px dashed var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    border-radius: 8px;
+}
+
+/* ── Floating menus (kebab + scheme picker) ───────────────── */
+.dt-popover-menu {
+    background: var(--t-surface-raised, #1e1f22);
+    color: var(--t-text-primary, #d4d4d4);
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    padding: 4px;
+    min-width: 200px;
+    z-index: 100000;
+    display: flex;
+    flex-direction: column;
+}
+.dt-popover-menu-item {
+    background: transparent;
+    border: none;
+    color: inherit;
+    text-align: left;
+    padding: 7px 10px;
+    border-radius: 5px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.1s;
+    font-family: inherit;
+}
+.dt-popover-menu-item:hover {
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.08));
+}
+
+/* ── Theme editor pane ────────────────────────────────────── */
+.dt-theme-editor-header {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 28px;
+    margin-bottom: 16px;
+}
+.dt-theme-editor-preview {
+    align-self: center;
+    transform: scale(1.2);
+    transform-origin: center left;
+}
+.dt-theme-editor-preview.dt-scheme-preview {
+    transform: scale(1.0);
+}
+.dt-theme-editor-info {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+.dt-theme-editor-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--t-text-tertiary, #888);
+    padding-left: 11px;
+}
+.dt-theme-editor-input,
+.dt-theme-editor-select {
+    background: var(--t-surface-base, #252526);
+    color: var(--t-text-primary, #d4d4d4);
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.15));
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+    font-family: inherit;
+}
+.dt-theme-editor-select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 34px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M1 1.5 L6 6.5 L11 1.5'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    background-size: 10px 7px;
+}
+.dt-theme-editor-input:disabled,
+.dt-theme-editor-select:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+.dt-theme-editor-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding: 12px;
+    background: var(--t-surface-raised, rgba(255, 255, 255, 0.02));
+    border-radius: 8px;
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.06));
+}
+.dt-theme-editor-section-row {
+    display: grid;
+    grid-template-columns: minmax(110px, 140px) 1fr;
+    gap: 10px;
+    align-items: center;
+}
+.dt-theme-editor-section-label {
+    font-size: 12px;
+    color: var(--t-text-secondary, #c8c8c8);
+}
+
+/* ── Area headers ("Sections", "Per-pane overrides") ──────── */
+.dt-theme-editor-area-header {
+    margin: 0 0 6px 0;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--t-text-tertiary, #888);
+}
+
+/* ── Per-section scheme picker ────────────────────────────── */
+.dt-scheme-picker {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    background: var(--t-surface-base, #252526);
+    color: var(--t-text-primary, #d4d4d4);
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-family: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.12s, background 0.12s;
+}
+.dt-scheme-picker:hover:not(:disabled) {
+    border-color: var(--t-border-strong, rgba(255, 255, 255, 0.25));
+}
+.dt-scheme-picker:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+.dt-scheme-picker-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.dt-scheme-picker-chevron {
+    flex-shrink: 0;
+    color: var(--t-text-tertiary, #888);
+    font-size: 10px;
+    pointer-events: none;
+}
+.dt-scheme-row-swatch {
+    flex-shrink: 0;
+    width: 120px;
+    display: flex;
+    align-items: center;
+    pointer-events: none;
+}
+.dt-scheme-row-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    color: var(--t-text-primary, #d4d4d4);
+}
+.dt-scheme-row-label.dt-muted {
+    color: var(--t-text-secondary, #c8c8c8);
+    font-style: italic;
+}
+.dt-scheme-menu {
+    position: fixed;
+    z-index: 100000;
+    max-height: 440px;
+    overflow-y: auto;
+    background: var(--t-surface-raised, #1e1f22);
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    border-radius: 8px;
+    padding: 4px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+    min-width: 300px;
+}
+.dt-scheme-menu-header {
+    padding: 8px 10px 4px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--t-text-tertiary, #888);
+    user-select: none;
+}
+.dt-scheme-menu-option {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    background: transparent;
+    color: inherit;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-family: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s;
+}
+.dt-scheme-menu-option:hover {
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.06));
+}
+.dt-scheme-menu-option.dt-selected {
+    border-color: var(--t-accent-primary, #4f8cff);
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.05));
+}
+.dt-scheme-menu-option-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* ── Theme editor actions (save / revert / delete) ────────── */
+.dt-theme-editor-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+    align-items: center;
+}
+.dt-theme-editor-btn {
+    background: var(--t-surface-raised, rgba(255, 255, 255, 0.04));
+    color: var(--t-text-primary, #d4d4d4);
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.15));
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.12s, border-color 0.12s, opacity 0.12s;
+}
+.dt-theme-editor-btn:hover:not(:disabled):not(.dt-disabled) {
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.08));
+}
+.dt-theme-editor-btn:disabled,
+.dt-theme-editor-btn.dt-disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    filter: none;
+    pointer-events: none;
+}
+.dt-theme-editor-btn.dt-primary {
+    background: var(--t-accent-primary, #4f8cff);
+    color: var(--t-accent-onPrimary, #fff);
+    border-color: transparent;
+}
+.dt-theme-editor-btn.dt-primary:hover:not(:disabled):not(.dt-disabled) {
+    background: color-mix(in oklab, var(--t-accent-primary, #4f8cff) 82%, white);
+}
+.dt-theme-editor-btn.dt-danger {
+    color: var(--t-semantic-danger, #ff6b6b);
+    border-color: rgba(255, 107, 107, 0.35);
+}
+.dt-theme-editor-btn.dt-danger:hover:not(:disabled):not(.dt-disabled) {
+    background: rgba(255, 107, 107, 0.12);
+}
+.dt-theme-editor-hint {
+    font-size: 12px;
+    color: var(--t-text-tertiary, #888);
+    font-style: italic;
+    flex-basis: 100%;
+}
+
+/* ── Scheme editor (color picker dialog) ──────────────────── */
+.dt-scheme-editor-fgbg {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 16px;
+    padding: 12px;
+    background: var(--t-surface-raised, rgba(255, 255, 255, 0.02));
+    border-radius: 8px;
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.06));
+    margin-bottom: 16px;
+}
+.dt-scheme-editor-fgbg-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: space-between;
+}
+.dt-scheme-editor-fgbg-label {
+    font-size: 12px;
+    color: var(--t-text-secondary, #c8c8c8);
+}
+.dt-scheme-editor-fgbg-picker {
+    width: 34px;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    background: transparent;
+    cursor: pointer;
+}
+.dt-scheme-editor-fgbg-picker:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+.dt-scheme-editor-overrides {
+    margin-top: 8px;
+}
+.dt-scheme-editor-overrides-title {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--t-text-primary, #d4d4d4);
+}
+.dt-scheme-editor-overrides-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 6px;
+    background: var(--t-surface-base, #252526);
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.08));
+    border-radius: 6px;
+}
+.dt-scheme-editor-overrides-head,
+.dt-scheme-editor-overrides-row {
+    display: grid;
+    grid-template-columns: 1fr 72px 72px;
+    gap: 8px;
+    align-items: center;
+    padding: 2px 4px;
+    font-size: 11px;
+}
+.dt-scheme-editor-overrides-cell {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.dt-scheme-editor-overrides-cell .dt-scheme-editor-overrides-picker {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.dt-scheme-editor-overrides > .dt-theme-editor-hint {
+    margin-bottom: 10px;
+}
+.dt-scheme-editor-overrides-head {
+    color: var(--t-text-tertiary, #888);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.08));
+    padding-bottom: 4px;
+    margin-bottom: 4px;
+}
+.dt-scheme-editor-overrides-label {
+    color: var(--t-text-secondary, #c8c8c8);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+}
+.dt-scheme-editor-overrides-picker {
+    width: 100%;
+    height: 22px;
+    padding: 0;
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.15));
+    border-radius: 3px;
+    background: transparent;
+    cursor: pointer;
+    position: relative;
+}
+.dt-scheme-editor-overrides-picker[data-set="1"] {
+    border-color: var(--t-accent-primary, #4f8cff);
+    box-shadow: 0 0 0 1px var(--t-accent-primary, #4f8cff);
+}
+.dt-scheme-editor-overrides-reset {
+    background: transparent;
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    color: var(--t-text-tertiary, #888);
+    border-radius: 4px;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    justify-self: center;
+    font-family: inherit;
+}
+.dt-scheme-editor-overrides-reset:hover:not(:disabled) {
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.06));
+    color: var(--t-text-primary, #d4d4d4);
+}
+.dt-scheme-editor-overrides-reset.dt-inactive,
+.dt-scheme-editor-overrides-reset:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+/* ── Name prompt (clone/new) ──────────────────────────────── */
+.dt-name-prompt-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99998;
+    background: rgba(0, 0, 0, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.dt-name-prompt {
+    position: relative;
+    background: var(--t-surface-base, #1e1e1e);
+    border: 1px solid var(--t-border-default, #444);
+    border-radius: 12px;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
+    padding: 18px 20px 20px;
+    width: 560px;
+    max-width: 90vw;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    color: var(--t-text-primary, #d4d4d4);
+}
+.dt-name-prompt-title {
+    margin: 0 0 14px;
+    font-size: 15px;
+    font-weight: 600;
+}
+.dt-name-prompt-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--t-text-secondary, #c8c8c8);
+    margin: 0 0 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.dt-name-prompt-input {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 7px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    border: 1px solid var(--t-border-default, #3c3c3c);
+    border-radius: 5px;
+    background: var(--t-surface-base, #252526);
+    color: var(--t-text-primary, #d4d4d4);
+    margin-bottom: 12px;
+    outline: none;
+}
+.dt-name-prompt-input:focus {
+    border-color: var(--t-accent-primary, #569cd6);
+    box-shadow: 0 0 0 2px rgba(86, 156, 214, 0.25);
+}
+.dt-name-prompt-error {
+    font-size: 12px;
+    color: var(--t-semantic-danger, #e06c75);
+    margin-bottom: 8px;
+}
+.dt-name-prompt-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+.dt-name-prompt-btn {
+    appearance: none;
+    border: 1px solid var(--t-border-default, #3c3c3c);
+    border-radius: 6px;
+    padding: 7px 18px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+}
+.dt-name-prompt-btn-cancel {
+    background: var(--t-surface-base, #252526);
+    color: var(--t-text-primary, #d4d4d4);
+}
+.dt-name-prompt-btn-cancel:hover {
+    background: var(--t-surface-overlay, #2d2d30);
+}
+.dt-name-prompt-btn-ok {
+    background: var(--t-accent-primary, #4f8cff);
+    color: var(--t-accent-onPrimary, #fff);
+    border-color: transparent;
+}
+.dt-name-prompt-btn-ok:hover {
+    filter: brightness(1.12);
+}
+.dt-name-prompt-btn-ok:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    filter: none;
+}
+
+/* ── Default theme silhouette + swatch (DefaultThemeManagerHost) ── */
+.dt-config-silhouette {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: pointer;
+    box-shadow: 0 0 0 1px var(--t-border-subtle, rgba(255, 255, 255, 0.08));
+    font-size: 0;
+}
+
+/* Tab strip: toggle icon, tabs, then a row of control icons */
+.dt-cs-tabs {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0 4px;
+    height: 11px;
+    flex-shrink: 0;
+}
+.dt-cs-tab-toggle {
+    width: 4px;
+    height: 4px;
+    border-radius: 1px;
+    opacity: 0.65;
+    flex-shrink: 0;
+}
+.dt-cs-tab {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 2px;
+    padding: 0 3px;
+}
+.dt-cs-tab-label {
+    width: 100%;
+    height: 2px;
+    border-radius: 1px;
+    opacity: 0.6;
+}
+.dt-cs-tab-active .dt-cs-tab-label {
+    opacity: 1;
+}
+.dt-cs-tabs-spacer { flex: 1; min-width: 0; }
+.dt-cs-tab-icons {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+}
+.dt-cs-tab-icon {
+    width: 3px;
+    height: 4px;
+    border-radius: 1px;
+    opacity: 0.8;
+}
+
+/* Body: sidebar + main */
+.dt-cs-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+.dt-cs-sidebar {
+    width: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 5px 3px;
+    flex-shrink: 0;
+}
+.dt-cs-sb-header {
+    height: 2px;
+    width: 55%;
+    border-radius: 1px;
+    opacity: 0.75;
+    margin-top: 1px;
+}
+.dt-cs-sb-header + .dt-cs-sb-header,
+.dt-cs-sb-item + .dt-cs-sb-header {
+    margin-top: 2px;
+}
+.dt-cs-sb-item {
+    height: 5px;
+    border-radius: 1.5px;
+    display: flex;
+    align-items: center;
+    padding: 0 3px 0 5px;
+}
+.dt-cs-sb-item-label {
+    height: 2px;
+    width: 80%;
+    border-radius: 1px;
+    opacity: 0.7;
+}
+.dt-cs-sb-item-active .dt-cs-sb-item-label {
+    opacity: 1;
+}
+
+/* Main content area: holds two floating panes side-by-side. The gap shows
+   the windows-chrome (.dt-cs-main bg) between panes, like a real split. */
+.dt-cs-main {
+    flex: 1;
+    padding: 3px;
+    gap: 3px;
+    display: flex;
+    min-width: 0;
+}
+.dt-cs-pane {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    border-radius: 3px;
+    overflow: hidden;
+    min-width: 0;
+}
+/* Focused pane: outer ring in the Active section's accent so the eye is
+   drawn to it the same way the real `.dt-pane-focused` outline reads.
+   The inset border (paneBorder) is preserved by stacking both shadows in
+   the inline style; this class only needs to exist for future overrides. */
+.dt-cs-pane-focused {}
+.dt-cs-pane-titlebar {
+    height: 9px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0 4px;
+    flex-shrink: 0;
+}
+.dt-cs-pane-icon {
+    width: 3px;
+    height: 3px;
+    border-radius: 1px;
+    opacity: 0.85;
+    flex-shrink: 0;
+}
+.dt-cs-pane-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 65%;
+    height: 2px;
+    border-radius: 1px;
+    opacity: 0.95;
+}
+.dt-cs-pane-titlebar-spacer { flex: 1; min-width: 0; }
+.dt-cs-pane-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 4px;
+    min-width: 0;
+}
+.dt-cs-line {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    height: 3px;
+}
+.dt-cs-prompt {
+    width: 4px;
+    height: 3px;
+    border-radius: 1px;
+    flex-shrink: 0;
+}
+.dt-cs-text {
+    height: 2px;
+    flex: 0 0 auto;
+    border-radius: 1px;
+    opacity: 0.55;
+}
+.dt-cs-text-long  { width: 70%; }
+.dt-cs-text-mid   { width: 55%; }
+.dt-cs-text-short { width: 35%; }
+.dt-cs-text-indent { margin-left: 7px; }
+
+/* Bottom accent strip */
+.dt-cs-accent {
+    height: 2px;
+    flex-shrink: 0;
+    opacity: 0.7;
+}
+
+.dt-theme-swatch {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    overflow: hidden;
+}
+.dt-swatch-line {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    border-radius: 5px;
+    font-family: Menlo, Monaco, 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1;
+    box-shadow: 0 0 0 1px var(--t-border-subtle, rgba(255, 255, 255, 0.08));
+}
+.dt-swatch-prompt {
+    font-weight: 700;
+}
+.dt-swatch-syntax-row {
+    display: flex;
+    gap: 3px;
+    padding: 0 2px;
+}
+.dt-syntax-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+
+/* ── Settings sidebar (SettingsSidebar.kt) ──────────────────
+   Slide-in right-side panel that hosts every per-app appearance
+   control the toolkit owns (sidebar/tabbar/mono/proportional fonts,
+   notifications, custom title bar). Mounts inside the right-side
+   `.dt-sidebar` slot so it inherits sidebar palette + width
+   transition; the rules below only style the panel's interior. */
+.dt-settings-sidebar-body {
+    display: flex;
+    flex-direction: column;
+    /* `flex: 1 1 auto` + `min-height: 0` (instead of `height: 100%`) so
+       this body fills its flex-column parent (the sidebar mount target)
+       with a definite height — without that the inner `.dt-settings-
+       sidebar-sections` flex item has no concrete remaining-space to
+       compute against and its `overflow-y: auto` never engages. */
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    background: var(--t-sidebar-bg, var(--t-chrome-titlebar, #161616));
+    color: var(--t-sidebar-text, #d6d6d6);
+}
+.dt-settings-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px 8px;
+    border-bottom: 1px solid var(--t-border-subtle, rgba(255,255,255,0.08));
+}
+.dt-settings-sidebar-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--t-text-primary, #e6e6e6);
+}
+.dt-settings-sidebar-close {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: var(--t-text-secondary, #b8b8b8);
+    cursor: pointer;
+    font-size: 22px;
+    line-height: 1;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+.dt-settings-sidebar-close:hover {
+    background: var(--t-surface-overlay, rgba(255,255,255,0.08));
+    color: var(--t-text-primary, #e6e6e6);
+}
+.dt-settings-sidebar-sections {
+    flex: 1 1 auto;
+    /* `min-height: 0` is required on a flex child whose `overflow-y: auto`
+       must actually engage — without it the flex algorithm sizes the item
+       to its content, the inner list overflows the panel, and no scroll-
+       bar appears. */
+    min-height: 0;
+    overflow-y: auto;
+    padding: 12px 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.dt-settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.dt-settings-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--t-text-tertiary, #9a9a9a);
+}
+.dt-settings-hint {
+    font-size: 11px;
+    color: var(--t-text-tertiary, #9a9a9a);
+    margin-top: -4px;
+    line-height: 1.35;
+}
+.dt-settings-button-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.dt-settings-size-row {
+    /* Smaller pills for size presets so 10–24 fit comfortably on one
+       or two rows. */
+}
+.dt-settings-choice-btn {
+    appearance: none;
+    background: var(--t-surface-raised, rgba(255,255,255,0.04));
+    color: var(--t-text-secondary, #b8b8b8);
+    border: 1px solid var(--t-border-subtle, rgba(255,255,255,0.10));
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 5px 10px;
+    font-size: 12px;
+    line-height: 1.2;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.dt-settings-choice-btn:hover {
+    background: var(--t-surface-overlay, rgba(255,255,255,0.10));
+    color: var(--t-text-primary, #e6e6e6);
+}
+.dt-settings-choice-btn.dt-selected {
+    background: var(--t-surface-sunken, var(--t-surface-base, #161616));
+    color: var(--t-text-primary, #e6e6e6);
+    border-color: var(--t-accent-primary, #ff8a3d);
+    box-shadow: inset 0 0 0 1px var(--t-accent-primary, #ff8a3d);
+    font-weight: 600;
+}
+.dt-settings-link-btn {
+    appearance: none;
+    background: var(--t-surface-raised, rgba(255,255,255,0.04));
+    color: var(--t-text-primary, #e6e6e6);
+    border: 1px solid var(--t-border-subtle, rgba(255,255,255,0.10));
+    border-radius: 4px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    text-align: left;
+    width: 100%;
+}
+.dt-settings-link-btn:hover {
+    background: var(--t-surface-overlay, rgba(255,255,255,0.10));
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Migrated from termtastic/styles.css — generic chrome primitives that
+   style termtastic-emitted DOM but are equally usable by any darkness-
+   toolkit consumer (modal/dialog/menu/dropdown/settings/theme-editor/
+   scheme-editor infrastructure). When the termtastic Kotlin sites that
+   emit these classes are reworked to use `dt-*` primitives, the rules
+   below can be deleted (or merged into the dt-* versions).
+   ════════════════════════════════════════════════════════════════════ */
+/* Far-right tab-bar overflow menu: a single "⋮" button at the end of the
+   tab strip that opens a dropdown with Rename/Close/Hide·Unhide for the
+   active tab and a list of hidden tabs. Replaces the older per-tab
+   hover-activated menu. See TabBarMenu.kt for the DOM builder. */
+
+.tab-bar-menu.open .tab-bar-menu-button {
+    color: var(--t-text-primary);
+    background: var(--t-border-subtle);
+}
+.pane-status-spinner {
+    display: none;
+    border-radius: 50%;
+    border: 2px solid var(--t-text-secondary, #555);
+    border-top-color: var(--t-text-primary, #f5f5f5);
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+    box-sizing: border-box;
+}
+/* Size variants */
+.pane-status-spinner.spinner-sidebar { width: 12px; height: 12px; border-width: 2px; }
+.pane-status-spinner.spinner-tab { width: 12px; height: 12px; border-width: 2px; align-self: center; }
+.pane-status-spinner.spinner-header { width: 14px; height: 14px; border-width: 2.5px; margin-right: 6px; }
+/* Spinners are always visible when a pane is working. */
+.pane-status-spinner.state-working {
+    display: inline-block;
+}
+.pane-status-spinner.state-waiting {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    animation: fade-warning 2.5s ease-in-out infinite;
+    color: var(--t-semantic-warn, #FFD60A);
+}
+.pane-menu {
+    position: relative;
+}
+.pane-menu.open .pane-menu-list {
+    display: block;
+}
+/* Submenu (e.g. "Set state" debug menu) */
+.pane-submenu {
+    position: relative;
+}
+.pane-submenu::after {
+    content: "▸";
+    float: right;
+    opacity: 0.5;
+}
+/* When the submenu would overflow the right edge, flip to the left. */
+.pane-submenu.open-left > .pane-submenu-list {
+    left: auto;
+    right: calc(100% + 4px);
+}
+.pane-submenu.open-left > .pane-submenu-list::before {
+    right: auto;
+    left: 100%;
+}
+.pane-submenu:hover > .pane-submenu-list {
+    display: block;
+}
+.pane-header-spacer {
+    width: 12px;
+    flex-shrink: 0;
+}
+/* `.pane-actions` (the per-header flex container) is now superseded by
+   the toolkit's `.dt-pane-actions` rendered inside `renderPaneHeader`.
+   `.pane-action-btn` is kept below because GitPane still uses it for its
+   in-content auto-refresh button. */
+
+.pane-action-btn {
+    appearance: none;
+    background: transparent;
+    border: none;
+    color: var(--t-text-secondary);
+    cursor: pointer;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background-color 120ms ease-in-out, color 120ms ease-in-out;
+}
+.pane-action-btn:hover {
+    background: var(--t-border-subtle);
+    color: var(--t-text-primary);
+}
+.pane-action-btn.close {
+    margin-left: 0;
+}
+.pane-flyout {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    min-width: 168px;
+    background: var(--t-surface-raised);
+    border: 1px solid var(--t-border-subtle);
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    padding: 6px;
+    z-index: 50;
+}
+.pane-flyout-wrap.open .pane-flyout {
+    display: block;
+}
+.pane-action-btn.active {
+    color: var(--t-accent-primary, #f4b869);
+}
+.pane-action-btn.active:hover {
+    color: var(--t-accent-primary, #f4b869);
+    background: var(--t-border-subtle);
+}
+/* ---------- Layout picker dropdown ------------------------------------ */
+
+/* Three-column grid of preview tiles, sized to content so the dropdown is
+   exactly wide enough for the tiles. Falls back to scrolling only when the
+   full palette wouldn't fit the viewport. Uses the #id selector to outrank
+   the generic .dropdown.open .dropdown-menu rule further down this file. */
+.dropdown.open #layout-menu {
+    display: grid;
+    grid-template-columns: repeat(3, min-content);
+    gap: 4px;
+    padding: 6px;
+    min-width: 0;
+    width: max-content;
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+}
+.layout-option {
+    appearance: none;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: inherit;
+    font: inherit;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+.layout-option:hover {
+    background: var(--t-border-subtle);
+    border-color: var(--t-text-secondary);
+}
+.layout-preview {
+    display: block;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 3px;
+}
+.layout-menu-empty {
+    grid-column: 1 / -1;
+    padding: 12px 4px;
+    font-size: 12px;
+    color: var(--t-text-secondary);
+    text-align: center;
+}
+/* Dropdowns in header */
+.dropdown {
+    position: relative;
+}
+.icon-button {
+    appearance: none;
+    background: transparent;
+    border: none;
+    color: var(--t-text-secondary);
+    padding: 0 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 32px;
+    line-height: 0;
+    transition: color 120ms ease-in-out;
+}
+.icon-button:hover {
+    color: var(--t-text-primary);
+}
+.theme-swatch {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    overflow: hidden;
+}
+.theme-swatch .swatch-terminal {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    border-radius: 5px;
+    font-family: Menlo, Monaco, 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1;
+    box-shadow: 0 0 0 1px var(--t-border-subtle);
+}
+.theme-swatch .swatch-prompt {
+    font-weight: 700;
+}
+.theme-swatch .swatch-syntax-row {
+    display: flex;
+    gap: 3px;
+    padding: 0 2px;
+}
+.theme-swatch .syntax-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+/* Legacy half-swatch support for dropdown menus. */
+.theme-swatch .half {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: Menlo, Monaco, monospace;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1;
+}
+/* Backgrounds are set inline per-theme so each swatch shows its real colors
+   (e.g. Solarized Light's cream background, Ubuntu's eggplant). */
+
+/* Larger swatches inside the dropdown menu so the colors are easier to read. */
+.dropdown-menu .theme-swatch {
+    width: 60px;
+    height: 30px;
+    border-radius: 5px;
+    flex-shrink: 0;
+}
+.dropdown-menu .theme-swatch .half {
+    font-size: 18px;
+}
+/* Theme menu lays out as a wide grid so all themes fit without scrolling. */
+.dropdown.open #theme-menu {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(190px, 1fr));
+    gap: 2px;
+    width: max-content;
+    max-width: calc(100vw - 24px);
+    max-height: none;
+    overflow: visible;
+}
+.dropdown.open .dropdown-menu {
+    display: block;
+}
+.dropdown.open #font-size-menu {
+    display: grid;
+}
+/* ---------- Empty-tab placeholder ----------------------------------- */
+
+.empty-tab {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    color: var(--t-text-secondary);
+    text-align: center;
+}
+/* Picker shown inside a freshly-split (empty) pane until the user chooses a kind. */
+.pane-picker {
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(8px, 4cqi, 24px);
+    padding: clamp(8px, 4cqi, 24px);
+    background: var(--t-sidebar-bg, #1e1e1e);
+    container-type: inline-size;
+    overflow: hidden;
+}
+.md-list {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+    background: var(--t-surface-raised, #252526);
+    border-right: 1px solid var(--t-border-subtle, #333);
+}
+/* ── Pane header icon (terminal / link / markdown) ── */
+.pane-header-icon {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 5px;
+    opacity: 0.55;
+    flex-shrink: 0;
+    color: var(--t-chrome-titleText, var(--t-text-secondary));
+}
+/* ── Confirm dialog ── */
+.pane-modal.confirm-modal {
+    width: auto;
+    min-width: 300px;
+    max-width: 420px;
+    padding: 18px 20px 20px;
+}
+.pane-modal.confirm-modal .pane-modal-title {
+    font-size: 15px;
+    margin: 0 0 10px;
+}
+.confirm-message {
+    margin: 0 0 16px;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--t-text-primary, #d4d4d4);
+}
+.confirm-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+.confirm-btn {
+    appearance: none;
+    border: 1px solid var(--border, #3c3c3c);
+    border-radius: 6px;
+    padding: 7px 18px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+}
+.confirm-cancel {
+    background: var(--t-surface-raised, #252526);
+    color: var(--t-text-primary, #d4d4d4);
+}
+.confirm-cancel:hover { background: var(--t-surface-overlay, #2d2d30); }
+.confirm-ok {
+    background: var(--t-accent-primary, var(--t-accent-primary));
+    color: var(--t-accent-onPrimary, #fff);
+    border-color: transparent;
+}
+.confirm-ok:hover { filter: brightness(1.12); }
+.confirm-ok:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }
+.confirm-ok:focus { outline: 2px solid var(--t-accent-primary, var(--t-accent-primary)); outline-offset: 2px; }
+body.appearance-light .confirm-cancel {
+    background: #fff;
+    border-color: rgba(0,0,0,0.18);
+}
+/* ── Pane type modal ── */
+.pane-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99998;
+    background: rgba(0, 0, 0, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.pane-modal {
+    position: relative;
+    background: var(--bg-primary, #1e1e1e);
+    border: 1px solid var(--border, #444);
+    border-radius: 12px;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
+    padding: 24px 28px 28px;
+    min-width: 420px;
+    max-width: 90vw;
+    width: 800px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    color: var(--t-text-primary, #d4d4d4);
+}
+.pane-modal-close {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    appearance: none;
+    background: none;
+    border: none;
+    color: var(--t-text-secondary, #999);
+    font-size: 22px;
+    cursor: pointer;
+    padding: 4px 8px;
+    line-height: 1;
+}
+.pane-modal-close:hover { color: var(--t-text-primary, #d4d4d4); }
+.pane-modal-title {
+    margin: 0 0 16px;
+    font-size: 18px;
+    font-weight: 600;
+}
+.pane-modal-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+/* Type picker grid (3 cards) */
+.pane-type-grid {
+    display: flex;
+    gap: 14px;
+    justify-content: center;
+}
+.pane-type-card {
+    appearance: none;
+    background: var(--t-surface-raised, #252526);
+    border: 1px solid var(--border, #3c3c3c);
+    border-radius: 10px;
+    color: var(--t-text-primary, #d4d4d4);
+    padding: 24px 20px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    min-width: 120px;
+    transition: background 80ms ease, border-color 80ms ease, transform 80ms ease;
+}
+.pane-type-card:hover {
+    background: var(--t-surface-overlay, #2d2d30);
+    border-color: var(--accent, #0e639c);
+}
+.pane-type-card:active { transform: translateY(1px); }
+.pane-type-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.pane-type-icon svg { width: 40px; height: 40px; }
+.pane-type-label {
+    font-weight: 500;
+    font-size: 13px;
+    white-space: nowrap;
+}
+body.appearance-light .pane-modal {
+    background: #f5f5f5;
+    border-color: rgba(0, 0, 0, 0.18);
+}
+body.appearance-light .pane-type-card {
+    background: #fff;
+    border-color: rgba(0, 0, 0, 0.15);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+body.appearance-light .pane-type-card:hover {
+    border-color: var(--accent, #0e639c);
+}
+/* Back button inside modal */
+.pane-modal-back {
+    appearance: none;
+    background: none;
+    border: none;
+    color: var(--accent, #4fc1ff);
+    font-size: 13px;
+    cursor: pointer;
+    padding: 4px 0;
+    margin-bottom: 12px;
+}
+.pane-modal-back:hover { text-decoration: underline; }
+.pane-modal-empty {
+    color: var(--t-text-secondary, #999);
+    text-align: center;
+    padding: 32px 0;
+    font-size: 14px;
+}
+/* ====================================================================== */
+/*  Settings modal                                                         */
+/* ====================================================================== */
+/* The settings sidebar lives inside .dt-app-frame-body as a flex child,
+   just like the left sidebar. It slides in from the right with a CSS
+   transition. */
+
+.settings-sidebar.open {
+    width: 340px;
+    min-width: 260px;
+}
+.settings-sidebar-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 20px 20px;
+}
+.settings-sidebar > .pane-modal-title {
+    padding: 20px 20px 0;
+    margin-bottom: 12px;
+}
+.settings-sidebar > .pane-modal-close {
+    top: 14px;
+    right: 14px;
+}
+.settings-section {
+    margin-bottom: 20px;
+}
+.settings-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--t-sidebar-textDim, var(--t-text-secondary, #999));
+    margin-bottom: 8px;
+}
+/* ─── Config category headers and card grid ──────────────────────── */
+
+.settings-config-category {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--t-text-tertiary, var(--t-text-secondary, #888));
+    padding: 12px 0 4px;
+}
+.settings-config-category:first-child {
+    padding-top: 0;
+}
+.settings-config-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 8px;
+    padding: 2px;
+}
+.settings-config-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 80ms ease, border-color 80ms ease;
+    position: relative;
+}
+.settings-config-card:hover {
+    background: var(--t-border-subtle, var(--t-border-subtle, #333));
+}
+body.appearance-light .settings-config-card:hover {
+    background: var(--t-border-subtle, rgba(0, 0, 0, 0.06));
+}
+.settings-config-card-name {
+    font-size: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+    color: var(--t-text-secondary, var(--t-text-secondary));
+    cursor: pointer;
+}
+.settings-config-card-delete {
+    appearance: none;
+    background: none;
+    border: none;
+    color: var(--t-text-tertiary, var(--t-text-secondary, #666));
+    font-size: 14px;
+    cursor: pointer;
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 80ms ease;
+}
+.settings-config-card:hover .settings-config-card-delete {
+    opacity: 1;
+}
+.settings-config-card-delete:hover {
+    color: #e06c75;
+    background: rgba(224, 108, 117, 0.1);
+}
+/* Drag-and-drop indicators for config cards */
+.settings-config-card.dragging {
+    opacity: 0.4;
+}
+.settings-config-card.drop-before {
+    box-shadow: -3px 0 0 0 var(--t-accent-primary, var(--accent, #61afef));
+}
+.settings-config-card.drop-after {
+    box-shadow: 3px 0 0 0 var(--t-accent-primary, var(--accent, #61afef));
+}
+/* Config silhouette CSS lives in the toolkit (.dt-config-silhouette /
+   .dt-cs-*) — termtastic delegates rendering via
+   TermtasticThemeManagerHost.renderConfigSilhouetteHtml. */
+
+.settings-save-config-btn {
+    width: 100%;
+}
+/* Theme config save dialog */
+.theme-config-save-modal {
+    min-width: 340px;
+}
+.theme-config-list {
+    max-height: 150px;
+    overflow-y: auto;
+    border: 1px solid var(--t-border-subtle, #3c3c3c);
+    border-radius: 6px;
+    margin-bottom: 12px;
+}
+.theme-config-list-item {
+    padding: 7px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--t-text-primary, #d4d4d4);
+    border-bottom: 1px solid var(--t-border-subtle, #3c3c3c);
+    transition: background 80ms ease;
+}
+.theme-config-list-item:last-child {
+    border-bottom: none;
+}
+.theme-config-list-item:hover {
+    background: var(--t-border-subtle, #333);
+}
+.theme-config-list-item.selected {
+    background: color-mix(in srgb, var(--accent, #4fc1ff) 18%, transparent);
+    border-left: 3px solid var(--accent, #4fc1ff);
+    color: var(--t-text-primary, #d4d4d4);
+    font-weight: 600;
+}
+body.appearance-light .theme-config-list {
+    border-color: rgba(0, 0, 0, 0.15);
+}
+body.appearance-light .theme-config-list-item {
+    color: #333;
+    border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+body.appearance-light .theme-config-list-item:hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+body.appearance-light .theme-config-list-item.selected {
+    color: #333;
+    background: color-mix(in srgb, var(--accent, #0e639c) 12%, transparent);
+    border-left: 3px solid var(--accent, #0e639c);
+}
+/* Choice buttons (appearance, font size, pane status) */
+.settings-button-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.settings-size-row {
+    gap: 4px;
+}
+.settings-choice-btn {
+    appearance: none;
+    background: var(--t-surface-raised, #252526);
+    border: 1px solid var(--t-border-subtle, #3c3c3c);
+    color: var(--t-text-primary, #d4d4d4);
+    font: inherit;
+    font-size: 12px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 80ms ease, border-color 80ms ease;
+}
+.settings-choice-btn:hover {
+    background: var(--t-border-subtle, #333);
+}
+.settings-choice-btn.selected {
+    border-color: var(--t-active-accent, var(--t-accent-primary, var(--t-accent-primary)));
+    background: var(--t-border-subtle, #333);
+    color: var(--t-active-accent, var(--t-accent-primary, var(--t-accent-primary)));
+    font-weight: 600;
+}
+body.appearance-light .settings-choice-btn {
+    background: #fff;
+    border-color: rgba(0, 0, 0, 0.15);
+    color: #333;
+}
+body.appearance-light .settings-choice-btn:hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+body.appearance-light .settings-choice-btn.selected {
+    border-color: var(--t-active-accent, var(--t-accent-primary, var(--t-accent-primary)));
+    color: var(--t-active-accent, var(--t-accent-primary, var(--t-accent-primary)));
+    background: rgba(0, 0, 0, 0.04);
+}
+.settings-size-row .settings-choice-btn {
+    padding: 5px 10px;
+    min-width: 42px;
+    text-align: center;
+}
+.settings-font-row .settings-choice-btn {
+    padding: 6px 12px;
+    text-align: center;
+}
+/* Server settings button at the bottom of the settings sidebar */
+.settings-server-btn {
+    margin: 8px 0 20px;
+    appearance: none;
+    background: var(--t-surface-raised, #252526);
+    border: 1px solid var(--t-border-subtle, #3c3c3c);
+    color: var(--t-text-primary, #d4d4d4);
+    font: inherit;
+    font-size: 13px;
+    padding: 8px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 80ms ease, border-color 80ms ease;
+    align-self: flex-start;
+}
+.settings-server-btn:hover {
+    background: var(--t-border-subtle, #333);
+    border-color: var(--t-text-secondary, #999);
+}
+body.appearance-light .settings-server-btn {
+    background: #fff;
+    border-color: rgba(0, 0, 0, 0.15);
+    color: #333;
+}
+body.appearance-light .settings-server-btn:hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+/* ─── Section theme overrides ─────────────────────────────────────── */
+.settings-hint {
+    font-size: 11px;
+    color: var(--t-text-tertiary, var(--t-text-secondary));
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+.settings-section-select {
+    appearance: none;
+    background: var(--t-surface-raised, var(--t-surface-raised));
+    border: 1px solid var(--t-border-default, var(--t-border-subtle));
+    color: var(--t-text-primary, var(--t-text-primary));
+    border-radius: 6px;
+    padding: 4px 28px 4px 10px;
+    font: 12px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    cursor: pointer;
+    min-width: 120px;
+    background-image: linear-gradient(45deg, transparent 50%, var(--t-text-tertiary, #888) 50%),
+                      linear-gradient(135deg, var(--t-text-tertiary, #888) 50%, transparent 50%);
+    background-position: calc(100% - 12px) 52%, calc(100% - 8px) 52%;
+    background-size: 4px 4px;
+    background-repeat: no-repeat;
+}
+.settings-section-select:focus {
+    outline: none;
+    border-color: var(--t-accent-primary, var(--t-accent-primary));
+}
+body.appearance-light .settings-section-select {
+    background-color: #fff;
+    border-color: rgba(0, 0, 0, 0.15);
+}
+/* ═══════════════════════════════════════════════════════════════════
+   Theme & Color Scheme UX (2026-04)
+   Styles for the Theme Manager sidebar (Tab A Themes + Tab B Color
+   schemes) and the toolbar active-theme button.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Theme Manager modal ──────────────────────────────────────── */
+
+/* ── Theme Manager sidebar (right-docked, single column) ──────────── */
+.theme-manager-sidebar {
+    width: 0;
+    min-width: 0;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: var(--t-sidebar-bg, var(--t-surface-raised, #252526));
+    border-left: 1px solid var(--t-border-subtle, var(--t-border-subtle, #333));
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    color: var(--t-sidebar-text, var(--t-text-primary, #d4d4d4));
+    font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    transition: width 200ms ease, min-width 200ms ease;
+}
+.theme-manager-sidebar.open {
+    width: 480px;
+    min-width: 400px;
+}
+.theme-manager-sidebar > .pane-modal-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 2;
+}
+.theme-manager-header {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 18px 20px 12px;
+    border-bottom: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.08));
+    background: var(--t-surface-raised, rgba(255, 255, 255, 0.03));
+}
+.theme-manager-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--t-text-primary, var(--t-text-primary));
+    padding-right: 28px; /* avoid the close button */
+}
+.theme-manager-tabs {
+    display: flex;
+    gap: 4px;
+}
+.theme-manager-tab {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--t-text-secondary, var(--t-text-secondary));
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.theme-manager-tab:hover {
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.06));
+    color: var(--t-text-primary, var(--t-text-primary));
+}
+.theme-manager-tab.selected {
+    background: var(--t-accent-primary, var(--t-accent-primary));
+    color: var(--t-accent-onPrimary, #fff);
+    border-color: transparent;
+}
+.theme-manager-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 14px 18px 18px;
+    display: flex;
+    flex-direction: column;
+}
+.theme-manager-back-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+.theme-manager-back-btn {
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    color: var(--t-text-primary, var(--t-text-primary));
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s, border-color 0.12s;
+}
+.theme-manager-back-btn:hover {
+    background: var(--t-surface-raised, rgba(255, 255, 255, 0.08));
+    border-color: var(--t-border-strong, rgba(255, 255, 255, 0.22));
+}
+.theme-manager-back-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--t-text-primary, var(--t-text-primary));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.theme-manager-editor-host {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.theme-manager-filters {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+.theme-manager-chip {
+    background: transparent;
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    color: var(--t-text-secondary, var(--t-text-secondary));
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.theme-manager-chip:hover {
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.06));
+}
+.theme-manager-chip.selected {
+    background: var(--t-accent-primary, var(--t-accent-primary));
+    color: var(--t-accent-onPrimary, #fff);
+    border-color: transparent;
+}
+.theme-manager-group-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--t-text-tertiary, #999);
+    margin: 14px 0 8px;
+}
+.theme-manager-grid {
+    display: grid;
+    /* Single column inside the narrow sidebar — cards stack vertically so
+       nothing overflows at 480px width. The editor drills down in place
+       rather than competing with the list for horizontal space. */
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+/* Let theme/scheme cards lay out horizontally (silhouette left, name right)
+   in the single-column sidebar so each row reads like a list item. */
+.theme-manager-sidebar .theme-manager-card-item {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    /* Reserve room for the absolute-positioned star (left) + kebab (right). */
+    padding: 8px 30px 8px 30px;
+    min-height: 56px;
+}
+.theme-manager-sidebar .theme-manager-card-item .theme-manager-silhouette {
+    transform: scale(0.9);
+    transform-origin: left center;
+    flex-shrink: 0;
+}
+.theme-manager-sidebar .theme-manager-card-name {
+    text-align: left;
+    justify-content: flex-start;
+    font-size: 13px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+/* The "+ New theme" / "+ New colour scheme" tiles share the sidebar's row layout so they
+   match a normal card's size; the plus sign and label sit inline. */
+.theme-manager-sidebar .new-scheme-tile,
+.theme-manager-sidebar .new-theme-tile {
+    justify-content: center;
+    gap: 8px;
+}
+.theme-manager-card-item {
+    position: relative;
+    background: var(--t-surface-raised, rgba(255, 255, 255, 0.02));
+    border: 1.5px solid transparent;
+    border-radius: 10px;
+    padding: 8px;
+    cursor: pointer;
+    transition: border-color 0.12s, transform 0.1s, background 0.12s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-height: 96px;
+}
+.theme-manager-card-item:hover {
+    border-color: var(--t-border-strong, rgba(255, 255, 255, 0.2));
+}
+.theme-manager-card-item.selected {
+    border-color: var(--t-accent-primary, var(--t-accent-primary));
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.05));
+}
+.theme-manager-silhouette {
+    display: inline-block;
+    transform: scale(1.1);
+    pointer-events: none;
+}
+.theme-manager-card-name {
+    font-size: 12px;
+    color: var(--t-text-primary, var(--t-text-primary));
+    text-align: center;
+    word-break: break-word;
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    justify-content: center;
+}
+.theme-manager-star {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    background: var(--star-bg, var(--t-surface-overlay, rgba(0, 0, 0, 0.28)));
+    border: none;
+    color: var(--star-fg, var(--t-text-secondary, #ddd));
+    font-size: 14px;
+    line-height: 1;
+    padding: 2px 5px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: color 0.12s, background 0.12s;
+}
+.theme-manager-star.active {
+    color: var(--star-active-fg, var(--t-accent-primary, #ffc857));
+}
+.theme-manager-star:hover {
+    background: var(--star-bg-hover, var(--t-surface-sunken, rgba(0, 0, 0, 0.5)));
+    color: var(--star-active-fg, var(--t-accent-primary, #ffc857));
+}
+.theme-manager-kebab {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: var(--kebab-bg, var(--t-surface-overlay, rgba(0, 0, 0, 0.28)));
+    border: none;
+    color: var(--kebab-fg, var(--t-text-secondary, #ddd));
+    font-size: 14px;
+    line-height: 1;
+    padding: 2px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+}
+.theme-manager-kebab:hover {
+    background: var(--kebab-bg-hover, var(--t-surface-sunken, rgba(0, 0, 0, 0.5)));
+    color: var(--kebab-fg-hover, var(--t-text-primary, #fff));
+}
+.theme-manager-menu {
+    background: var(--t-surface-raised, #1e1f22);
+    color: var(--t-text-primary, var(--t-text-primary));
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    padding: 4px;
+    min-width: 200px;
+    /* Must be above .pane-modal-overlay (99998) — the menu is attached to
+       document.body so without this it renders behind the theme manager. */
+    z-index: 100000;
+    display: flex;
+    flex-direction: column;
+}
+.theme-manager-menu-item {
+    background: transparent;
+    border: none;
+    color: inherit;
+    text-align: left;
+    padding: 7px 10px;
+    border-radius: 5px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+.theme-manager-menu-item:hover {
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.08));
+}
+.theme-manager-empty {
+    padding: 20px 0;
+    color: var(--t-text-tertiary, #888);
+    font-size: 13px;
+    text-align: center;
+    border: 1px dashed var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    border-radius: 8px;
+}
+.new-scheme-tile,
+.new-theme-tile {
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.04));
+    border: 2px dashed var(--t-border-strong, rgba(255, 255, 255, 0.18));
+    justify-content: center;
+    /* Extra space above so the create-new action sits apart from the list,
+       rather than reading as another card in the grid. */
+    margin-top: 10px;
+}
+.new-scheme-plus,
+.new-theme-plus {
+    font-size: 18px;
+    color: var(--t-text-tertiary, #888);
+    line-height: 1;
+}
+.new-scheme-label,
+.new-theme-label {
+    font-size: 13px;
+    color: var(--t-text-secondary, var(--t-text-secondary));
+}
+/* ── Theme / Scheme editor (right pane) ───────────────────────── */
+
+.theme-editor-header {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 28px;
+    margin-bottom: 16px;
+}
+.theme-editor-preview {
+    align-self: center;
+    transform: scale(1.2);
+    transform-origin: center left;
+}
+.scheme-preview {
+    transform: scale(1.0);
+}
+.theme-editor-info {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+.theme-editor-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--t-text-tertiary, #888);
+    /* Match the input/select content inset (padding 10px + 1px border)
+       so the label text aligns with the value text below it. */
+    padding-left: 11px;
+}
+.theme-editor-input,
+.theme-editor-select {
+    background: var(--t-surface-base, var(--t-surface-raised));
+    color: var(--t-text-primary, var(--t-text-primary));
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.15));
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+    font-family: inherit;
+}
+.theme-editor-select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 34px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M1 1.5 L6 6.5 L11 1.5'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    background-size: 10px 7px;
+}
+.theme-editor-input:disabled,
+.theme-editor-select:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+.theme-editor-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding: 12px;
+    background: var(--t-surface-raised, rgba(255, 255, 255, 0.02));
+    border-radius: 8px;
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.06));
+}
+.theme-editor-section-row {
+    display: grid;
+    grid-template-columns: minmax(110px, 140px) 1fr;
+    gap: 10px;
+    align-items: center;
+}
+.theme-editor-section-label {
+    font-size: 12px;
+    color: var(--t-text-secondary, var(--t-text-secondary));
+}
+.theme-editor-section-select {
+    background: var(--t-surface-base, var(--t-surface-raised));
+    color: var(--t-text-primary, var(--t-text-primary));
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    border-radius: 5px;
+    padding: 4px 8px;
+    font-size: 12px;
+}
+/* ── Per-section scheme picker (theme editor) ─────────────────────── */
+
+/* Custom popover replacing the native <select> for scheme rows. The
+   trigger shows a mini scheme swatch beside the name so the user can
+   see the colours at a glance; the menu mirrors the same row layout. */
+.section-scheme-picker {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    background: var(--t-surface-base, var(--t-surface-raised));
+    color: var(--t-text-primary, var(--t-text-primary));
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-family: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.12s, background 0.12s;
+}
+.section-scheme-picker:hover:not(:disabled) {
+    border-color: var(--t-border-strong, rgba(255, 255, 255, 0.25));
+}
+.section-scheme-picker:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+.section-scheme-picker-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.section-scheme-picker-chevron {
+    flex-shrink: 0;
+    color: var(--t-text-tertiary, #888);
+    font-size: 10px;
+    pointer-events: none;
+}
+/* Shared row primitives — inside both trigger and menu option. */
+.section-scheme-swatch {
+    flex-shrink: 0;
+    width: 120px;
+    display: flex;
+    align-items: center;
+    pointer-events: none;
+}
+.section-scheme-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    color: var(--t-text-primary, var(--t-text-primary));
+}
+.section-scheme-label.muted {
+    color: var(--t-text-secondary, var(--t-text-secondary));
+    font-style: italic;
+}
+/* Popover menu — attached to document.body so z-index must beat
+   .pane-modal-overlay (99998), matching .theme-manager-menu. */
+.section-scheme-menu {
+    position: fixed;
+    z-index: 100000;
+    max-height: 440px;
+    overflow-y: auto;
+    background: var(--t-surface-raised, #1e1f22);
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    border-radius: 8px;
+    padding: 4px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+    min-width: 300px;
+}
+.section-scheme-menu-header {
+    padding: 8px 10px 4px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--t-text-tertiary, #888);
+    user-select: none;
+}
+.section-scheme-option {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    background: transparent;
+    color: inherit;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-family: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s;
+}
+.section-scheme-option:hover {
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.06));
+}
+.section-scheme-option.selected {
+    border-color: var(--t-accent-primary, var(--t-accent-primary));
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.05));
+}
+.section-scheme-option-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+/* Per-pane palette dropdown — italicized "Default" (clear-action) sits at
+   the top of the menu, separated from the real scheme rows beneath by a
+   hairline so it reads as a distinct action. */
+.pane-palette-default .pane-palette-default-label {
+    font-style: italic;
+}
+.pane-palette-default {
+    border-bottom: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.08));
+    margin-bottom: 4px;
+    padding-bottom: 6px;
+}
+.theme-editor-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+    align-items: center;
+}
+.theme-editor-btn {
+    background: var(--t-surface-raised, rgba(255, 255, 255, 0.04));
+    color: var(--t-text-primary, var(--t-text-primary));
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.15));
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s, opacity 0.12s;
+}
+.theme-editor-btn:hover:not(:disabled):not(.is-disabled) {
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.08));
+}
+.theme-editor-btn:disabled,
+.theme-editor-btn.is-disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    filter: none;
+    pointer-events: none;
+}
+.theme-editor-btn.primary {
+    background: var(--t-accent-primary, var(--t-accent-primary));
+    color: var(--t-accent-onPrimary, #fff);
+    border-color: transparent;
+}
+.theme-editor-btn.primary:hover:not(:disabled):not(.is-disabled) {
+    background: color-mix(in oklab, var(--t-accent-primary, var(--t-accent-primary)) 82%, white);
+}
+.theme-editor-btn.danger {
+    color: var(--danger, #ff6b6b);
+    border-color: rgba(255, 107, 107, 0.35);
+}
+.theme-editor-btn.danger:hover:not(:disabled):not(.is-disabled) {
+    background: rgba(255, 107, 107, 0.12);
+}
+.theme-editor-hint {
+    font-size: 12px;
+    color: var(--t-text-tertiary, #888);
+    font-style: italic;
+    flex-basis: 100%;
+}
+/* ── Scheme editor colour pickers + overrides grid ────────────── */
+
+.scheme-editor-fgbg {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 16px;
+    padding: 12px;
+    background: var(--t-surface-raised, rgba(255, 255, 255, 0.02));
+    border-radius: 8px;
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.06));
+    margin-bottom: 16px;
+}
+.scheme-editor-fgbg-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: space-between;
+}
+.scheme-editor-fgbg-label {
+    font-size: 12px;
+    color: var(--t-text-secondary, var(--t-text-secondary));
+}
+.scheme-editor-fgbg-picker {
+    width: 34px;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    background: transparent;
+    cursor: pointer;
+}
+.scheme-editor-fgbg-picker:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+.scheme-editor-overrides {
+    margin-top: 8px;
+}
+.scheme-editor-overrides-title {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--t-text-primary, var(--t-text-primary));
+}
+.scheme-editor-overrides-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 6px;
+    background: var(--t-surface-base, var(--t-surface-raised));
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.08));
+    border-radius: 6px;
+}
+.scheme-editor-overrides-head,
+.scheme-editor-overrides-row {
+    display: grid;
+    grid-template-columns: 1fr 72px 72px;
+    gap: 8px;
+    align-items: center;
+    padding: 2px 4px;
+    font-size: 11px;
+}
+.scheme-editor-overrides-cell {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.scheme-editor-overrides-cell .scheme-editor-overrides-picker {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+/* Padding between the overrides explanation and the grid. */
+.scheme-editor-overrides > .theme-editor-hint {
+    margin-bottom: 10px;
+}
+.scheme-editor-overrides-head {
+    color: var(--t-text-tertiary, #888);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.08));
+    padding-bottom: 4px;
+    margin-bottom: 4px;
+}
+.scheme-editor-overrides-label {
+    color: var(--t-text-secondary, var(--t-text-secondary));
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+}
+.scheme-editor-overrides-picker {
+    width: 100%;
+    height: 22px;
+    padding: 0;
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.15));
+    border-radius: 3px;
+    background: transparent;
+    cursor: pointer;
+    position: relative;
+}
+/* Explicit-override marker: accent ring on pickers the user has set. */
+.scheme-editor-overrides-picker[data-set="1"] {
+    border-color: var(--t-accent-primary, var(--t-accent-primary));
+    box-shadow: 0 0 0 1px var(--t-accent-primary, var(--t-accent-primary));
+}
+.scheme-editor-overrides-reset {
+    background: transparent;
+    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    color: var(--t-text-tertiary, #888);
+    border-radius: 4px;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    justify-self: center;
+}
+.scheme-editor-overrides-reset:hover:not(:disabled) {
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.06));
+    color: var(--t-text-primary, var(--t-text-primary));
+}
+.scheme-editor-overrides-reset.is-inactive,
+.scheme-editor-overrides-reset:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+/* ── Second-pass migration: bare-word-prefix families (.pane-menu*, .dropdown*, .pane-flyout*, .theme-swatch*, .layout-preview*, .tab-bar-menu* legacy etc.) ── */
+/* Far-right tab-bar overflow menu: a single "⋮" button at the end of the
+   tab strip that opens a dropdown with Rename/Close/Hide·Unhide for the
+   active tab and a list of hidden tabs. Replaces the older per-tab
+   hover-activated menu. See TabBarMenu.kt for the DOM builder. */
+
+
+.tab-bar-menu-list.open {
+    display: block;
+}
+/* Section heading inside the tab-bar dropdown (e.g. "Active tab",
+   "Hidden tabs"). Small-caps secondary-color label that visually groups
+   the rows beneath it without looking clickable. */
+
+/* Hidden-tab row that is also the currently active tab: mirror the
+   `.tab-button.active` framing so the user sees the same orange ring and
+   label color in the dropdown that they would see on an active tab in
+   the strip. The 2px inset box-shadow stands in for the sliding
+   `.tab-active-indicator` element that adorns visible tabs. */
+.tab-bar-menu-item.active {
+    color: var(--t-accent-primary);
+    font-weight: 700;
+    box-shadow: inset 0 0 0 2px var(--t-accent-primary);
+}
+.tab-bar-menu-item.active .tab-bar-menu-icon {
+    color: var(--t-accent-primary);
+}
+.pane-menu-button {
+    appearance: none;
+    background: transparent;
+    border: none;
+    color: var(--t-text-secondary);
+    font-family: inherit;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    letter-spacing: 1px;
+    transition: background-color 120ms ease-in-out, color 120ms ease-in-out;
+}
+.pane-menu-button:hover {
+    background: var(--t-border-subtle);
+    color: var(--t-text-primary);
+}
+.pane-menu-list {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    min-width: 180px;
+    background: var(--t-surface-raised);
+    border: 1px solid var(--t-border-subtle);
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    padding: 4px;
+    z-index: 50;
+}
+.pane-menu-item {
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--t-text-primary);
+    cursor: pointer;
+}
+.pane-menu-item:hover {
+    background: var(--t-border-subtle);
+}
+/* Submenu (e.g. "Set state" debug menu) */
+
+
+.pane-submenu-list {
+    display: none;
+    position: absolute;
+    left: calc(100% + 4px);
+    top: -4px;
+    min-width: 140px;
+    background: var(--t-surface-raised);
+    border: 1px solid var(--t-border-subtle);
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    padding: 4px;
+    z-index: 51;
+}
+/* When the submenu would overflow the right edge, flip to the left. */
+
+
+/* Invisible bridge so the mouse can travel from the parent item to the
+   submenu without crossing a dead zone that closes the hover. */
+.pane-submenu-list::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 100%;
+    width: 12px;
+}
+/* `.pane-actions` (the per-header flex container) is now superseded by
+   the toolkit's `.dt-pane-actions` rendered inside `renderPaneHeader`.
+   `.pane-action-btn` is kept below because GitPane still uses it for its
+   in-content auto-refresh button. */
+
+
+
+
+/* Generic flyout wrapper — used for pane-settings flyouts. */
+.pane-flyout-wrap {
+    position: relative;
+    display: inline-flex;
+}
+.pane-flyout-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 0;
+}
+.pane-flyout-label {
+    font-size: 11px;
+    color: var(--t-text-secondary, #888);
+    padding: 4px 4px 2px;
+    user-select: none;
+}
+/* ---------- Layout picker dropdown ------------------------------------ */
+
+/* Three-column grid of preview tiles, sized to content so the dropdown is
+   exactly wide enough for the tiles. Falls back to scrolling only when the
+   full palette wouldn't fit the viewport. Uses the #id selector to outrank
+   the generic .dropdown.open .dropdown-menu rule further down this file. */
+
+
+
+
+.layout-preview-primary {
+    fill: var(--t-active-accent, var(--t-accent-primary, #f4b869));
+    stroke: none;
+}
+.layout-preview-other {
+    fill: var(--t-text-secondary, #888);
+    opacity: 0.5;
+    stroke: none;
+}
+/* Dropdowns in header */
+
+
+
+.dropdown-button {
+    appearance: none;
+    background: var(--t-surface-raised);
+    border: 1px solid var(--t-border-subtle);
+    color: var(--t-text-primary);
+    font: inherit;
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+}
+.dropdown-button:hover {
+    border-color: var(--t-text-secondary);
+}
+.dropdown-caret {
+    font-size: 10px;
+    color: var(--t-text-secondary);
+}
+.dropdown-label {
+    font-weight: 500;
+}
+/* Legacy half-swatch support for dropdown menus. */
+
+/* Backgrounds are set inline per-theme so each swatch shows its real colors
+   (e.g. Solarized Light's cream background, Ubuntu's eggplant). */
+
+/* Larger swatches inside the dropdown menu so the colors are easier to read. */
+
+
+/* Theme menu lays out as a wide grid so all themes fit without scrolling. */
+
+.dropdown-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 260px;
+    background: var(--t-surface-raised);
+    border: 1px solid var(--t-border-subtle);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    padding: 4px;
+    z-index: 100;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    color: var(--t-text-primary);
+    font-size: 12px;
+}
+.dropdown-item:hover {
+    background: var(--t-border-subtle);
+}
+.dropdown-item.selected {
+    background: var(--t-border-subtle);
+}
+.dropdown-item .name {
+    flex: 1;
+}
+.dropdown-item .check {
+    color: var(--t-text-secondary);
+    font-size: 11px;
+}
+/* ---------- Empty-tab placeholder ----------------------------------- */
+
+
+.empty-tab-message {
+    font-size: 22px;
+    font-weight: 500;
+    opacity: 0.85;
+}
+.empty-tab-button {
+    appearance: none;
+    background: var(--t-surface-raised);
+    color: var(--t-text-primary);
+    border: 1px solid var(--t-border-subtle);
+    border-radius: 8px;
+    padding: 14px 28px;
+    font-family: inherit;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 120ms ease-in-out, border-color 120ms ease-in-out;
+}
+.empty-tab-button:hover {
+    background: var(--t-border-subtle);
+    border-color: var(--t-text-secondary);
+}
+/* Picker shown inside a freshly-split (empty) pane until the user chooses a kind. */
+.pane-picker-btn {
+    appearance: none;
+    background: var(--t-surface-raised, #252526);
+    color: var(--t-text-primary, #d4d4d4);
+    border: 1px solid var(--t-border-subtle, #333);
+    border-radius: 8px;
+    padding: clamp(6px, 3cqi, 24px) clamp(8px, 4cqi, 28px);
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    max-width: 240px;
+    max-height: 220px;
+    aspect-ratio: 8 / 7;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(4px, 2cqi, 12px);
+    font-family: inherit;
+    font-size: clamp(10px, 2.4cqi, 13px);
+    cursor: pointer;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08),
+                0 1px 2px rgba(0, 0, 0, 0.04);
+    transition: background 80ms ease, border-color 80ms ease, transform 80ms ease;
+}
+.pane-picker-btn > .pane-picker-icon > svg {
+    width: clamp(18px, 10cqi, 40px);
+    height: auto;
+}
+.pane-picker-label {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.pane-picker-btn:hover:not(.disabled) {
+    background: var(--t-surface-overlay, #2d2d30);
+    border-color: var(--accent, #0e639c);
+}
+.pane-picker-btn:active:not(.disabled) {
+    transform: translateY(1px);
+}
+.pane-picker-btn.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+body.appearance-light .pane-picker-btn {
+    border-color: rgba(0, 0, 0, 0.18);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.10),
+                0 2px 8px rgba(0, 0, 0, 0.04);
+}
+body.appearance-light .pane-picker-btn:hover:not(.disabled) {
+    border-color: var(--accent, #0e639c);
+}
+.pane-picker-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--t-text-primary, #d4d4d4);
+}
+.pane-picker-label {
+    color: var(--t-text-primary, #d4d4d4);
+    font-weight: 500;
+}
+.md-list-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--t-border-subtle, #333);
+    color: var(--t-text-primary, #d4d4d4);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.md-list-title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.md-list-auto {
+    appearance: none;
+    background: transparent;
+    border: 1px solid var(--t-border-subtle, #333);
+    color: var(--t-text-secondary, #888);
+    font-size: 11px;
+    text-transform: none;
+    letter-spacing: normal;
+    cursor: pointer;
+    user-select: none;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-family: inherit;
+}
+.md-list-auto:hover {
+    color: var(--t-text-primary, #d4d4d4);
+    background: var(--t-surface-overlay, #2d2d30);
+}
+.md-list-auto.active {
+    color: var(--t-accent-primary, #f4b869);
+    border-color: var(--t-accent-primary, #f4b869);
+    background: rgba(244, 184, 105, 0.08);
+}
+.md-list-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+.md-list-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px 5px 4px;
+    cursor: pointer;
+    color: var(--t-text-secondary);
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    user-select: none;
+    transition: background 100ms ease, color 100ms ease;
+}
+.md-list-chevron {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--t-text-secondary);
+    opacity: 0.7;
+    font-size: 10px;
+    line-height: 1;
+}
+.md-list-chevron.empty {
+    visibility: hidden;
+}
+.md-list-chevron:hover {
+    color: var(--t-text-primary);
+    opacity: 1;
+}
+.md-list-item:hover {
+    background: var(--t-border-subtle);
+    color: var(--t-text-primary);
+}
+.md-list-item.active {
+    background: rgba(244, 184, 105, 0.08);
+    color: var(--t-accent-primary);
+}
+.md-list-item.active .md-list-item-age {
+    color: var(--t-accent-primary);
+    opacity: 0.7;
+}
+.md-list-item-icon {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    opacity: 0.6;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.md-list-item-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: rtl;
+    text-align: left;
+}
+.md-list-item-age {
+    color: var(--t-text-secondary);
+    font-size: 11px;
+    flex-shrink: 0;
+    opacity: 0.8;
+}
+.md-list-empty {
+    padding: 16px 12px;
+    color: var(--t-text-secondary, #888);
+    font-size: 12px;
+    text-align: center;
+}
+.md-list-section-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    cursor: pointer;
+    color: var(--t-text-primary);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    user-select: none;
+    transition: background 100ms ease;
+}
+.md-list-section-header:hover {
+    background: var(--t-border-subtle);
+}
+.md-list-section-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: rtl;
+    text-align: left;
+}
+.md-list-section-chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    transition: transform 150ms ease;
+    font-size: 14px;
+    color: var(--t-text-secondary);
+}
+.md-list-section-header.collapsed-tree .md-list-section-chevron {
+    transform: rotate(-90deg);
+}
+.md-list-section-children {
+    overflow: hidden;
+    transition: max-height 200ms ease-in-out;
+}
+.md-list-section-children.collapsed-tree {
+    max-height: 0 !important;
+}
+/* ====================================================================== */
+/*  Settings modal                                                         */
+/* ====================================================================== */
+/* The settings sidebar lives inside .dt-app-frame-body as a flex child,
+   just like the left sidebar. It slides in from the right with a CSS
+   transition. */
+
+
+
+
+
+
+
+/* ─── Config category headers and card grid ──────────────────────── */
+
+
+
+
+
+
+
+
+
+
+
+/* Drag-and-drop indicators for config cards */
+
+
+
+/* Config silhouette CSS lives in the toolkit (.dt-config-silhouette /
+   .dt-cs-*) — termtastic delegates rendering via
+   TermtasticThemeManagerHost.renderConfigSilhouetteHtml. */
+
+
+/* Theme config save dialog */
+
+/* "Default" swatch card (no-override) */
+.theme-swatch-default {
+    width: 100%;
+    height: 40px;
+    border-radius: 6px;
+    border: 1px dashed var(--t-border-default, var(--t-border-subtle, #555));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--t-text-tertiary, #888);
+    font-size: 11px;
+}
+
+/* ── Syntax highlighting tokens (migrated from termtastic) ── */
+/* Syntax highlighting */
+.hl-keyword { color: #569cd6; }
+.hl-string { color: #ce9178; }
+.hl-comment { color: #6a9955; font-style: italic; }
+.hl-number { color: #b5cea8; }
+.hl-tag { color: #569cd6; }
+.hl-attr { color: #9cdcfe; }
+.hl-type { color: #4ec9b0; }
+.hl-annotation { color: #dcdcaa; }
+.hl-punctuation { color: #808080; }
+
+/* ── Hover menu (attachHoverMenu / buildNewWindowSplitButton) ──
+   Popover revealed when the user hovers an anchor button (e.g. the
+   topbar "New pane" icon). Shares the same surface/border tokens as
+   .dt-layout-preset-grid so both popovers feel like one component
+   family; the layout is a vertical column of icon+label rows instead
+   of a tile grid. */
+.dt-hover-menu {
+    position: fixed;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    min-width: 180px;
+    padding: 4px 0;
+    background: var(--t-surface-base, #252526);
+    border: 1px solid var(--t-border-strong, var(--t-border-prominent, rgba(255, 255, 255, 0.45)));
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+}
+.dt-hover-menu-item {
+    appearance: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px;
+    background: transparent;
+    border: 0;
+    color: var(--t-text-secondary, #b8b8b8);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+    transition: background 0.12s, color 0.12s;
+}
+.dt-hover-menu-item:hover {
+    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.08));
+    color: var(--t-text-primary, #e6e6e6);
+}
+.dt-hover-menu-icon {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
+}
+.dt-hover-menu-icon svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+}
+.dt-hover-menu-label {
+    flex: 1;
+    white-space: nowrap;
+}

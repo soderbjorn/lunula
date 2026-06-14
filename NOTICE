@@ -1,0 +1,22 @@
+Darkness Toolkit
+Copyright (c) 2026 Robert Söderbjörn
+
+This product depends on third-party libraries. Their licenses and copyright
+notices are listed below. For full license texts, see the referenced URLs.
+
+================================================================================
+APACHE 2.0 DEPENDENCIES
+================================================================================
+
+The following dependencies are used under the Apache License, Version 2.0
+(https://www.apache.org/licenses/LICENSE-2.0):
+
+  Kotlin stdlib, kotlinx-coroutines, kotlinx-serialization, kotlinx-html
+    Copyright JetBrains s.r.o. and Kotlin Programming Language contributors
+
+  Compose Multiplatform (runtime, foundation, ui, material3)
+    Copyright JetBrains s.r.o. and contributors
+    Source: https://github.com/JetBrains/compose-multiplatform
+
+  AndroidX libraries (used transitively in toolkit-compose Android target)
+    Copyright The Android Open Source Project

@@ -1,0 +1,11 @@
+.gradle/
+.kotlin/
+build/
+local.properties
+.idea/
+.DS_Store
+*.iml
+kotlin-js-store/
+node_modules/
+demo/electron/resources/
+demo/electron/dist/
