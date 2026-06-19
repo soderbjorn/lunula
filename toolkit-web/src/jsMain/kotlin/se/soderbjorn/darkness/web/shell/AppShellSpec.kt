@@ -371,6 +371,22 @@ class TabSource(
  *   Defaults to returning `null`.
  * @property sidebarSections optional app-specific sidebar sections,
  *   appended after the toolkit's default tabs/panes tree.
+ * @property sidebarHeader optional factory returning custom DOM pinned to
+ *   the TOP of the left sidebar, above the scrollable tabs/panes tree.
+ *   Apps use this to surface a header that should ride along with the
+ *   sessions list — e.g. termtastic's app logo + work-state dot. Returning
+ *   `null` (the default) leaves the sidebar with no header. The factory is
+ *   invoked on each shell rerender; apps that need stable element identity
+ *   (event listeners, in-place state mutation) should cache and return the
+ *   same element each call — the toolkit re-parents it into the freshly
+ *   built sidebar rather than cloning it.
+ * @property sidebarFooter optional factory returning custom DOM pinned to
+ *   the BOTTOM of the left sidebar, below the scrollable tabs/panes tree.
+ *   The content area flex-grows so this footer stays anchored to the
+ *   bottom. Apps use it for a persistent status/action footer that belongs
+ *   with the sessions list — e.g. termtastic's Claude usage rows plus the
+ *   update / news pills. Same identity/caching contract and rerender cadence
+ *   as [sidebarHeader]; `null` (the default) leaves no footer.
  * @property extraTopbarTrailing optional app-specific trailing topbar
  *   actions, appended after the toolkit's default actions
  *   (themes-toggle / theme-manager). A small visual gap separates the
@@ -463,11 +479,29 @@ data class AppShellSpec(
      */
     val paneIndex: (tabId: String, paneId: String) -> Int? = { _, _ -> null },
     val sidebarSections: List<AppShellSidebarSection> = emptyList(),
+    val sidebarHeader: (() -> HTMLElement?)? = null,
+    val sidebarFooter: (() -> HTMLElement?)? = null,
     val extraTopbarTrailing: List<TopbarAction> = emptyList(),
     val extraTopbarBeforeStandard: List<TopbarAction> = emptyList(),
     val appPanes: Map<String, String> = emptyMap(),
     val bottomBarLeading: (() -> HTMLElement?)? = null,
     val bottomBarTrailing: (() -> HTMLElement?)? = null,
+    /**
+     * Whether the toolkit's bottom status bar is rendered at all. When
+     * `true` (the default) the toolkit mounts its standard bottom bar —
+     * the slim chrome strip whose slots are filled by [bottomBarLeading]
+     * / [bottomBarTrailing] (or the app-name fallback). Set to `false` to
+     * omit the bar entirely: the bottom-bar slot stays in the frame but
+     * is left empty, so the app frame is just top bar + sidebars + main
+     * with no footer chrome and no draggable bottom edge.
+     *
+     * Apps that have migrated all their footer status content elsewhere
+     * (e.g. termtastic moved its Claude-usage rows into the left-sidebar
+     * footer) opt out here so an otherwise-empty bar doesn't sit at the
+     * bottom of the window. When `false`, [bottomBarLeading] /
+     * [bottomBarTrailing] are never invoked.
+     */
+    val showBottomBar: Boolean = true,
     val settingsHost: ThemeManagerHost? = null,
     /**
      * Optional factory returning the body element of an app-supplied

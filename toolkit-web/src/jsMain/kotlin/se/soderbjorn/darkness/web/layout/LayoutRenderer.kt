@@ -92,8 +92,15 @@ import se.soderbjorn.darkness.web.confirmClosePane
  *   is the pre-existing behaviour. Default `null`.
  * @property onFloatingMinimized fired when the user clicks the minimize
  *   action. Hosts flip the matching [FloatingPaneSpec.isMinimized] flag
- *   (and surface the pane in their sidebar / overflow menu so the user
- *   can restore it). `null` hides the minimize button.
+ *   (which drops the pane from the layout and parks a chip in the dock —
+ *   see [LayoutRenderer.render]). `null` hides the minimize button.
+ * @property onFloatingRestored fired when the user clicks a dock chip (or
+ *   its restore button) for a minimized pane. Hosts clear the matching
+ *   [FloatingPaneSpec.isMinimized] flag and re-render; the pane re-enters
+ *   the layout at its preserved geometry. A separate entry point from
+ *   [onFloatingMinimized] is required because a minimized pane has no
+ *   chrome header in the layout — the dock chip is the only restore
+ *   affordance. `null` makes the dock chips inert (no restore).
  * @property confirmFloatingClose when `true` (the default) the close action
  *   shows a [confirmClosePane] dialog before invoking [onFloatingClosed],
  *   using the pane's title (or "this pane" if untitled). Apps that already
@@ -113,12 +120,38 @@ class PaneCallbacks(
     val onFloatingMaximizeToggled: ((PaneId) -> Unit)? = null,
     val onFloatingMaximizeCleared: ((PaneId) -> Unit)? = null,
     val onFloatingMinimized: ((PaneId) -> Unit)? = null,
+    val onFloatingRestored: ((PaneId) -> Unit)? = null,
     val confirmFloatingClose: Boolean = true,
 )
 
 /** Toolkit DOM class names used by the renderer (also referenced by stylesheets). */
 object LayoutClassNames {
     const val ROOT = "dt-pane-root"
+
+    /**
+     * Inner positioning context the renderer mounts inside [ROOT]. Holds
+     * every absolutely-positioned `.dt-pane-floating` plus the resize
+     * separators. Split out from [ROOT] so the dock ([DOCK]) can sit as a
+     * flow sibling *below* the pane area and genuinely reserve vertical
+     * space, rather than overlay the bottom of the panes. The pane area
+     * flex-grows; the dock flex-shrinks to its content.
+     */
+    const val PANE_AREA = "dt-pane-area"
+
+    /**
+     * Flow-row strip rendered under [PANE_AREA] when ≥1 floating pane is
+     * minimized. Hosts a parked-title-bar chip ([DOCK_ITEM]) per minimized
+     * pane. Absent (not rendered) when nothing is minimized, so no empty
+     * bar sits at the bottom.
+     */
+    const val DOCK = "dt-pane-dock"
+
+    /**
+     * One chip in the [DOCK] — a parked title bar for a minimized pane.
+     * Shows the pane's icon + label and a restore button; clicking the chip
+     * body (or the button) fires [PaneCallbacks.onFloatingRestored].
+     */
+    const val DOCK_ITEM = "dt-pane-dock-item"
     const val PANE = "dt-pane"
 
     /** @see PaneHeaderClassNames.HEADER — kept here for backward source compatibility. */
@@ -254,10 +287,26 @@ class LayoutRenderer(
      */
     private var lastLayout: PaneLayout = PaneLayout()
 
+    /**
+     * Inner element that holds the absolutely-positioned panes + resize
+     * separators. Sits inside [container] (which carries the
+     * [LayoutClassNames.ROOT] class and is laid out as a flex column);
+     * the dock — when present — is appended after this as a flow sibling
+     * so it reserves space below the panes instead of overlaying them.
+     *
+     * All pane DOM operations (wipe, append, query, focus-class, and the
+     * drag/resize geometry math) target [paneArea], not [container]; pane
+     * geometry fractions are therefore measured against this element's box.
+     */
+    private val paneArea: HTMLElement = (document.createElement("div") as HTMLElement).also {
+        it.className = LayoutClassNames.PANE_AREA
+    }
+
     init {
         if (!container.classList.contains(LayoutClassNames.ROOT)) {
             container.classList.add(LayoutClassNames.ROOT)
         }
+        container.appendChild(paneArea)
         // Register pane navigation hotkeys against this renderer.
         // [HotkeyRegistry.register]'s replace-on-register semantics mean
         // that constructing a new LayoutRenderer (e.g. on tab switch)
@@ -346,12 +395,50 @@ class LayoutRenderer(
                 .toSet()
         } else emptySet()
 
+        // FLIP groundwork for the minimize/restore animation. Snapshot the
+        // current on-screen rect of every live pane and every dock chip
+        // BEFORE the wipe/rebuild relocates them; keyed by pane id (a pane is
+        // either a layout pane OR a dock chip in any given render, so no
+        // collision). After the rebuild we animate the transitioning element
+        // between its old rect (here) and its new rect.
+        val prevRectById = HashMap<String, org.w3c.dom.DOMRect>()
+        // Ids transitioning between layout and dock this render (skip on a
+        // tab switch — that's a fresh paint, not a user minimize/restore).
+        val prevMinimizedIds = previousLayout.floatingPanes
+            .filter { it.isMinimized }.map { it.id }.toSet()
+        val nowMinimizedIds = layout.floatingPanes
+            .filter { it.isMinimized }.map { it.id }.toSet()
+        val minimizingIds: Set<String> =
+            if (!contextChanged) departingIds.filter { it in nowMinimizedIds }.toSet()
+            else emptySet()
+        val restoringIds: Set<String> =
+            if (!contextChanged) prevMinimizedIds.filter { it in currentIds }.toSet()
+            else emptySet()
+        if (minimizingIds.isNotEmpty() || restoringIds.isNotEmpty()) {
+            val paneEls = paneArea.querySelectorAll("[data-pane-id]")
+            for (i in 0 until paneEls.length) {
+                val el = paneEls.item(i) as? HTMLElement ?: continue
+                if (el.classList.contains(CLOSING_GHOST_CLASS)) continue
+                el.getAttribute("data-pane-id")?.let { prevRectById[it] = el.getBoundingClientRect() }
+            }
+            val chipEls = container.querySelectorAll(".${LayoutClassNames.DOCK_ITEM}")
+            for (i in 0 until chipEls.length) {
+                val el = chipEls.item(i) as? HTMLElement ?: continue
+                el.getAttribute("data-dock-pane-id")?.let { prevRectById[it] = el.getBoundingClientRect() }
+            }
+        }
+        // Elements that should fly into the dock after the dock is built,
+        // paired with the screen rect they were pinned at (their FLIP
+        // start rect — captured before the dock resizes the pane area).
+        val minimizingGhosts = HashMap<String, HTMLElement>()
+        val minimizingGhostRects = HashMap<String, org.w3c.dom.DOMRect>()
+
         // Wipe non-ghost, non-departing children. Ghosts (already in
         // mid-animation) stay; departing panes are left in place and
         // marked as ghosts in the next pass so they animate out.
         val toRemove = mutableListOf<org.w3c.dom.Node>()
         val toAnimateOut = mutableListOf<HTMLElement>()
-        var node = container.firstChild
+        var node = paneArea.firstChild
         while (node != null) {
             val el = node as? HTMLElement
             when {
@@ -366,8 +453,46 @@ class LayoutRenderer(
             }
             node = node.nextSibling
         }
-        toRemove.forEach { container.removeChild(it) }
-        toAnimateOut.forEach { startCloseAnimation(it) }
+        toRemove.forEach { paneArea.removeChild(it) }
+        toAnimateOut.forEach { el ->
+            val id = el.getAttribute("data-pane-id")
+            if (id != null && id in minimizingIds) {
+                // A minimizing pane flies into its dock chip (built below)
+                // rather than shrinking into the screen centre. Preserve it
+                // as a ghost so neither this render's separator/dock work nor
+                // a follow-up render wipes it before the flight finishes.
+                //
+                // Freeze the ghost's box at its current px rect BEFORE
+                // `renderDock` runs. The dock reserves vertical space, which
+                // flex-shrinks the pane area — and since a floating pane is
+                // sized in *percentages of the pane area*, that shrink would
+                // both resize the ghost mid-flight and fire its own
+                // `left/top/width/height` 220ms transition, fighting the FLIP
+                // (the visible symptom: the pane appears to snap straight to
+                // the dock instead of flying there). Replacing the `%` geometry
+                // with explicit px (still `position: absolute` within the
+                // pane area, so no transform-ancestor containing-block
+                // surprises that `position: fixed` would risk) decouples the
+                // ghost from the resize. The pane area hasn't shrunk yet at
+                // this point — the dock is built below — so the offsets are
+                // measured against its full size and stay valid for the flight.
+                val rect = el.getBoundingClientRect()
+                val areaRect = paneArea.getBoundingClientRect()
+                el.classList.add(CLOSING_GHOST_CLASS)
+                el.style.setProperty("pointer-events", "none")
+                el.style.setProperty("--dt-fp-z", "9999")
+                el.style.setProperty("transition", "none")
+                el.style.margin = "0"
+                el.style.left = "${rect.left - areaRect.left}px"
+                el.style.top = "${rect.top - areaRect.top}px"
+                el.style.width = "${rect.width}px"
+                el.style.height = "${rect.height}px"
+                minimizingGhosts[id] = el
+                minimizingGhostRects[id] = rect
+            } else {
+                startCloseAnimation(el)
+            }
+        }
         val pendingPanes = mutableListOf<Pair<PaneId, HTMLElement>>()
         // Reconcile the renderer's focus memory with the layout we're about
         // to paint. If the previously-focused id is gone (closed or now
@@ -378,7 +503,57 @@ class LayoutRenderer(
         }
         for (float in layout.floatingPanes) {
             if (float.isMinimized) continue
-            container.appendChild(buildFloatingPane(float, pendingPanes))
+            paneArea.appendChild(buildFloatingPane(float, pendingPanes))
+        }
+        // Dock: a flow strip under the pane area holding one chip per
+        // minimized pane. Rebuilt from scratch each render (cheap: at most
+        // a handful of chips) and only present when something is minimized,
+        // so the bottom strip appears/disappears with the minimized set.
+        renderDock(layout.floatingPanes.filter { it.isMinimized })
+        // Minimize/restore FLIP. The dock chips and the laid-out panes are
+        // now in the DOM, so their destination/source rects measure true.
+        //  - Minimizing: the held ghost (full pane) flies + shrinks into its
+        //    chip, fading out as it merges with the (already-visible) chip.
+        //  - Restoring: the freshly-built pane starts at its old chip rect
+        //    and grows out to its real geometry.
+        for ((id, ghost) in minimizingGhosts) {
+            // Prefer the rect the ghost was pinned at over the pre-wipe
+            // snapshot — they agree, but the pinned rect is exactly the
+            // ghost's current (fixed) box, keeping frame 0 a true identity.
+            val from = minimizingGhostRects[id] ?: prevRectById[id]
+            val chip = container.querySelector(
+                ".${LayoutClassNames.DOCK_ITEM}[data-dock-pane-id=\"$id\"]"
+            ) as? HTMLElement
+            val to = chip?.getBoundingClientRect()
+            if (from == null || to == null) {
+                ghost.parentNode?.removeChild(ghost)
+                continue
+            }
+            // Ghost's box rests at `from` (old pane rect); fly it to the
+            // chip (`to`) and fade out so it merges into the visible chip.
+            animateFlip(
+                el = ghost,
+                startRect = from,
+                endRect = to,
+                startOpacity = 1.0,
+                endOpacity = 0.0,
+                removeOnFinish = true,
+            )
+        }
+        for (id in restoringIds) {
+            val el = paneArea.querySelector("[data-pane-id=\"$id\"]") as? HTMLElement ?: continue
+            val from = prevRectById[id] ?: continue
+            val to = el.getBoundingClientRect()
+            // Pane's box rests at `to` (real geometry); start it at the old
+            // chip rect (`from`) and grow it out to its layout slot.
+            animateFlip(
+                el = el,
+                startRect = from,
+                endRect = to,
+                startOpacity = 0.4,
+                endOpacity = 1.0,
+                removeOnFinish = false,
+            )
         }
         // Drop stale entries so a long-running session doesn't accumulate
         // maximize-state snapshots for panes that no longer exist.
@@ -407,7 +582,7 @@ class LayoutRenderer(
             val visiblePanes = layout.floatingPanes.filterNot { it.isMinimized || it.isMaximized }
             val separators = computeSeparators(visiblePanes)
             mountSeparators(
-                container = container,
+                container = paneArea,
                 separators = separators,
                 callbacks = SeparatorCallbacks(
                     onFloatingMoved = onMoved,
@@ -421,8 +596,110 @@ class LayoutRenderer(
             // Clear any prior separators so a switch to Auto / Maximized
             // immediately drops the bars instead of leaving stale ones in
             // the DOM until the next non-suppressed render.
-            mountSeparators(container, emptyList(), noopSeparatorCallbacks)
+            mountSeparators(paneArea, emptyList(), noopSeparatorCallbacks)
         }
+    }
+
+    /**
+     * Rebuilds the dock under the pane area from [minimized].
+     *
+     * Removes any existing `.dt-pane-dock` first, then — when [minimized]
+     * is non-empty — appends a fresh one to [container] (after [paneArea])
+     * so it reads as a strip below the panes. Each minimized pane becomes
+     * one [buildDockItem] chip. When [minimized] is empty nothing is
+     * appended, so the dock disappears entirely (no empty bar).
+     *
+     * Called at the end of every full [render]; the header-only fast path
+     * never changes the minimized set so it leaves the dock untouched.
+     *
+     * @param minimized the layout's minimized floating panes, in layout
+     *   order. Empty means "no dock".
+     */
+    private fun renderDock(minimized: List<FloatingPaneSpec>) {
+        (container.querySelector(".${LayoutClassNames.DOCK}") as? HTMLElement)
+            ?.let { container.removeChild(it) }
+        if (minimized.isEmpty()) return
+        val dock = document.createElement("div") as HTMLElement
+        dock.className = LayoutClassNames.DOCK
+        for (spec in minimized) {
+            dock.appendChild(buildDockItem(spec))
+        }
+        container.appendChild(dock)
+    }
+
+    /**
+     * Builds one dock chip for the minimized pane [spec] — a parked title
+     * bar showing the pane's leading icon + label and a restore button.
+     *
+     * Icon and label are pulled from the host's [PaneCallbacks.paneHeader]
+     * callback (the same source the in-layout chrome header uses) so a
+     * docked pane reads identically to its title bar. Clicking the chip
+     * body or its restore button fires [PaneCallbacks.onFloatingRestored];
+     * the host clears [FloatingPaneSpec.isMinimized] and re-renders, and
+     * the pane animates back from the dock into its preserved geometry.
+     *
+     * @param spec the minimized pane to represent.
+     * @return a detached `.dt-pane-dock-item` element with restore wired.
+     */
+    private fun buildDockItem(spec: FloatingPaneSpec): HTMLElement {
+        val item = document.createElement("div") as HTMLElement
+        item.className = LayoutClassNames.DOCK_ITEM
+        // Not `data-pane-id`: hosts that focus on `data-pane-id` presses
+        // (termtastic's pointerdown net) shouldn't treat a dock click as a
+        // focus of a pane that isn't even in the layout — the restore
+        // handler re-adds and focuses it instead.
+        item.setAttribute("data-dock-pane-id", spec.id)
+        val headerSpec = callbacks.paneHeader.invoke(spec.id, spec.title)
+
+        headerSpec.leadingIcon?.let { iconHtml ->
+            val icon = document.createElement("span") as HTMLElement
+            icon.className = "${LayoutClassNames.DOCK_ITEM}-icon"
+            icon.innerHTML = iconHtml
+            item.appendChild(icon)
+        }
+
+        // Live status badge (e.g. a working spinner) — the same element the
+        // chrome header would surface via `PaneHeaderSpec.leadingBadge`. A
+        // minimized pane has no chrome header, so showing it on the chip
+        // keeps the "this pane is busy" signal visible while it's docked.
+        headerSpec.leadingBadge?.let { badge ->
+            val slot = document.createElement("span") as HTMLElement
+            slot.className = "${LayoutClassNames.DOCK_ITEM}-badge"
+            slot.appendChild(badge)
+            item.appendChild(slot)
+        }
+
+        val label = document.createElement("span") as HTMLElement
+        label.className = "${LayoutClassNames.DOCK_ITEM}-label"
+        val text = headerSpec.title ?: spec.title ?: spec.id
+        label.textContent = text
+        label.setAttribute("title", text)
+        item.appendChild(label)
+
+        callbacks.onFloatingRestored?.let { onRestore ->
+            // Explicit restore affordance — the diagonal-inward arrows
+            // (ICON_RESTORE) the toolkit uses for "bring back from a larger
+            // state". stopPropagation so the chip-body click below doesn't
+            // also fire (harmless duplicate, but keep it to a single call).
+            val action = PaneActions.restore { onRestore(spec.id) }
+            val btn = document.createElement("button") as org.w3c.dom.HTMLButtonElement
+            btn.type = "button"
+            btn.className = "${PaneHeaderClassNames.ACTION} ${LayoutClassNames.DOCK_ITEM}-restore"
+            btn.title = action.tooltip
+            btn.setAttribute("aria-label", action.tooltip)
+            btn.innerHTML = action.iconHtml
+            btn.addEventListener("click", { ev ->
+                ev.stopPropagation()
+                onRestore(spec.id)
+            })
+            item.appendChild(btn)
+            // Clicking anywhere on the chip body restores too — the chip is
+            // a parked title bar, and clicking a title bar to un-minimize is
+            // the convention the user described.
+            item.addEventListener("click", { _ -> onRestore(spec.id) })
+            item.style.cursor = "pointer"
+        }
+        return item
     }
 
     /**
@@ -507,7 +784,7 @@ class LayoutRenderer(
     }
 
     private fun applyFocusClass(paneId: PaneId) {
-        val all = container.querySelectorAll(".${LayoutClassNames.PANE}")
+        val all = paneArea.querySelectorAll(".${LayoutClassNames.PANE}")
         for (i in 0 until all.length) {
             val el = all.item(i) as HTMLElement
             val isMatch = el.getAttribute("data-pane-id") == paneId
@@ -831,7 +1108,7 @@ class LayoutRenderer(
         // how to deal with missing / ghosted elements.
         for (spec in curr) {
             if (spec.isMinimized) continue
-            val existing = container.querySelector("[data-pane-id=\"${spec.id}\"]") as? HTMLElement
+            val existing = paneArea.querySelector("[data-pane-id=\"${spec.id}\"]") as? HTMLElement
                 ?: return false
             if (existing.classList.contains(CLOSING_GHOST_CLASS)) return false
         }
@@ -856,7 +1133,7 @@ class LayoutRenderer(
     private fun applyHeaderOnlyUpdate(layout: PaneLayout) {
         for (spec in layout.floatingPanes) {
             if (spec.isMinimized) continue
-            val pane = container.querySelector("[data-pane-id=\"${spec.id}\"]") as? HTMLElement
+            val pane = paneArea.querySelector("[data-pane-id=\"${spec.id}\"]") as? HTMLElement
                 ?: continue
             val newHeader = buildPaneHeaderForFloating(pane, spec)
             // Find the existing header among direct children. Avoids
@@ -901,7 +1178,9 @@ class LayoutRenderer(
             // renderPaneHeader stops their propagation already, so we won't
             // see them here, but this is a defensive belt.
             if (mouseEv.button.toInt() != 0) return@addEventListener
-            val containerRect = container.getBoundingClientRect()
+            // Geometry fractions are measured against the pane area (not
+            // the outer root), since the dock can occupy part of the root.
+            val containerRect = paneArea.getBoundingClientRect()
             val containerW = containerRect.width
             val containerH = containerRect.height
             if (containerW <= 0 || containerH <= 0) return@addEventListener
@@ -1019,7 +1298,9 @@ class LayoutRenderer(
             mouseEv.preventDefault()
             // Don't focus the pane just because a resize handle was grabbed.
             mouseEv.stopPropagation()
-            val containerRect = container.getBoundingClientRect()
+            // Geometry fractions are measured against the pane area (not
+            // the outer root), since the dock can occupy part of the root.
+            val containerRect = paneArea.getBoundingClientRect()
             val containerW = containerRect.width
             val containerH = containerRect.height
             if (containerW <= 0 || containerH <= 0) return@addEventListener
@@ -1125,6 +1406,75 @@ class LayoutRenderer(
      * animation. The `onfinish` callback removes the element from
      * the DOM once the animation completes.
      */
+    /**
+     * FLIP-animates [el] between two screen rects via the Web Animations
+     * API. The element's actual laid-out box (`getBoundingClientRect()`) is
+     * the reference; the animation maps it to [startRect] at the start and
+     * to [endRect] at the end (both with a `top left` transform origin), so
+     * the caller can fly the element between any two rectangles regardless of
+     * where its CSS box actually rests:
+     *
+     *  - **Minimize**: the ghost's box rests at the old pane rect, which is
+     *    [startRect]; [endRect] is the dock chip — the ghost flies down + in.
+     *  - **Restore**: the new pane's box rests at its real geometry, which is
+     *    [endRect]; [startRect] is the old dock chip — the pane grows out.
+     *
+     * @param el             the element to animate.
+     * @param startRect      screen rect the element should appear at on frame 0.
+     * @param endRect        screen rect the element should appear at on the last frame.
+     * @param startOpacity   opacity on frame 0.
+     * @param endOpacity     opacity on the last frame.
+     * @param removeOnFinish when `true` the element is removed from the DOM
+     *   once the animation completes (minimize ghost); the animation also
+     *   uses `fill: forwards` so it holds the end state until removal. When
+     *   `false` the fill is `none` so the element settles to its natural
+     *   (untransformed) box — correct for a restored pane whose [endRect]
+     *   already equals its resting box.
+     */
+    private fun animateFlip(
+        el: HTMLElement,
+        startRect: org.w3c.dom.DOMRect,
+        endRect: org.w3c.dom.DOMRect,
+        startOpacity: Double,
+        endOpacity: Double,
+        removeOnFinish: Boolean,
+    ) {
+        val box = el.getBoundingClientRect()
+        if (box.width <= 0.0 || box.height <= 0.0) {
+            if (removeOnFinish) el.parentNode?.removeChild(el)
+            return
+        }
+        fun mapTransform(r: org.w3c.dom.DOMRect): String {
+            val dx = r.left - box.left
+            val dy = r.top - box.top
+            val sx = r.width / box.width
+            val sy = r.height / box.height
+            return "translate(${dx}px, ${dy}px) scale($sx, $sy)"
+        }
+        val f0: dynamic = js("({})")
+        f0.transformOrigin = "top left"
+        f0.transform = mapTransform(startRect)
+        f0.opacity = startOpacity
+        val f1: dynamic = js("({})")
+        f1.transformOrigin = "top left"
+        f1.transform = mapTransform(endRect)
+        f1.opacity = endOpacity
+        val frames: dynamic = js("[]")
+        frames.push(f0)
+        frames.push(f1)
+        val opts: dynamic = js("({})")
+        opts.duration = 420
+        opts.easing = "cubic-bezier(.2, .8, .2, 1)"
+        opts.fill = if (removeOnFinish) "forwards" else "none"
+        val animation = el.asDynamic().animate(frames, opts)
+        if (removeOnFinish) {
+            animation.onfinish = {
+                el.parentNode?.removeChild(el)
+                Unit
+            }
+        }
+    }
+
     private fun startCloseAnimation(pane: HTMLElement) {
         pane.classList.add(CLOSING_GHOST_CLASS)
         pane.style.setProperty("pointer-events", "none")

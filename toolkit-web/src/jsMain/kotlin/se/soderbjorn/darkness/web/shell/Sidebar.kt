@@ -31,6 +31,10 @@ import org.w3c.dom.events.MouseEvent
  * @property header       element shown at the top of the sidebar (label,
  *   search box, …). May be null.
  * @property content      main scrollable content of the sidebar.
+ * @property footer       element pinned to the bottom of the sidebar, below
+ *   the scrollable [content] (status footer, action buttons, app signature,
+ *   …). The content area flex-grows so the footer stays anchored at the
+ *   bottom regardless of how short or tall the content is. May be null.
  * @property visible      whether the sidebar should be rendered at all. When
  *   false, the element returned by the render functions has `display: none`.
  * @property isResizable  when true, an inside-edge drag handle is appended
@@ -51,6 +55,7 @@ class SidebarSpec(
     val widthPx: Int = 240,
     val header: HTMLElement? = null,
     val content: HTMLElement? = null,
+    val footer: HTMLElement? = null,
     val visible: Boolean = true,
     val isResizable: Boolean = false,
     val minWidthPx: Int = 0,
@@ -109,6 +114,12 @@ private fun renderSidebar(spec: SidebarSpec, isLeft: Boolean): HTMLElement {
         contentWrap.className = "dt-sidebar-content"
         contentWrap.appendChild(it)
         bar.appendChild(contentWrap)
+    }
+    spec.footer?.let {
+        val footerWrap = document.createElement("div") as HTMLElement
+        footerWrap.className = "dt-sidebar-footer"
+        footerWrap.appendChild(it)
+        bar.appendChild(footerWrap)
     }
     if (spec.isResizable) {
         attachSidebarResizeHandle(

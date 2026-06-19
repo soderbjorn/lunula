@@ -1015,7 +1015,14 @@ private class ShellState(
         leftSlot.innerHTML = ""
         val sidebarEl = leftSidebarController.mountSidebarOrPlaceholder(
             spec = SidebarSpec(
+                // App-supplied header / footer pinned above and below the
+                // scrollable tabs/panes tree (e.g. termtastic's logo at the
+                // top and its Claude-usage + update/news footer at the
+                // bottom). Both factories are re-invoked on every rerender;
+                // apps that cache the element get it re-parented intact.
+                header = spec.sidebarHeader?.invoke(),
                 content = buildLeftSidebarContent(),
+                footer = spec.sidebarFooter?.invoke(),
                 visible = true,
                 isResizable = true,
                 // Floor the drag at the resize handle's own width: the user
@@ -1090,8 +1097,13 @@ private class ShellState(
         // we add them; for now the bar exists with the toolkit's
         // standard chrome so apps that mount through `mountAppShell`
         // get the same visual baseline as notegrow / termtastic.
+        // Apps that opt out via `spec.showBottomBar = false` (e.g.
+        // termtastic, which relocated its footer status content into
+        // the left sidebar) get an empty slot and no footer chrome.
         bottomSlot.innerHTML = ""
-        bottomSlot.appendChild(buildBottomBar())
+        if (spec.showBottomBar) {
+            bottomSlot.appendChild(buildBottomBar())
+        }
 
         // Chrome paint — stamp Pass-3 per-section vars on the freshly
         // built `.dt-topbar` / `.dt-sidebar` / `.dt-bottombar` BEFORE
@@ -1279,12 +1291,33 @@ private class ShellState(
                             removeLocalPane(paneId)
                         }
                     },
-                    // Minimize button intentionally NOT wired — apps that
-                    // want a minimize affordance can re-introduce one via
-                    // their own pane header customization. The toolkit's
-                    // pane chrome shows the maximize / restore / close
-                    // controls only.
-                    onFloatingMinimized = null,
+                    // Minimize: flip the pane's geometry `isMinimized` flag
+                    // (un-maximizing first so a maximized pane docks as a
+                    // plain title bar, not a flagged-but-hidden full-bleed
+                    // pane). The renderer drops it from the layout and parks
+                    // a chip in the dock; on an auto/preset layout the
+                    // remaining panes re-tile. Persisted through
+                    // `persistLayoutState` (via `updateGeometry`) into the
+                    // LAYOUT_STATE blob — same path as maximize/position/size.
+                    onFloatingMinimized = { paneId ->
+                        viewActiveTabId()?.let { tabId ->
+                            updateGeometry(tabId, paneId) {
+                                it.copy(isMinimized = true, isMaximized = false)
+                            }
+                            reflowAfterMinimizeChange(tabId)
+                        }
+                    },
+                    // Restore from the dock: clear `isMinimized`; the pane
+                    // re-enters the layout at its preserved geometry and the
+                    // remaining panes re-tile under a non-Custom preset.
+                    onFloatingRestored = { paneId ->
+                        viewActiveTabId()?.let { tabId ->
+                            updateGeometry(tabId, paneId) {
+                                it.copy(isMinimized = false)
+                            }
+                            reflowAfterMinimizeChange(tabId)
+                        }
+                    },
                     onFloatingFocused = { paneId ->
                         // Raise: bump the pane's zIndex to max+1, and mark
                         // the pane as active on the [LayoutController] so
@@ -1392,7 +1425,14 @@ private class ShellState(
      */
     private fun activePaneForActiveTab(): String? {
         val tabId = viewActiveTabId() ?: return null
-        val visibleIds = viewPanesIn(tabId).map { it.id }
+        // Exclude minimized panes: a docked pane is not in the layout, so it
+        // must never be resolved as the active/focused pane. (Local-mode
+        // `viewPanesIn` already drops minimized; source mode does not, so
+        // filter explicitly so a host-reported active pane that's been
+        // minimized hands off to a visible sibling.)
+        val visibleIds = viewPanesIn(tabId)
+            .map { it.id }
+            .filterNot { geometryFor(tabId, it).isMinimized }
         if (visibleIds.isEmpty()) return null
         val sourceActive = external?.tabs?.firstOrNull { it.id == tabId }?.activePaneId
         if (sourceActive != null && sourceActive in visibleIds) return sourceActive
@@ -1865,9 +1905,50 @@ private class ShellState(
     }
 
     /** Pane count of the active tab — sizes the layout-preset miniatures. */
+    /**
+     * Re-tiles + repaints after a pane's `isMinimized` flag flipped
+     * (minimize from the chrome header, or restore from the dock chip).
+     *
+     * Renders **exactly once** so the renderer's minimize/restore FLIP
+     * animation isn't wiped by a second rebuild: under a non-Custom preset
+     * [maybeReapplyPresetForActiveTab] does the single render (and fires
+     * `onGeometryChanged`); under Custom we render directly. The active-pane
+     * never lands on a docked pane because [activePaneForActiveTab] (which
+     * the post-render focus reconciliation consults) filters minimized panes
+     * out and the renderer re-focuses a visible one.
+     *
+     * @param tabId the tab whose minimized set just changed.
+     */
+    private fun reflowAfterMinimizeChange(tabId: String) {
+        if (controllerFor(tabId).activePreset == LayoutPreset.Custom) {
+            rerender()
+            spec.onGeometryChanged?.invoke(tabId)
+        } else {
+            maybeReapplyPresetForActiveTab()
+        }
+        // The synchronous reflow above fires while a *restored* pane is still
+        // mid-FLIP (growing out of its dock chip) and, on the very tick its
+        // cached content is reattached, the pane container can still read
+        // `offsetParent == null` until layout flushes — so a host that gates
+        // its reflow on visibility (e.g. termtastic's `forceReassert`, which
+        // skips terminals whose `offsetParent` is null) silently no-ops and
+        // the restored pane keeps its stale PTY size. Fire one more
+        // geometry-changed once the restore animation has settled and layout
+        // has flushed, so the host re-fits the pane at its final on-screen
+        // size. Harmless for the minimize direction (it just re-pings the
+        // still-visible panes). Mirrors the host's existing "reflow after a
+        // hidden→visible edge" behaviour.
+        val cb = spec.onGeometryChanged ?: return
+        kotlinx.browser.window.setTimeout({ cb.invoke(tabId) }, MINIMIZE_REFLOW_SETTLE_MS)
+    }
+
     private fun activePaneCountForPresets(): Int {
         val activeTab = viewActiveTabId() ?: return 0
-        return viewPanesIn(activeTab).size
+        // Minimized panes are docked and excluded from layout, so the preset
+        // preview tiles must reflect the count of panes that actually tile.
+        // (Local-mode `viewPanesIn` already drops minimized; source mode does
+        // not, so filter explicitly here for both.)
+        return viewPanesIn(activeTab).count { !geometryFor(activeTab, it.id).isMinimized }
     }
 
     /**
@@ -2000,7 +2081,13 @@ private class ShellState(
 
     private fun buildPaneRow(tabId: String, paneId: String, isActive: Boolean): HTMLElement {
         val row = document.createElement("div") as HTMLElement
-        row.className = "dt-sidebar-row" + if (isActive) " dt-active" else ""
+        // Minimized panes are parked in the dock and don't participate in
+        // layout; dim their sidebar row (`.dt-sidebar-row-minimized`) so the
+        // list visually distinguishes them from the live panes.
+        val isMinimized = geometryFor(tabId, paneId).isMinimized
+        row.className = "dt-sidebar-row" +
+            (if (isActive) " dt-active" else "") +
+            (if (isMinimized) " dt-sidebar-row-minimized" else "")
         // Identifying attributes so [repaintSidebarActiveMark] can flip
         // the active highlight imperatively, without rebuilding the
         // sidebar (which would race with an in-flight pane mousedown
@@ -2063,6 +2150,13 @@ private class ShellState(
             row.appendChild(badge)
         }
         row.addEventListener("click", {
+            // Clicking a docked pane's row un-minimizes it first, so the
+            // pane re-enters the layout (animating back from the dock) and
+            // can then become active just like any other row click.
+            val wasMinimized = geometryFor(tabId, paneId).isMinimized
+            if (wasMinimized) {
+                updateGeometry(tabId, paneId) { it.copy(isMinimized = false) }
+            }
             if (spec.tabSource != null) {
                 // Activate the parent tab first when the clicked pane is
                 // not in the currently active tab — `onPaneSelect` only
@@ -2085,6 +2179,10 @@ private class ShellState(
                 controllerFor(tabId).setActive(paneId)
                 mutateLocal { it.copy(activeTabId = tabId) }
             }
+            // Reflow once after the host-select calls so the restore FLIP
+            // plays; for source mode the host's activePaneId catches up on
+            // its snapshot round-trip and focuses the freshly-restored pane.
+            if (wasMinimized) reflowAfterMinimizeChange(tabId)
         })
         return row
     }
@@ -2553,7 +2651,12 @@ private class ShellState(
                 widthPct = g.widthPct, heightPct = g.heightPct,
                 zIndex = g.zIndex,
                 isMaximized = g.isMaximized,
-                isMinimized = false,
+                // Carry the real minimized flag so `applyPresetToPanes`
+                // excludes docked panes from tiling and returns them
+                // unchanged. (In local mode `viewPanesIn` already filters
+                // them out; source mode does not, so this is what keeps a
+                // minimized pane out of the source-mode re-tile.)
+                isMinimized = g.isMinimized,
             )
         }
         val laidOut = ctl.applyPresetToPanes(asSpecs)
@@ -2706,6 +2809,15 @@ private class ShellState(
  * feels immediate on release.
  */
 private const val MAIN_RESIZE_DEBOUNCE_MS = 150
+
+/**
+ * Delay before [AppShellMount]'s second, deferred geometry-changed fire
+ * after a minimize/restore. Sits just past the renderer's 420 ms
+ * minimize/restore FLIP so a restored pane is at its final on-screen size
+ * (and its container's `offsetParent` has resolved) before the host
+ * re-fits it — see `reflowAfterMinimizeChange`.
+ */
+private const val MINIMIZE_REFLOW_SETTLE_MS = 460
 
 private const val SIDEBAR_PANE_ROW_MIME = "application/x-darkness-sidebar-pane-row"
 
