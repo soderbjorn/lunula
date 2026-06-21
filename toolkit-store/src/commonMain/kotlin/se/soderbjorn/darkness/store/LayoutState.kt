@@ -4,7 +4,7 @@
  * [LayoutState] captures the parts of the toolkit shell that change as the
  * user works — sidebar widths, sidebar visibility, the active tab, and
  * each tab's pane tree (with its optional fullscreen-within-tab leaf
- * overlay). It is intentionally **separate** from [se.soderbjorn.darkness.core.UiSettings]:
+ * overlay). It is intentionally **separate** from the shared theme/UI state:
  * theme/appearance change rarely (and apply across the whole Darkness app
  * family), while layout state changes constantly (and is per-app —
  * notegrow's tree ≠ termtastic's). Different blast radius, different write
@@ -20,12 +20,12 @@
  * - Linux:   `$XDG_CONFIG_HOME/darkness/<app-name>/layout-state.json` (defaults to `~/.config/darkness/<app-name>/`)
  *
  * Persistence helpers ([readLayoutState] / [writeLayoutState] /
- * [watchLayoutState]) mirror the [UiSettings] flavour: atomic write,
+ * [watchLayoutState]) mirror the shared UI-settings flavour: atomic write,
  * self-write suppression, debounced filewatching. Apps that don't reach
  * the filesystem directly (browser-side renderers) should round-trip
  * the JSON through an IPC bridge — see notegrow's Electron preload.
  *
- * @see se.soderbjorn.darkness.core.UiSettings
+ * @see readUiSettingsRaw
  */
 package se.soderbjorn.darkness.store
 

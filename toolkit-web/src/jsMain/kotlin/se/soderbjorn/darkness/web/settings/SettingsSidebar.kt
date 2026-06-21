@@ -305,6 +305,7 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
         title = "Sidebar font",
         hint = "Used by the topbar and sidebars.",
         kind = FontKind.Proportional,
+        showKinds = setOf(FontKind.Proportional, FontKind.Mono),
         currentKey = { spec.host.sidebarFontFamily },
         onPick = { key ->
             spec.host.setSidebarFontFamily(key)
@@ -327,6 +328,7 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
         title = "Tab bar font",
         hint = "Used by the tab strip (falls back to Sidebar when unset).",
         kind = FontKind.Proportional,
+        showKinds = setOf(FontKind.Proportional, FontKind.Mono),
         currentKey = { spec.host.tabbarFontFamily },
         onPick = { key ->
             spec.host.setTabbarFontFamily(key)
@@ -371,6 +373,7 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
         title = "Proportional font",
         hint = "Used by prose / note content.",
         kind = FontKind.Proportional,
+        showKinds = setOf(FontKind.Proportional, FontKind.Mono),
         currentKey = { spec.host.proportionalFontFamily },
         onPick = { key ->
             spec.host.setProportionalFontFamily(key)
@@ -422,12 +425,25 @@ private fun makeSection(title: String, hint: String? = null): Section {
     return Section(section, row)
 }
 
+/**
+ * Builds one font-face pill row.
+ *
+ * @param kind the section's primary kind. Drives the system default
+ *   ([FontKind.Mono] → `system`, [FontKind.Proportional] → `systemProp`)
+ *   and floats presets of this kind to the front of the row.
+ * @param showKinds the kinds whose presets are offered in the row.
+ *   Defaults to just [kind]. Proportional chrome sections (Sidebar / Tab
+ *   bar / Proportional) pass both kinds so users can also pick a
+ *   monospaced face for chrome — the proportional presets stay first,
+ *   monospaced ones follow.
+ */
 private fun buildFontFaceSection(
     title: String,
     hint: String,
     kind: FontKind,
     currentKey: () -> String?,
     onPick: (String?) -> Unit,
+    showKinds: Set<FontKind> = setOf(kind),
 ): HTMLElement {
     val section = makeSection(title, hint)
     val row = section.row
@@ -435,11 +451,17 @@ private fun buildFontFaceSection(
     val current = currentKey()
     // System default first, regardless of order in [fontPresets], so
     // users without a strong opinion always see a familiar label at the
-    // start of the row.
+    // start of the row. When the row offers more than one kind (e.g.
+    // chrome sections that also list monospaced faces), presets matching
+    // the section's primary [kind] are floated ahead of the rest while
+    // preserving each group's declared order (sortedWith is stable).
     val systemKey = if (kind == FontKind.Mono) "system" else "systemProp"
-    val sortedPresets = fontPresets.filter { it.kind == kind }.sortedBy {
-        if (it.key == systemKey) -1 else 0
-    }
+    val sortedPresets = fontPresets
+        .filter { it.kind in showKinds }
+        .sortedWith(compareBy(
+            { if (it.key == systemKey) 0 else 1 },
+            { if (it.kind == kind) 0 else 1 },
+        ))
     for (preset in sortedPresets) {
         if (preset.key !in installed) continue
         val isSelected = preset.key == current ||

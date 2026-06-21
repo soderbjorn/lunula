@@ -2,20 +2,23 @@
  * Host interface bridging the toolkit's [showThemeManager] modal to its
  * embedding application's theme state.
  *
- * The toolkit owns the editor UI; the host owns persistence, side-effects
- * (e.g. server POSTs, file writes), and the visual silhouette/swatch
- * primitives. Apps implement this interface and pass an instance to
- * [showThemeManager].
+ * The toolkit owns the editor UI; the host owns persistence and side-effects
+ * (e.g. server POSTs, file writes). Apps implement this interface and pass an
+ * instance to [showThemeManager].
  *
- * The manager calls into the host on every read and on every action; it
- * does not cache. After a write action the host should update its own
- * state and call [refreshThemeManager] to repaint.
+ * Under the post-revamp theme system the host's surface is small: the two
+ * slot selections, the appearance preference, and the user's custom themes —
+ * plus the per-app font / notification / titlebar preferences that the
+ * Settings sidebar mutates. Colour-schemes, favorites, and per-pane sections
+ * are gone.
+ *
+ * The manager calls into the host on every read and on every action; it does
+ * not cache. After a write action the host should update its own state and
+ * call [refreshThemeManager] to repaint.
  */
 package se.soderbjorn.darkness.web.themeeditor
 
 import se.soderbjorn.darkness.core.Appearance
-import se.soderbjorn.darkness.core.ColorScheme
-import se.soderbjorn.darkness.core.CustomScheme
 import se.soderbjorn.darkness.core.Theme
 
 /**
@@ -27,71 +30,34 @@ interface ThemeManagerHost {
 
     // ── Read snapshots ─────────────────────────────────────────────
 
-    /** Name of the currently active main colour scheme. */
-    val mainSchemeName: String
+    /** Name of the theme currently bound to the *dark* slot. */
+    val darkThemeName: String
+
+    /** Name of the theme currently bound to the *light* slot. */
+    val lightThemeName: String
 
     /** The currently selected [Appearance] (Auto/Dark/Light). */
     val appearance: Appearance
 
-    /** Name of the theme currently bound to the *light* slot, or null. */
-    val lightThemeName: String?
-
-    /** Name of the theme currently bound to the *dark* slot, or null. */
-    val darkThemeName: String?
-
-    /** User-defined custom themes (named [Theme]s), keyed by name. */
-    val customThemes: Map<String, Theme>
-
-    /** User-defined custom colour schemes, keyed by name. */
-    val customSchemes: Map<String, CustomScheme>
-
-    /** Names of themes the user has marked as favorite. */
-    val favoriteThemes: Collection<String>
-
-    /** Names of colour schemes the user has marked as favorite. */
-    val favoriteSchemes: Collection<String>
-
-    /**
-     * App-supplied pane → universal-section map.
-     *
-     * The Theme Manager uses this when resolving the active theme onto
-     * the host's per-pane scheme view (e.g. via
-     * [se.soderbjorn.darkness.core.resolveActiveTheme]). Each key is a
-     * concrete pane name the host renders (e.g. `"sidebar"`, `"editor"`,
-     * `"git"`); each value is one of the [se.soderbjorn.darkness.core.Sections]
-     * constants describing that pane's role in the universal vocabulary.
-     *
-     * Defaults to empty so existing hosts that haven't declared a map yet
-     * still compile; an empty map means "every pane inherits the main
-     * scheme", which is the same behaviour as before this field existed.
-     */
-    val appPanes: Map<String, String> get() = emptyMap()
+    /** User-defined custom themes (named [Theme]s). */
+    val customThemes: List<Theme>
 
     // ── Actions ────────────────────────────────────────────────────
 
-    /** Set the theme bound to the *light* slot, or clear it (`null`). */
-    fun setLightThemeName(name: String?)
+    /** Set the theme bound to the *dark* slot. */
+    fun setDarkThemeName(name: String)
 
-    /** Set the theme bound to the *dark* slot, or clear it (`null`). */
-    fun setDarkThemeName(name: String?)
+    /** Set the theme bound to the *light* slot. */
+    fun setLightThemeName(name: String)
 
-    /** Toggle [name] in [favoriteThemes]. */
-    fun toggleFavoriteTheme(name: String)
-
-    /** Toggle [name] in [favoriteSchemes]. */
-    fun toggleFavoriteScheme(name: String)
+    /** Set the appearance preference (Auto/Dark/Light). */
+    fun setAppearance(appearance: Appearance)
 
     /** Persist [theme] as a custom theme (creates or replaces by name). */
     fun saveCustomTheme(theme: Theme)
 
     /** Remove a user-saved custom theme by [name]. */
     fun deleteCustomTheme(name: String)
-
-    /** Persist [scheme] as a custom colour scheme (creates or replaces). */
-    fun saveCustomScheme(scheme: CustomScheme)
-
-    /** Remove a user-saved custom colour scheme by [name]. */
-    fun deleteCustomScheme(name: String)
 
     // ── Per-app settings (font / size / titlebar / notifications) ─
     //
@@ -170,26 +136,4 @@ interface ThemeManagerHost {
 
     /** Persist the custom-titlebar toggle. */
     fun setUseCustomTitleBar(value: Boolean) {}
-
-    // ── Rendering primitives owned by the host ─────────────────────
-    //
-    // These let the host control the per-app look of theme silhouettes
-    // and swatches without the toolkit prescribing a style.
-
-    /**
-     * Returns HTML markup for a theme silhouette preview given the
-     * theme's section assignments. Set as `innerHTML` on the silhouette
-     * container by the manager.
-     *
-     * @param theme the theme to render
-     */
-    fun renderConfigSilhouetteHtml(theme: Theme): String
-
-    /**
-     * Returns HTML markup for a colour-scheme swatch preview.
-     * Set as `innerHTML` on the swatch container by the manager.
-     *
-     * @param scheme the colour scheme to render
-     */
-    fun renderThemeSwatchHtml(scheme: ColorScheme): String
 }

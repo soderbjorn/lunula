@@ -1,7 +1,7 @@
 /* ElectronMain.kt — Electron main process, written in Kotlin/JS.
  *
  * UI settings split across the cross-app `<DarknessDir>/themes.json`
- * (theme/scheme definitions shared with every Darkness app) and the
+ * (v2 custom theme definitions shared with every Darkness app) and the
  * per-app `<DarknessDir>/darkness-demo.json` (selections + UI prefs).
  * Layout state stays per-app under `<DarknessDir>/DarknessDemo/`. The
  * toolkit owns the JSON shapes; this host owns where the bytes
@@ -110,9 +110,9 @@ fun main() {
 /* --- Path resolution -------------------------------------------------- */
 
 /**
- * Cross-app shared darkness themes file path: holds custom themes,
- * custom schemes, and favorites — read/written by every Darkness app
- * on this machine.
+ * Cross-app shared darkness themes file path: holds the v2 custom
+ * themes (`PersistKeys.THEME_V2_CUSTOM`) — read/written by every
+ * Darkness app on this machine.
  */
 private fun sharedThemesPath(): String =
     sharedDarknessPath("themes.json")
@@ -263,8 +263,8 @@ private fun createWindow() {
     }
     // Authoritative window-chrome flag, sourced from `electron-chrome.json`
     // cached by this process. The renderer can't recover this from the
-    // toolkit's `ThemeSnapshot` because the stock `ElectronIpcPersister`
-    // doesn't round-trip THEME_SNAPSHOT — we pass it directly so
+    // toolkit's persisted theme state because the custom-title-bar
+    // boolean isn't part of any persister key — we pass it directly so
     // darkness-toolkit's `autoApplyCustomTitleBarBodyClass` (called from
     // `injectDarknessToolkitStyles`) can deterministically toggle
     // `dt-custom-titlebar` at boot, before the persister read completes.

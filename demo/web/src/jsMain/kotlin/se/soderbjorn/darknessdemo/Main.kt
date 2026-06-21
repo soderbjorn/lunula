@@ -51,9 +51,9 @@ fun main() {
  * title bar (with its leading icon and label) is rendered by the
  * toolkit chrome separately, so the body shouldn't repeat them.
  *
- * The label uses `--t-terminal-fg` — the same theme token notegrow's
- * editor body used pre-refactor — so the demo's pane text reads in
- * the familiar main editor colour across every theme.
+ * The label uses `--t-text` over a `--t-bg` surface — the post-revamp
+ * theme tokens for primary text and the app background — so the demo's
+ * pane reads correctly across every theme.
  */
 private fun buildPaneContent(paneId: String): HTMLElement {
     val container = document.createElement("div") as HTMLElement
@@ -63,8 +63,8 @@ private fun buildPaneContent(paneId: String): HTMLElement {
     container.style.justifyContent = "center"
     container.style.padding = "16px"
     container.style.boxSizing = "border-box"
-    container.style.background = "var(--t-surface-base, #1e1e1e)"
-    container.style.color = "var(--t-terminal-fg, #e6e6e6)"
+    container.style.background = "var(--t-bg, #1e1e1e)"
+    container.style.color = "var(--t-text, #e6e6e6)"
     // Demo's sample pane is the canonical "code/terminal-style" content,
     // so it follows the toolkit's monospaced font category. Picking a
     // family or size in the gear's Settings sidebar takes effect here

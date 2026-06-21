@@ -10,7 +10,7 @@ package se.soderbjorn.darkness.web.shell
 
 import org.w3c.dom.HTMLElement
 import se.soderbjorn.darkness.core.Persister
-import se.soderbjorn.darkness.core.UiSettings
+import se.soderbjorn.darkness.core.ThemeSnapshotV2
 import se.soderbjorn.darkness.web.layout.PaneAction
 import se.soderbjorn.darkness.web.layout.PaneTitleSegment
 import se.soderbjorn.darkness.web.themeeditor.ThemeManagerHost
@@ -398,13 +398,10 @@ class TabSource(
  *   standard cluster. Use for app-level actions that conceptually live
  *   alongside the layout/theme controls but aren't toolkit-supplied
  *   (e.g. notegrow's "Starred bookmarks" tab-level button).
- * @property appPanes optional map from app-specific pane identifiers to
- *   their universal section ([se.soderbjorn.darkness.core.Sections]).
- *   Forwarded to the theme manager so it can present per-pane override
- *   rows for panes the app actually renders (e.g. notegrow's `starred`
- *   and `outline` panes mapping to `Auxiliary`). Defaults to empty —
- *   apps that only use the toolkit's universal sections need not
- *   supply this.
+ * @property appPanes retained for call-site compatibility only. Under the
+ *   post-revamp theme system there are no per-pane sections, so this map is
+ *   no longer consumed by the theme manager. Existing apps may keep passing
+ *   it (it is ignored); new apps should leave it empty. Defaults to empty.
  * @property bottomBarLeading optional factory that returns custom DOM
  *   for the leading (left) slot of the toolkit's bottom bar. Used by
  *   apps that need a richer status footer than the default empty leading
@@ -576,29 +573,21 @@ data class AppShellSpec(
 
     /**
      * Fired at the end of every internal [AppShellHandle.refresh] /
-     * rerender pass, after the toolkit has rebuilt its chrome slots
-     * and re-applied [applyUiSettings] (Pass 1 + 2 + 3).
+     * rerender pass, after the toolkit has rebuilt its chrome slots and
+     * re-applied the active theme (via [applyTheme]).
      *
-     * **Why:** the toolkit's Pass 3 only paints the section selectors
-     * it knows about (`.dt-pane`, `.dt-sidebar`, `.dt-topbar`,
-     * `.dt-bottombar`). Hosts that layer their own per-section paint
-     * on top — termtastic stamps the full `terminal` / `fileBrowser` /
-     * `git` palettes onto `.terminal-cell > .terminal` etc., because
-     * those are app-specific DOM that the toolkit can't target by
-     * default — lose those inline overrides on every rerender
-     * (LayoutRenderer wipes & rebuilds the pane subtrees). Without a
-     * reapply hook the user sees the host-layered colours flip to the
-     * scheme `.dt-pane` was painted with (the "windows" scheme),
-     * instead of the dedicated terminal / fileBrowser / git schemes
-     * the user picked. Symptom: the pane interior padding around the
-     * terminal canvas shows the chrome scheme's surface colour
-     * (cream/beige) instead of the terminal scheme's bg.
+     * **Why:** the toolkit paints the flat `--t-*` palette on `:root` and
+     * relies on the CSS cascade for its own chrome. Hosts that paint their
+     * own app-specific DOM directly (e.g. termtastic stamps colours onto
+     * `.terminal-cell > .terminal`, which the toolkit can't target) lose
+     * those inline overrides on every rerender (LayoutRenderer wipes &
+     * rebuilds the pane subtrees). This hook lets them re-stamp after the
+     * toolkit's paint.
      *
-     * **How to apply:** Register a handler that re-runs the host's
-     * per-section paint pass. Cheap to no-op — the toolkit makes no
-     * guarantees about call frequency, so handlers should be
-     * idempotent. Fires AFTER the toolkit's own paint, so handlers
-     * can safely overwrite anything the toolkit just stamped.
+     * **How to apply:** Register a handler that re-runs the host's own paint
+     * pass. Cheap to no-op — the toolkit makes no guarantees about call
+     * frequency, so handlers should be idempotent. Fires AFTER the toolkit's
+     * own paint, so handlers can safely overwrite anything just stamped.
      */
     val onAfterRefresh: (() -> Unit)? = null,
 )
@@ -662,26 +651,24 @@ interface AppShellHandle {
     fun beginPaneRename(paneId: String)
 
     /**
-     * Pushes an app-resolved [UiSettings] into the toolkit so subsequent
+     * Pushes an app-resolved [ThemeSnapshotV2] into the toolkit so subsequent
      * rerenders paint with it. Updates the toolkit's stored snapshot,
-     * repaints `:root` CSS vars + per-section paint on the live chrome,
-     * and reapplies host font vars.
+     * repaints `:root` CSS vars on the live chrome, and reapplies host font
+     * vars.
      *
-     * Use this when the app owns theme resolution outside the toolkit's
-     * own theme manager (e.g. termtastic's `TermtasticThemeManagerHost`,
-     * which writes through `appVm` and bypasses
-     * [DefaultThemeManagerHost.onChange]). Without a sync call, the
-     * toolkit's stored UI stays at whatever was loaded from the
-     * persister at mount, and the next [refresh] (e.g. on tab/pane
-     * switch) repaints chrome with that stale snapshot — clobbering the
-     * app's own paint.
+     * Use this when the app owns theme resolution outside the toolkit's own
+     * theme manager (e.g. termtastic's `TermtasticThemeManagerHost`, which
+     * writes through `appVm`). Without a sync call, the toolkit's stored
+     * snapshot stays at whatever was loaded from the persister at mount, and
+     * the next [refresh] (e.g. on tab/pane switch) repaints chrome with that
+     * stale snapshot — clobbering the app's own paint.
      *
-     * Does NOT call [refresh]: it paints in place over the existing
-     * chrome, mirroring the toolkit's internal `onThemeManagerChanged`
-     * path so a rerender doesn't tear down anything the user is
-     * currently interacting with (theme editor, open menu).
+     * Does NOT call [refresh]: it paints in place over the existing chrome,
+     * mirroring the toolkit's internal `onThemeManagerChanged` path so a
+     * rerender doesn't tear down anything the user is currently interacting
+     * with (theme editor, open menu).
      */
-    fun setUiSettings(ui: UiSettings)
+    fun setThemeSnapshot(snapshot: ThemeSnapshotV2)
 
     /** Tears down the shell, releasing toolkit-owned resources. */
     fun dispose()

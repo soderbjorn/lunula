@@ -10,7 +10,7 @@
  * `darkness-toolkit.css`; consumers must call [injectDarknessToolkitStyles]
  * once at boot for the modal to render correctly.
  *
- * @see ResolvedPalette
+ * @see ResolvedTheme
  */
 package se.soderbjorn.darkness.web
 

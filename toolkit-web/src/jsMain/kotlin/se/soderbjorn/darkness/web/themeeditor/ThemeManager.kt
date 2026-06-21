@@ -1,33 +1,33 @@
 /**
- * Theme Manager modal entry point.
+ * Theme Manager modal entry point (post-revamp theme system).
  *
  * Public API:
  *  - [showThemeManager] — open the right-side sidebar that lets users browse,
- *    favorite, clone, delete, and edit themes & colour schemes.
+ *    assign, clone, edit, and delete themes.
  *  - [closeThemeManager] — slide-out and detach.
  *  - [refreshThemeManager] — repaint when upstream state changes.
  *
- * This file is a thin composer: it owns the panel chrome (header, tabs,
- * Escape handling) and the shared module state, then delegates list/editor
- * rendering to the focused files in this package — see [renderThemesLeft]
- * (theme grid), [renderThemeEditor] (theme editor), [renderSchemesLeft]
- * (scheme grid), and [renderSchemeEditor] (scheme/color editor).
+ * This file owns the panel chrome (header, Escape handling) and the shared
+ * module state, then renders all themes as a reflowing thumbnail grid grouped
+ * into "Dark" and "Light" sections. Each card shows the theme name above its
+ * thumbnail; clicking the card assigns the theme to the active slot, and a
+ * small arrow (revealed on hover) opens the theme's editor — which holds the
+ * token swatches plus the Clone and Delete actions. Colour-scheme tabs,
+ * favorites, and per-pane sections are gone; the editor view is the flat
+ * 20-token [renderThemeColorEditor].
  *
  * @see ThemeManagerHost
  */
 package se.soderbjorn.darkness.web.themeeditor
 
-import se.soderbjorn.darkness.core.*
-import se.soderbjorn.darkness.web.applyCssVars
-import se.soderbjorn.darkness.web.toCssVarMap
-import se.soderbjorn.darkness.web.toCssAliasMap
+import se.soderbjorn.darkness.core.Theme
+import se.soderbjorn.darkness.core.ThemeGroup
+import se.soderbjorn.darkness.core.allThemes
+import se.soderbjorn.darkness.core.argbToCss
+import se.soderbjorn.darkness.core.builtinTheme
 import se.soderbjorn.darkness.web.isDarkActive
-import se.soderbjorn.darkness.web.showConfirmDialog
 
 import kotlinx.browser.document
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.HTMLInputElement
 import org.w3c.dom.events.Event
@@ -46,171 +46,81 @@ private var themeManagerEscHandler: ((Event) -> Unit)? = null
  * When set, the panel's close button + Escape route through this callback
  * instead of [closeThemeManager], so a wrapper that owns layout space (e.g.
  * the right-side sidebar built by `buildThemeManagerSidebar`) can play its
- * own close animation and rebuild the host shell to reclaim the slot. The
- * direct [closeThemeManager] path only detaches the inner panel — without
- * this hook the outer sidebar stays mounted at its full width with empty
- * content. Reset to null inside [closeThemeManager] so a subsequent direct
- * `showThemeManager` mount (no wrapper) starts clean.
+ * own close animation and rebuild the host shell to reclaim the slot. Reset
+ * to null inside [closeThemeManager].
  */
 internal var themeManagerOnCloseRequested: (() -> Unit)? = null
 
 /** Accessor for the host bound to the currently-open manager. */
 internal fun themeManagerHost(): ThemeManagerHost = host
 
-/**
- * Resolves the [ColorScheme] currently bound to the main theme slot, looking
- * up [ThemeManagerHost.mainSchemeName] in the user's custom schemes first,
- * then falling back to the built-in [recommendedColorSchemes] list.
- */
-private fun currentMainScheme(): ColorScheme {
-    val n = host.mainSchemeName
-    return host.customSchemes[n]?.toColorScheme()
-        ?: recommendedColorSchemes.firstOrNull { it.name == n }
-        ?: recommendedColorSchemes.first { it.name == DEFAULT_THEME_NAME }
-}
+/** Callback invoked after mutations to refresh the manager UI, if open. */
+private var themeManagerRerender: (() -> Unit)? = null
 
-/** Resolves the full semantic [ResolvedPalette] for the currently active theme + appearance. */
-private fun currentResolvedPalette(): ResolvedPalette {
-    val isDark = isDarkActive(host.appearance)
-    return currentMainScheme().resolve(isDark)
-}
-
-/** Per-section [ResolvedPalette] for the currently active theme. */
-private fun sectionPalette(@Suppress("UNUSED_PARAMETER") section: String): ResolvedPalette {
-    return currentResolvedPalette()
-}
-
-/** Top-level tabs in the manager. */
-private enum class ManagerTab { Themes, Schemes }
-
-/** Drill-down view state for a single tab in the sidebar. */
+/** Drill-down view state for the manager. */
 private enum class ManagerView { List, Editor }
-
-/**
- * Set to `true` by any editor input whose value diverges from what was in
- * the preset when the editor was opened, and reset to `false` when the
- * editor is opened, saved, or reverted. Consulted by every exit path
- * (back arrow, tab switch, close button, opening another sidebar, Escape)
- * to prompt for a discard confirmation before the in-flight edits vanish.
- */
-internal var isEditorDirty: Boolean = false
-
-/**
- * Optional callback that restores the live theme to its pre-edit state.
- *
- * The theme editor applies picker / mode changes to the live theme as the
- * user makes them so the rest of the UI previews the edit immediately
- * (see [renderThemeEditor]). That means closing the editor on a discard
- * confirmation has to roll the live theme back too — clearing
- * [isEditorDirty] alone would leak the in-flight edits into the saved
- * state. The editor sets this callback when it opens an editable theme
- * (snapshotting the original [Theme]) and clears it on Save / Revert /
- * Delete; [confirmDiscardIfDirty] invokes it before running [onProceed].
- */
-internal var themeEditorDiscardLiveEdits: (() -> Unit)? = null
-
-/**
- * Show a discard-changes confirmation when the editor is dirty, otherwise
- * run [onProceed] immediately. On confirm the dirty flag is cleared,
- * [themeEditorDiscardLiveEdits] (if set) restores the live theme to its
- * pre-edit state, and [onProceed] runs; on cancel the dialog closes and
- * nothing else happens.
- */
-private fun confirmDiscardIfDirty(onProceed: () -> Unit) {
-    if (!isEditorDirty) { onProceed(); return }
-    showConfirmDialog(
-        title = "Discard changes?",
-        message = "You have unsaved changes. Discard them?",
-        confirmLabel = "Discard",
-        onConfirm = {
-            themeEditorDiscardLiveEdits?.invoke()
-            themeEditorDiscardLiveEdits = null
-            isEditorDirty = false
-            onProceed()
-        },
-    )
-}
 
 /**
  * Closes the Theme Manager right-sidebar with a slide-out transition.
  *
  * @param onClosed optional callback invoked once the slide-out transition has
- *                 finished and the panel's DOM node has been detached.
- *                 Invoked immediately (synchronously) when the panel was not
- *                 open to begin with.
+ *   finished and the panel's DOM node has been detached. Invoked immediately
+ *   (synchronously) when the panel was not open to begin with.
  * @see showThemeManager
  */
 fun closeThemeManager(onClosed: (() -> Unit)? = null) {
     val panel = themeManagerPanel ?: run { onClosed?.invoke(); return }
-    // Intercept close when the editor has unsaved changes. On cancel we
-    // abort — [onClosed] is intentionally not invoked so any chained
-    // handoff (e.g. settings panel opening next) doesn't proceed behind
-    // the user's back.
-    if (isEditorDirty) {
-        confirmDiscardIfDirty { closeThemeManager(onClosed) }
-        return
-    }
     var done = false
     panel.classList.remove("dt-open")
     panel.addEventListener("transitionend", {
         if (!done && !panel.classList.contains("dt-open")) {
             done = true
             panel.remove()
-            Unit
             onClosed?.invoke()
         }
     })
     themeManagerEscHandler?.let { document.removeEventListener("keydown", it) }
     themeManagerEscHandler = null
     themeManagerRerender = null
-    themeManagerFocusTheme = null
-    themeManagerFocusScheme = null
     themeManagerOnCloseRequested = null
-    themeEditorDiscardLiveEdits = null
     themeManagerPanel = null
 }
 
 /**
  * Opens the Theme Manager as a right-side sidebar. Idempotent: if already
- * open it is brought forward and any requested tab/focus target is applied
- * without rebuilding the DOM.
+ * open it is brought forward without rebuilding the DOM.
  *
- * Orphan recovery: if the panel reference is non-null but its node has
- * been detached from the document (e.g. a host's full rebuild path called
- * `innerHTML = ""` on the slot that contained it), the still-live panel
- * is re-appended to [mountInto] instead of rebuilt. That preserves the
- * user's open editor / current selection / dirty state across an external
- * teardown — without it, re-mount-on-rerender shows an empty pane until
- * the user closes and reopens the manager.
+ * Orphan recovery: if the panel reference is non-null but its node has been
+ * detached from the document (a host's full rebuild path called `innerHTML =
+ * ""` on the slot that contained it), the still-live panel is re-appended to
+ * [mountInto] instead of rebuilt.
  *
- * @param initialTab  which tab to show on open (`"themes"` or `"schemes"`).
- * @param focusTheme  optional theme name to preselect and drill into.
- * @param focusScheme optional scheme name to preselect and drill into.
+ * @param hostArg    the host whose theme state the manager reads/writes.
+ * @param mountInto  the element to append the panel to.
+ * @param initialTab retained for call-site compatibility; ignored (the
+ *   manager no longer has tabs).
+ * @param focusTheme optional theme name to open straight into the editor for
+ *   (used by the clone flow). Only honoured for custom themes.
  * @see closeThemeManager
  */
 fun showThemeManager(
     hostArg: ThemeManagerHost,
     mountInto: HTMLElement,
-    initialTab: String = "themes",
+    @Suppress("UNUSED_PARAMETER") initialTab: String = "themes",
     focusTheme: String? = null,
-    focusScheme: String? = null,
 ) {
     host = hostArg
     themeManagerPanel?.let { existing ->
         if (document.contains(existing)) return
-        // Panel was detached by an external teardown but its JS state +
-        // listeners are still alive. Reattach to the new mount target
-        // rather than rebuilding from scratch — see KDoc above.
         mountInto.appendChild(existing)
         return
     }
-    val appBody = mountInto
 
     val panel = document.createElement("aside") as HTMLElement
     panel.id = "theme-manager-sidebar"
     panel.className = "dt-theme-manager"
 
-    // ── Header: close button + title + tab strip ──
+    // ── Header: close button + title ──
     val header = document.createElement("div") as HTMLElement
     header.className = "dt-theme-manager-header"
 
@@ -218,9 +128,6 @@ fun showThemeManager(
     closeBtn.className = "dt-theme-manager-close"
     closeBtn.innerHTML = "&times;"
     closeBtn.title = "Close"
-    // Prefer the wrapper-supplied close hook when set so the outer
-    // sidebar slot (which owns the layout space) collapses with the panel;
-    // fall back to the bare panel teardown when there is no wrapper.
     closeBtn.addEventListener("click", {
         themeManagerOnCloseRequested?.invoke() ?: closeThemeManager()
     })
@@ -231,271 +138,356 @@ fun showThemeManager(
     title.textContent = "Themes"
     header.appendChild(title)
 
-    val tabStrip = document.createElement("div") as HTMLElement
-    tabStrip.className = "dt-theme-manager-tabs"
-    val tabThemes = makeTabBtn("Themes", selected = initialTab != "schemes")
-    val tabSchemes = makeTabBtn("Color schemes", selected = initialTab == "schemes")
-    tabStrip.appendChild(tabThemes)
-    tabStrip.appendChild(tabSchemes)
-    header.appendChild(tabStrip)
-
     panel.appendChild(header)
 
-    // ── Body (single-column: either list or editor view) ──
+    // ── Body (single column: list or editor) ──
     val body = document.createElement("div") as HTMLElement
     body.className = "dt-theme-manager-body"
     panel.appendChild(body)
 
-    // ── State ─────────────────────────────────────────────────────
-    var activeTab = when (initialTab) {
-        "schemes" -> ManagerTab.Schemes
-        else -> ManagerTab.Themes
+    // ── State ──
+    var view = if (focusTheme != null && builtinTheme(focusTheme) == null) {
+        ManagerView.Editor
+    } else {
+        ManagerView.List
     }
-    var themeFilter = ThemeFilter.All
-    var schemeFilter = SchemeFilter.All
-    // Default to the slot that matches the active appearance so opening the
-    // manager in dark mode doesn't land on the *light* slot's theme (which
-    // reads as "I'm in dark mode but the editor is showing a light theme").
-    // `focusTheme` (the explicit "Edit this card" path) still wins.
-    var selectedTheme: String? = focusTheme ?: run {
-        val activeIsDark = isDarkActive(host.appearance)
-        if (activeIsDark) host.darkThemeName ?: host.lightThemeName
-        else host.lightThemeName ?: host.darkThemeName
-    }
-    var selectedScheme: String? = focusScheme
-    var view: ManagerView = when {
-        activeTab == ManagerTab.Themes && focusTheme != null -> ManagerView.Editor
-        activeTab == ManagerTab.Schemes && focusScheme != null -> ManagerView.Editor
-        else -> ManagerView.List
-    }
+    var editingTheme: String? = focusTheme?.takeIf { builtinTheme(it) == null }
+    // Built-ins open read-only (inspect without cloning); custom themes edit.
+    var editingReadOnly: Boolean = false
 
     var renderAll: () -> Unit = {}
 
-    fun setView(v: ManagerView) {
+    fun setView(v: ManagerView, themeName: String? = null, readOnly: Boolean = false) {
         view = v
+        editingTheme = themeName
+        editingReadOnly = readOnly
         renderAll()
     }
 
-    fun renderListView(container: HTMLElement) {
-        if (activeTab == ManagerTab.Themes) {
-            // Highlight follows the active-mode slot so clicking swaps the
-            // highlight immediately — the click IS the assignment. When the
-            // host's slot pointer is null/empty (the user has never picked a
-            // theme for this mode, or persistence dropped the field), fall
-            // back to the same default the active-theme resolver uses so the
-            // Active section keeps surfacing the actually-painted theme
-            // instead of disappearing on appearance toggles.
-            val state = host
-            val activeLight = !isDarkActive(state.appearance)
-            val rawSlot = if (activeLight) state.lightThemeName else state.darkThemeName
-            val activeSlotName = rawSlot?.takeIf { it.isNotEmpty() }
-                ?: if (activeLight) DEFAULT_LIGHT_THEME_NAME else DEFAULT_DARK_THEME_NAME
-            renderThemesLeft(container, themeFilter, activeSlotName,
-                onFilter = { f -> themeFilter = f; renderAll() },
-                onAssign = { name ->
-                    GlobalScope.launch(start = CoroutineStart.UNDISPATCHED) {
-                        if (activeLight) host.setLightThemeName(name)
-                        else host.setDarkThemeName(name)
-                    }
-                    pokeManager()
-                },
-                onEdit = { name ->
-                    selectedTheme = name
-                    setView(ManagerView.Editor)
-                })
-        } else {
-            renderSchemesLeft(container, schemeFilter, selectedScheme,
-                onFilter = { f -> schemeFilter = f; renderAll() },
-                onSelect = { name ->
-                    selectedScheme = name
-                    setView(ManagerView.Editor)
-                })
-        }
-    }
-
-    fun renderEditorView(container: HTMLElement) {
-        val backBar = document.createElement("div") as HTMLElement
-        backBar.className = "dt-theme-manager-back-bar"
-        val backBtn = document.createElement("button") as HTMLElement
-        backBtn.className = "dt-theme-manager-back-btn"
-        backBtn.innerHTML = "&larr;"
-        val destination = when (activeTab) {
-            ManagerTab.Themes -> "Themes"
-            ManagerTab.Schemes -> "Color schemes"
-        }
-        backBtn.title = "Back to $destination"
-        backBtn.addEventListener("click", {
-            confirmDiscardIfDirty { setView(ManagerView.List) }
-        })
-        backBar.appendChild(backBtn)
-        val backLabel = document.createElement("span") as HTMLElement
-        backLabel.className = "dt-theme-manager-back-label"
-        backLabel.textContent = "Back to list"
-        backBar.appendChild(backLabel)
-        container.appendChild(backBar)
-
-        val editorHost = document.createElement("div") as HTMLElement
-        editorHost.className = "dt-theme-manager-editor-host"
-        container.appendChild(editorHost)
-
-        if (activeTab == ManagerTab.Themes) {
-            renderThemeEditor(editorHost, selectedTheme) { renderAll() }
-        } else {
-            renderSchemeEditor(editorHost, selectedScheme) { renderAll() }
-        }
-    }
-
     renderAll = {
-        // If the editor's target has disappeared since the last render (the
-        // user just deleted it, or it was removed elsewhere), fall back to
-        // the list view instead of showing a dead-end "not found" message.
-        if (view == ManagerView.Editor) {
-            val state = host
-            val missing = when (activeTab) {
-                ManagerTab.Themes -> {
-                    val n = selectedTheme
-                    n == null || (state.customThemes[n] == null &&
-                        defaultThemes.none { it.name == n })
-                }
-                ManagerTab.Schemes -> {
-                    val n = selectedScheme
-                    n == null || (state.customSchemes[n] == null &&
-                        recommendedColorSchemes.none { it.name == n })
-                }
-            }
-            if (missing) {
+        // If the editor target has vanished (deleted elsewhere), drop to list.
+        // A read-only built-in is always present in the catalog, so only an
+        // editable (custom) target can disappear.
+        if (view == ManagerView.Editor && !editingReadOnly) {
+            val n = editingTheme
+            if (n == null || host.customThemes.none { it.name == n }) {
                 view = ManagerView.List
-                if (activeTab == ManagerTab.Themes) selectedTheme = null
-                else selectedScheme = null
+                editingTheme = null
             }
         }
-
-        title.textContent = when (activeTab) {
-            ManagerTab.Themes -> "Themes"
-            ManagerTab.Schemes -> "Color schemes"
-        }
-        // Tabs only make sense when browsing the list — while editing a
-        // theme/scheme they'd either duplicate the new back-bar label or
-        // mislead the user into thinking a tab click would switch the
-        // current edit's context.
-        tabStrip.style.display = if (view == ManagerView.Editor) "none" else "flex"
+        title.textContent = "Themes"
         body.innerHTML = ""
         body.classList.toggle("view-editor", view == ManagerView.Editor)
         body.classList.toggle("view-list", view == ManagerView.List)
-        if (view == ManagerView.List) renderListView(body) else renderEditorView(body)
+        if (view == ManagerView.List) {
+            renderThemeList(
+                container = body,
+                onOpen = { name, readOnly -> setView(ManagerView.Editor, name, readOnly) },
+            )
+        } else {
+            renderThemeColorEditor(
+                container = body,
+                themeName = editingTheme,
+                readOnly = editingReadOnly,
+                onBack = { setView(ManagerView.List) },
+                onCloneAndEdit = { srcName ->
+                    val src = allThemes(host.customThemes).firstOrNull { it.name == srcName }
+                    if (src != null) {
+                        val copy = src.copy(name = dedupeCloneName(src.name))
+                        host.saveCustomTheme(copy)
+                        setView(ManagerView.Editor, copy.name, readOnly = false)
+                    }
+                },
+            )
+        }
     }
-
-    tabThemes.addEventListener("click", {
-        confirmDiscardIfDirty {
-            activeTab = ManagerTab.Themes
-            tabThemes.classList.add("dt-selected")
-            tabSchemes.classList.remove("dt-selected")
-            view = ManagerView.List
-            renderAll()
-        }
-    })
-    tabSchemes.addEventListener("click", {
-        confirmDiscardIfDirty {
-            activeTab = ManagerTab.Schemes
-            tabSchemes.classList.add("dt-selected")
-            tabThemes.classList.remove("dt-selected")
-            if (selectedScheme == null) {
-                selectedScheme = host.mainSchemeName
-            }
-            view = ManagerView.List
-            renderAll()
-        }
-    })
 
     renderAll()
 
-    // ── Escape-to-close ──
+    // ── Escape-to-close (or back-to-list from the editor) ──
     val escHandler: (Event) -> Unit = { ev ->
         if ((ev as? KeyboardEvent)?.key == "Escape") {
-            if (view == ManagerView.Editor) {
-                confirmDiscardIfDirty { setView(ManagerView.List) }
-            } else {
-                themeManagerOnCloseRequested?.invoke() ?: closeThemeManager()
-            }
+            if (view == ManagerView.Editor) setView(ManagerView.List)
+            else themeManagerOnCloseRequested?.invoke() ?: closeThemeManager()
         }
     }
     document.addEventListener("keydown", escHandler)
     themeManagerEscHandler = escHandler
+    themeManagerRerender = { renderAll() }
 
-    themeManagerRerender = { _: Any -> renderAll() }
-
-    // ── Focus hooks: let clone flows drop the user straight into the
-    // editor for the newly-created theme/scheme.
-    themeManagerFocusTheme = { name ->
-        activeTab = ManagerTab.Themes
-        tabThemes.classList.add("dt-selected"); tabSchemes.classList.remove("dt-selected")
-        selectedTheme = name
-        view = ManagerView.Editor
-        renderAll()
-    }
-    themeManagerFocusScheme = { name ->
-        activeTab = ManagerTab.Schemes
-        tabSchemes.classList.add("dt-selected"); tabThemes.classList.remove("dt-selected")
-        selectedScheme = name
-        view = ManagerView.Editor
-        renderAll()
-    }
-
-    appBody.appendChild(panel)
+    mountInto.appendChild(panel)
     themeManagerPanel = panel
 
-    // Apply the sidebar section theme so the panel matches the left sidebar
-    // (same treatment the settings panel applies to itself).
-    val sidebarPalette = sectionPalette("sidebar")
-    val rootPalette = currentResolvedPalette()
-    if (sidebarPalette != rootPalette) {
-        val cssVars = sidebarPalette.toCssVarMap() + sidebarPalette.toCssAliasMap()
-        for ((prop, value) in cssVars) panel.style.setProperty(prop, value)
-    }
-
     kotlinx.browser.window.requestAnimationFrame { panel.classList.add("dt-open") }
-    panel.addEventListener("transitionend", { Unit }, js("({once:true})"))
-}
-
-/** Callback invoked after mutations to refresh the manager UI, if open. */
-private var themeManagerRerender: ((Any) -> Unit)? = null
-
-/** Set while the manager is open; drills into the editor for a freshly-cloned theme. */
-internal var themeManagerFocusTheme: ((String) -> Unit)? = null
-
-/** Set while the manager is open; drills into the editor for a freshly-cloned scheme. */
-internal var themeManagerFocusScheme: ((String) -> Unit)? = null
-
-/** Notify the open manager (if any) to re-render. */
-internal fun pokeManager() {
-    themeManagerRerender?.invoke(Unit)
 }
 
 /**
  * Refresh the Theme Manager panel if it is currently open. Called from
- * upstream state observers so that appearance-dependent UI re-sorts when
- * the user toggles between light and dark. No-op when the panel is closed.
+ * upstream state observers (e.g. an appearance toggle) so selection
+ * highlights re-sort. No-op when the panel is closed.
  */
 fun refreshThemeManager() {
-    themeManagerRerender?.invoke(Unit)
+    themeManagerRerender?.invoke()
 }
 
-/** Build a tab button element. */
-private fun makeTabBtn(label: String, selected: Boolean): HTMLElement {
-    val btn = document.createElement("button") as HTMLElement
-    btn.className = "dt-theme-manager-tab" + if (selected) " dt-selected" else ""
-    btn.textContent = label
-    return btn
+/** Notify the open manager (if any) to re-render. Internal alias of [refreshThemeManager]. */
+internal fun pokeManager() {
+    themeManagerRerender?.invoke()
 }
 
 /**
- * Generic modal name prompt used for clone operations.
+ * Renders the theme catalog into [container] as a reflowing thumbnail grid: a
+ * "Dark" group (themes whose [ThemeGroup] is `Dark`) and a "Light" group, each
+ * card built by [renderThemeCard]. The grid packs as many thumbnails per row as
+ * the (resizable) sidebar width allows. The appearance (Auto/Dark/Light) is
+ * chosen from the app's toolbar, not here.
  *
- * @param title         modal title
- * @param label         input label
- * @param initial       initial input value
- * @param validate      returns an error string or `null` if valid
- * @param onCommit      called with the final, validated name
+ * @param container the body element to fill.
+ * @param onOpen    invoked with a theme's name and a read-only flag when its
+ *   open-editor arrow is pressed (read-only for built-ins, editable for custom);
+ *   the caller switches to the editor view.
+ */
+private fun renderThemeList(container: HTMLElement, onOpen: (String, Boolean) -> Unit) {
+    val all = allThemes(host.customThemes)
+    fun section(label: String, group: ThemeGroup) {
+        val themes = all.filter { it.group == group }
+        if (themes.isEmpty()) return
+        val heading = document.createElement("h3") as HTMLElement
+        heading.className = "dt-theme-group-heading"
+        heading.textContent = label
+        container.appendChild(heading)
+        val list = document.createElement("div") as HTMLElement
+        list.className = "dt-theme-list"
+        for (theme in themes) list.appendChild(renderThemeCard(theme, onOpen))
+        container.appendChild(list)
+    }
+    section("Dark", ThemeGroup.Dark)
+    section("Light", ThemeGroup.Light)
+}
+
+/**
+ * Builds one theme card: the name plus a small "open editor" arrow above a
+ * mini-window thumbnail. Clicking the card body assigns the theme to the slot
+ * for the currently-active appearance (dark mode → dark slot, light mode →
+ * light slot); the assigned theme is highlighted via `dt-theme-card-assigned`.
+ *
+ * The arrow opens the theme's editor view ([onOpen]) — read-only for built-in
+ * (default) themes, editable for custom ones. Every other per-theme action
+ * (Clone, Delete) lives inside that editor, so the card stays compact and the
+ * grid can pack many thumbnails per row.
+ *
+ * @param theme  the theme to render.
+ * @param onOpen invoked with the theme name and a read-only flag when the
+ *   open-editor arrow is pressed (read-only for built-ins, editable for custom).
+ * @return the card element.
+ */
+private fun renderThemeCard(theme: Theme, onOpen: (String, Boolean) -> Unit): HTMLElement {
+    val isCustom = builtinTheme(theme.name) == null
+    // The slot a click fills is whichever mode is *currently active* (the
+    // appearance preference, or the OS when Auto) — not the theme's own group.
+    // So clicking any theme while in light mode sets the light slot, etc.
+    val activeIsDark = isDarkActive(host.appearance)
+    val assigned = if (activeIsDark) host.darkThemeName == theme.name
+        else host.lightThemeName == theme.name
+
+    val card = document.createElement("div") as HTMLElement
+    card.className = "dt-theme-card" + if (assigned) " dt-theme-card-assigned" else ""
+    card.setAttribute("role", "button")
+    card.title = if (activeIsDark) "Use as the dark-mode theme"
+        else "Use as the light-mode theme"
+
+    // Title row: name on the left, a small arrow on the right that opens the
+    // theme's editor (read-only for built-ins, editable for custom themes).
+    // The name lives in a fixed two-line-tall area (so long names get a second
+    // row) with its text bottom-anchored, so single-line names sit right above
+    // the thumbnail.
+    val titleRow = document.createElement("div") as HTMLElement
+    titleRow.className = "dt-theme-card-title"
+    val nameArea = document.createElement("div") as HTMLElement
+    nameArea.className = "dt-theme-card-name-area"
+    val nameEl = document.createElement("span") as HTMLElement
+    nameEl.className = "dt-theme-card-name"
+    nameEl.textContent = theme.name
+    nameArea.appendChild(nameEl)
+    titleRow.appendChild(nameArea)
+
+    val openBtn = document.createElement("button") as HTMLElement
+    openBtn.className = "dt-theme-card-open"
+    openBtn.innerHTML = "&rsaquo;"
+    openBtn.title = if (isCustom) "Edit theme" else "View theme"
+    openBtn.addEventListener("click", { ev: Event ->
+        ev.stopPropagation()
+        onOpen(theme.name, !isCustom)
+    })
+    titleRow.appendChild(openBtn)
+    card.appendChild(titleRow)
+
+    card.appendChild(buildThemeThumb(theme))
+
+    // Clicking the card (outside the open-editor arrow) assigns this theme to
+    // the slot for the currently-active appearance.
+    card.addEventListener("click", {
+        if (activeIsDark) host.setDarkThemeName(theme.name)
+        else host.setLightThemeName(theme.name)
+        pokeManager()
+    })
+
+    return card
+}
+
+/**
+ * Builds the realistic mini-app silhouette thumbnail for [theme]: a tab strip,
+ * a sidebar column, two floating panes (one focused) each with their own
+ * titlebar and a few code lines, and a bottom accent strip — coloured entirely
+ * from the theme's resolved tokens, so each card previews the real app chrome
+ * at a glance.
+ *
+ * This mirrors the pre-revamp `defaultRenderConfigSilhouetteHtml` look (which
+ * the multi-scheme theme model drove); here each region is mapped onto the flat
+ * [se.soderbjorn.darkness.core.ResolvedTheme] tokens. The `.dt-config-silhouette`
+ * / `.dt-cs-*` class hierarchy (sizing, proportions) is defined in
+ * `darkness-toolkit.css`; this builder only assigns the per-token colours.
+ *
+ * @param theme the theme to preview.
+ * @return the thumbnail element (a `.dt-config-silhouette` flex column).
+ */
+private fun buildThemeThumb(theme: Theme): HTMLElement {
+    val r = theme.resolve()
+    fun c(v: Long) = argbToCss(v)
+
+    // Token → region mapping. Named locals so the markup below reads like the
+    // real chrome it mimics rather than a wall of `argbToCss(...)`.
+    val tabsBg         = c(r.surfaceAlt)
+    val tabsActiveBg   = c(r.surface)
+    val tabsActiveRing = c(r.accent)
+    val tabsActiveText = c(r.textBright)
+    val tabsDim        = c(r.textDim)
+    val tabsAccent     = c(r.accent)
+
+    val sidebarBg   = c(r.surface)
+    val sidebarText = c(r.text)
+    val sidebarDim  = c(r.textDim)
+
+    val windowsBg           = c(r.bg)
+    val mainBg              = c(r.surface)
+    val mainFg              = c(r.text)
+    val paneBorder          = c(r.border)
+    val paneTitleBg         = c(r.surfaceAlt)
+    val paneTitleText       = c(r.textDim)
+    val paneTitleBgActive   = c(r.surfaceAlt)
+    val paneTitleTextActive = c(r.textBright)
+    val activeBg            = c(r.accent)
+
+    val thumb = document.createElement("div") as HTMLElement
+    thumb.className = "dt-config-silhouette"
+    thumb.style.background = windowsBg
+    thumb.innerHTML = """
+        <span class="dt-cs-tabs" style="background:$tabsBg">
+            <span class="dt-cs-tab-toggle" style="background:$tabsDim"></span>
+            <span class="dt-cs-tab dt-cs-tab-active" style="background:$tabsActiveBg;box-shadow:inset 0 0 0 1px $tabsActiveRing">
+                <span class="dt-cs-tab-label" style="background:$tabsActiveText"></span>
+            </span>
+            <span class="dt-cs-tab">
+                <span class="dt-cs-tab-label" style="background:$tabsDim"></span>
+            </span>
+            <span class="dt-cs-tab">
+                <span class="dt-cs-tab-label" style="background:$tabsDim"></span>
+            </span>
+            <span class="dt-cs-tabs-spacer"></span>
+            <span class="dt-cs-tab-icons">
+                <span class="dt-cs-tab-icon" style="background:$tabsAccent"></span>
+                <span class="dt-cs-tab-icon" style="background:$tabsDim"></span>
+                <span class="dt-cs-tab-icon" style="background:$tabsDim"></span>
+            </span>
+        </span>
+        <span class="dt-cs-body">
+            <span class="dt-cs-sidebar" style="background:$sidebarBg">
+                <span class="dt-cs-sb-header" style="background:$sidebarDim"></span>
+                <span class="dt-cs-sb-item dt-cs-sb-item-active" style="box-shadow:inset 0 0 0 1px $activeBg">
+                    <span class="dt-cs-sb-item-label" style="background:$sidebarText"></span>
+                </span>
+                <span class="dt-cs-sb-item">
+                    <span class="dt-cs-sb-item-label" style="background:$sidebarText"></span>
+                </span>
+                <span class="dt-cs-sb-header" style="background:$sidebarDim"></span>
+                <span class="dt-cs-sb-item">
+                    <span class="dt-cs-sb-item-label" style="background:$sidebarText"></span>
+                </span>
+            </span>
+            <span class="dt-cs-main" style="background:$windowsBg">
+                <span class="dt-cs-pane dt-cs-pane-focused" style="box-shadow:inset 0 0 0 1px $paneBorder, 0 0 0 1px $activeBg">
+                    <span class="dt-cs-pane-titlebar" style="background:$paneTitleBgActive">
+                        <span class="dt-cs-pane-icon" style="background:$paneTitleTextActive"></span>
+                        <span class="dt-cs-pane-title" style="background:$paneTitleTextActive"></span>
+                        <span class="dt-cs-pane-titlebar-spacer"></span>
+                        <span class="dt-cs-pane-icon" style="background:$paneTitleTextActive"></span>
+                    </span>
+                    <span class="dt-cs-pane-body" style="background:$mainBg">
+                        <span class="dt-cs-line">
+                            <span class="dt-cs-prompt" style="background:$activeBg"></span>
+                            <span class="dt-cs-text dt-cs-text-long" style="background:$mainFg"></span>
+                        </span>
+                        <span class="dt-cs-line">
+                            <span class="dt-cs-text dt-cs-text-indent dt-cs-text-mid" style="background:$mainFg"></span>
+                        </span>
+                        <span class="dt-cs-line">
+                            <span class="dt-cs-text dt-cs-text-indent dt-cs-text-short" style="background:$mainFg"></span>
+                        </span>
+                    </span>
+                </span>
+                <span class="dt-cs-pane" style="box-shadow:inset 0 0 0 1px $paneBorder">
+                    <span class="dt-cs-pane-titlebar" style="background:$paneTitleBg">
+                        <span class="dt-cs-pane-icon" style="background:$paneTitleText"></span>
+                        <span class="dt-cs-pane-title" style="background:$paneTitleText"></span>
+                        <span class="dt-cs-pane-titlebar-spacer"></span>
+                        <span class="dt-cs-pane-icon" style="background:$paneTitleText"></span>
+                    </span>
+                    <span class="dt-cs-pane-body" style="background:$mainBg">
+                        <span class="dt-cs-line">
+                            <span class="dt-cs-text dt-cs-text-long" style="background:$mainFg"></span>
+                        </span>
+                        <span class="dt-cs-line">
+                            <span class="dt-cs-text dt-cs-text-short" style="background:$mainFg"></span>
+                        </span>
+                        <span class="dt-cs-line">
+                            <span class="dt-cs-text dt-cs-text-mid" style="background:$mainFg"></span>
+                        </span>
+                    </span>
+                </span>
+            </span>
+        </span>
+        <span class="dt-cs-accent" style="background:$activeBg"></span>
+    """.trimIndent()
+    return thumb
+}
+
+/**
+ * Produces a unique clone name from [base]: `"<base> (copy)"`, then
+ * `"<base> (copy 2)"`, `"(copy 3)"`, … until the name collides with neither a
+ * built-in nor an existing custom theme.
+ *
+ * @param base the source theme's name.
+ * @return a name not currently in use.
+ */
+private fun dedupeCloneName(base: String): String {
+    val existing = allThemes(host.customThemes).map { it.name }.toSet()
+    val first = "$base (copy)"
+    if (first !in existing) return first
+    var i = 2
+    while ("$base (copy $i)" in existing) i++
+    return "$base (copy $i)"
+}
+
+// ── Shared name-prompt helper (kept for any future flows) ───────────
+
+/**
+ * Generic modal name prompt.
+ *
+ * @param title    modal title.
+ * @param label    input label.
+ * @param initial  initial input value.
+ * @param validate returns an error string or `null` if valid.
+ * @param onCommit called with the final, validated name.
  */
 internal fun showNamePrompt(
     title: String,
@@ -546,9 +538,6 @@ internal fun showNamePrompt(
     okBtn.className = "dt-name-prompt-btn dt-name-prompt-btn-ok"
     okBtn.textContent = "OK"
 
-    // Re-run [validate] on every input change so OK reflects validity
-    // upfront. Show the error text only once the user has touched the
-    // field so the initial prompt stays quiet on a valid default.
     var dirty = false
     val syncValidity = {
         val err = validate(input.value.trim())

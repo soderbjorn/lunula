@@ -16,9 +16,6 @@
  */
 package se.soderbjorn.darkness.store
 
-import se.soderbjorn.darkness.core.ColorScheme
-import se.soderbjorn.darkness.core.UiSettings
-
 /** iOS stub — see file-level docs. */
 actual fun defaultSharedThemesPath(): String? = null
 
@@ -26,13 +23,7 @@ actual fun defaultSharedThemesPath(): String? = null
 actual fun defaultAppUiSettingsPath(appName: String): String? = null
 
 /** iOS stub — see file-level docs. */
-actual fun readUiSettings(path: String, extraSchemes: List<ColorScheme>): UiSettings? = null
-
-/** iOS stub — see file-level docs. */
 actual fun readUiSettingsRaw(path: String): String? = null
-
-/** iOS stub — see file-level docs. */
-actual fun writeUiSettings(path: String, settings: UiSettings): Boolean = false
 
 /** iOS stub — see file-level docs. */
 actual fun writeUiSettingsRaw(path: String, jsonString: String): Boolean = false
@@ -44,7 +35,7 @@ actual fun writeUiSettingsRaw(path: String, jsonString: String): Boolean = false
  */
 actual fun watchUiSettings(
     path: String,
-    onChange: (UiSettings) -> Unit,
+    onChange: (String) -> Unit,
 ): Closeable = object : Closeable {
     override fun close() { /* no-op stub */ }
 }

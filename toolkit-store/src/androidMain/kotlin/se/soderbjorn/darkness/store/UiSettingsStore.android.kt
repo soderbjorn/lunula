@@ -5,7 +5,7 @@
  * filesystem location not actually possible without bespoke storage
  * permissions, so [defaultSharedThemesPath] returns null on Android by
  * default — apps must pass an explicit path (e.g. `context.filesDir`)
- * to [readUiSettings]/[writeUiSettings]. The host app can also use
+ * to [readUiSettingsRaw]/[writeUiSettingsRaw]. The host app can also use
  * the JVM read/write helpers directly with any `java.io.File` path
  * it controls.
  *
@@ -19,11 +19,6 @@
 package se.soderbjorn.darkness.store
 
 import android.os.FileObserver
-import se.soderbjorn.darkness.core.ColorScheme
-import se.soderbjorn.darkness.core.UiSettings
-import se.soderbjorn.darkness.core.recommendedColorSchemes
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -44,20 +39,6 @@ actual fun defaultSharedThemesPath(): String? = null
  */
 actual fun defaultAppUiSettingsPath(appName: String): String? = null
 
-/**
- * Reads and parses a [UiSettings] from a file on Android. Same semantics as
- * the JVM implementation, but uses [java.io.File] APIs that are always
- * available on Android.
- */
-actual fun readUiSettings(path: String, extraSchemes: List<ColorScheme>): UiSettings? {
-    val text = readUiSettingsRaw(path) ?: return null
-    if (text.isBlank()) return null
-    val obj = runCatching { Json.parseToJsonElement(text) as? JsonObject }
-        .getOrNull() ?: return null
-    val pool = if (extraSchemes.isEmpty()) recommendedColorSchemes else recommendedColorSchemes + extraSchemes
-    return UiSettings.resolveAgainst(obj, pool)
-}
-
 /** Reads the raw file as text. Returns null on missing/IO error. */
 actual fun readUiSettingsRaw(path: String): String? {
     val f = File(path)
@@ -69,17 +50,10 @@ actual fun readUiSettingsRaw(path: String): String? {
 private val lastWrittenBytes = ConcurrentHashMap<String, ByteArray>()
 
 /**
- * Writes a [UiSettings] to disk atomically. Writes to `<path>.tmp` then
+ * Atomic-write a raw JSON string to disk. Writes to `<path>.tmp` then
  * renames into place via [File.renameTo]. Parent dirs are created on
  * demand. The written bytes are recorded so [watchUiSettings] can
  * suppress the matching event.
- */
-actual fun writeUiSettings(path: String, settings: UiSettings): Boolean =
-    writeUiSettingsRaw(path, settings.toJsonString())
-
-/**
- * Atomic-write a raw JSON string. Implementation detail shared with the
- * structured [writeUiSettings] entry point.
  */
 actual fun writeUiSettingsRaw(path: String, jsonString: String): Boolean {
     return runCatching {
@@ -106,7 +80,7 @@ actual fun writeUiSettingsRaw(path: String, jsonString: String): Boolean {
 @Suppress("DEPRECATION")
 actual fun watchUiSettings(
     path: String,
-    onChange: (UiSettings) -> Unit,
+    onChange: (String) -> Unit,
 ): Closeable {
     val target = File(path).absoluteFile
     val parent = target.parentFile ?: throw IllegalArgumentException("Path has no parent: $path")
@@ -125,13 +99,9 @@ actual fun watchUiSettings(
             val bytes = runCatching { target.readBytes() }.getOrNull() ?: return@Thread
             val mine = lastWrittenBytes[path]
             if (mine != null && bytes.contentEquals(mine)) return@Thread
-            val settings = runCatching {
-                val text = bytes.toString(Charsets.UTF_8)
-                if (text.isBlank()) null
-                else (Json.parseToJsonElement(text) as? JsonObject)
-                    ?.let { UiSettings.resolveAgainst(it, recommendedColorSchemes) }
-            }.getOrNull() ?: return@Thread
-            runCatching { onChange(settings) }
+            val text = bytes.toString(Charsets.UTF_8)
+            if (text.isBlank()) return@Thread
+            runCatching { onChange(text) }
         }.apply { isDaemon = true }.start()
     }
 

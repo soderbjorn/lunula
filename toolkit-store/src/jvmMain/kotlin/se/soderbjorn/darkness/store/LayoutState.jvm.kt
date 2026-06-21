@@ -84,7 +84,7 @@ actual fun readLayoutState(path: String): LayoutState? {
 private val lastWrittenLayoutBytes = ConcurrentHashMap<String, ByteArray>()
 
 /**
- * Atomic-write a [LayoutState] to disk. Mirrors [writeUiSettings]'s
+ * Atomic-write a [LayoutState] to disk. Mirrors [writeUiSettingsRaw]'s
  * tmp+ATOMIC_MOVE pattern.
  */
 actual fun writeLayoutState(path: String, layout: LayoutState): Boolean {

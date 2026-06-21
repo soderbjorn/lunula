@@ -16,8 +16,8 @@ import org.w3c.dom.HTMLButtonElement
 import org.w3c.dom.HTMLElement
 import se.soderbjorn.darkness.core.Appearance
 import se.soderbjorn.darkness.core.PersistKeys
-import se.soderbjorn.darkness.core.UiSettings
-import se.soderbjorn.darkness.web.applyUiSettings
+import se.soderbjorn.darkness.core.ThemeSnapshotV2
+import se.soderbjorn.darkness.web.applyTheme
 import se.soderbjorn.darkness.web.injectDarknessToolkitStyles
 import se.soderbjorn.darkness.web.isDarkActive
 import se.soderbjorn.darkness.web.layout.DEFAULT_LAYOUT_GRID
@@ -52,13 +52,12 @@ import se.soderbjorn.darkness.web.settings.toggleAppSettingsSidebar
 import se.soderbjorn.darkness.web.settings.toggleSettingsSidebar
 import se.soderbjorn.darkness.web.themeeditor.DefaultThemeManagerHost
 import se.soderbjorn.darkness.web.themeeditor.DefaultThemeManagerState
-import se.soderbjorn.darkness.web.themeeditor.applySnapshot
-import se.soderbjorn.darkness.web.themeeditor.toSnapshot
+import se.soderbjorn.darkness.web.themeeditor.applySnapshotV2
+import se.soderbjorn.darkness.web.themeeditor.toSnapshotV2
 import se.soderbjorn.darkness.web.themeeditor.buildThemeManagerSidebar
 import se.soderbjorn.darkness.web.themeeditor.closeThemeManager
 import se.soderbjorn.darkness.web.themeeditor.isThemeManagerSidebarOpen
 import se.soderbjorn.darkness.web.themeeditor.refreshThemeManager
-import se.soderbjorn.darkness.web.themeeditor.resolveActiveUiSettings
 import se.soderbjorn.darkness.web.themeeditor.toggleThemeManagerSidebar
 
 /**
@@ -321,8 +320,9 @@ internal fun decodeShellLayoutJson(json: String): PersistedShellLayout? {
  *
  * Composition (all toolkit-supplied unless overridden via [spec]):
  * - injects `darkness-toolkit.css` if not already present
- * - reads [PersistKeys.UI_SETTINGS] / [PersistKeys.LAYOUT] from the persister (or seeds defaults)
- * - applies the resolved theme via [applyUiSettings]
+ * - reads [PersistKeys.THEME_V2_SELECTION] / [PersistKeys.THEME_V2_CUSTOM] /
+ *   [PersistKeys.LAYOUT] from the persister (or seeds defaults)
+ * - applies the resolved theme via [applyTheme]
  * - builds the [renderAppFrame] with top bar, body (left sidebar +
  *   pane main), and an optional bottom bar
  * - constructs the standard top bar with the toolkit's tab-bar
@@ -352,15 +352,14 @@ fun mountAppShell(
     // ignore the theme manager (no spec field needed); the toolkit
     // mounts it for free as part of the canonical chrome.
     val themeState = DefaultThemeManagerState()
-    // `onChange` fires each time the user picks a theme / scheme /
-    // appearance in the manager. We capture a forward reference to the
-    // ShellState so the closure can resolve the new UiSettings, apply
-    // the resulting palette to the DOM, persist, and re-render. Late
-    // binding because ShellState needs themeHost in its constructor.
+    // `onChange` fires each time the user picks a theme / appearance in the
+    // manager. We capture a forward reference to the ShellState so the closure
+    // can resolve the new snapshot, apply the resulting palette to the DOM,
+    // persist, and re-render. Late binding because ShellState needs themeHost
+    // in its constructor.
     var stateRef: ShellState? = null
     val themeHost: DefaultThemeManagerHost = object : DefaultThemeManagerHost(
         state = themeState,
-        _appPanes = spec.appPanes,
         onChange = { stateRef?.onThemeManagerChanged() },
     ) {}
 
@@ -411,63 +410,38 @@ fun mountAppShell(
     state.attach(frame, topBarSlot, leftSidebarSlot, rightSidebarSlot, main, bottomBarSlot)
 
     val initJob: Job = scope.launch {
-        // 1. Restore UI settings (theme + appearance + per-section overrides).
-        val uiRaw = spec.persister.read(PersistKeys.UI_SETTINGS)
-        val ui = if (uiRaw != null) UiSettings.fromJsonString(uiRaw) else UiSettings.defaults()
+        // 1. Restore the v2 theme snapshot from its two persisted parts:
+        //    THEME_V2_SELECTION (per-app: slots + appearance) and
+        //    THEME_V2_CUSTOM (shared: custom themes). Hydrate the toolkit's
+        //    themeState BEFORE applyTheme so `applyHostFontVars()` paints the
+        //    persisted fonts onto `--dt-font-*` on the first frame.
+        val selectionRaw = spec.persister.read(PersistKeys.THEME_V2_SELECTION)
+        val customRaw = spec.persister.read(PersistKeys.THEME_V2_CUSTOM)
+        val snapshot = ThemeSnapshotV2.fromStrings(selectionRaw, customRaw)
+        themeState.applySnapshotV2(snapshot)
 
-        // 1a. Restore the ThemeSnapshot (font preferences, custom themes,
-        //     favorites) into the toolkit's themeState BEFORE applyUi so
-        //     `applyUi`'s `applyHostFontVars()` step paints the persisted
-        //     fonts onto `--dt-font-*` on the first frame.
-        val snapshotRaw = spec.persister.read(PersistKeys.THEME_SNAPSHOT)
-        val haveSnapshot = snapshotRaw != null
-        if (snapshotRaw != null) {
-            val snapshot = se.soderbjorn.darkness.core.ThemeSnapshot.fromJsonString(snapshotRaw)
-            themeState.applySnapshot(snapshot)
-        } else {
-            // No persisted snapshot (e.g. apps using the stock
-            // ElectronIpcPersister, which doesn't round-trip THEME_SNAPSHOT)
-            // would normally leave `state.useCustomTitleBar` at its default
-            // `false` and cause [applyCustomTitleBar] below to strip
-            // `dt-custom-titlebar` from `<body>` — clobbering the value
-            // [autoApplyCustomTitleBarBodyClass] already set from the
-            // host's authoritative `darknessApi.customTitleBar` flag.
-            // Seed from the bridge so the renderer's state matches the
-            // BrowserWindow's actual `titleBarStyle`.
-            val bridgeCustomTitleBar: dynamic = js(
-                """
-                (function() {
-                    try {
-                        if (typeof globalThis !== 'undefined'
-                            && globalThis.darknessApi
-                            && typeof globalThis.darknessApi.customTitleBar === 'boolean') {
-                            return globalThis.darknessApi.customTitleBar;
-                        }
-                    } catch (e) { }
-                    return null;
-                })()
-                """
-            )
-            if (bridgeCustomTitleBar != null) {
-                themeState.useCustomTitleBar = bridgeCustomTitleBar as Boolean
-            }
+        // Seed the custom-titlebar flag from the Electron bridge when present
+        // so the renderer's state matches the BrowserWindow's actual
+        // `titleBarStyle` (the v2 snapshot doesn't carry titlebar prefs).
+        val bridgeCustomTitleBar: dynamic = js(
+            """
+            (function() {
+                try {
+                    if (typeof globalThis !== 'undefined'
+                        && globalThis.darknessApi
+                        && typeof globalThis.darknessApi.customTitleBar === 'boolean') {
+                        return globalThis.darknessApi.customTitleBar;
+                    }
+                } catch (e) { }
+                return null;
+            })()
+            """
+        )
+        if (bridgeCustomTitleBar != null) {
+            themeState.useCustomTitleBar = bridgeCustomTitleBar as Boolean
         }
 
-        // 1a'. Re-resolve the UiSettings against the snapshot's slot
-        //      pointers + the persisted appearance before painting. The
-        //      UI_SETTINGS blob caches `theme` (the resolved main scheme),
-        //      but apps that mutate slot bindings outside the toolkit's
-        //      DefaultThemeManagerHost path (notably termtastic, whose
-        //      TermtasticThemeManagerHost writes through appVm and never
-        //      back-fills UI_SETTINGS) leave that cache stale across
-        //      restarts. Without this re-resolve the chrome would paint
-        //      from the stale cached theme on first frame while the app's
-        //      own painters paint from the fresh slot, splitting the UI
-        //      into "chrome of last theme, content of current theme".
-        val resolvedUi = if (haveSnapshot) {
-            resolveActiveUiSettings(themeState, ui, paneToSection = spec.appPanes)
-        } else ui
-        state.applyUi(resolvedUi)
+        state.applyThemeSnapshot(snapshot)
 
         // 1b. Restore collapsed-sidebar-section ids. Stored as a JSON
         //     array of strings (or empty / missing — defaults to all open).
@@ -522,8 +496,8 @@ fun mountAppShell(
             triggerPaneRename(paneId)
         }
 
-        override fun setUiSettings(ui: UiSettings) {
-            state.syncUiFromHost(ui)
+        override fun setThemeSnapshot(snapshot: ThemeSnapshotV2) {
+            state.syncThemeFromHost(snapshot)
         }
 
         override fun dispose() {
@@ -605,7 +579,7 @@ private class ShellState(
      */
     private var mainResizeDebounceHandle: Int = 0
 
-    private var ui: UiSettings = UiSettings.defaults()
+    private var snapshot: ThemeSnapshotV2 = ThemeSnapshotV2()
     /** Non-null only in local mode. */
     private var local: PersistedShellLayout? = null
     /** Non-null only in source mode. */
@@ -754,33 +728,20 @@ private class ShellState(
         mainResizeObserver = obs
     }
 
-    fun applyUi(ui: UiSettings) {
-        kotlinx.browser.window.asDynamic().console.log(
-            "[applyUi] entry: ui.appearance=${ui.appearance} ui.theme=${ui.theme.name} " +
-                "prev.this.ui.appearance=${this.ui.appearance}"
-        )
-        this.ui = ui
-        // Mirror appearance into the default theme-manager state so the
-        // theme grid's "current mode first" sort reads the live value
-        // after the topbar cycle button flips Auto/Dark/Light. Apps that
-        // supply their own [ThemeManagerHost] (e.g. termtastic) bypass
-        // [themeState] entirely and aren't affected.
-        themeState.appearance = ui.appearance
-        val docEl = document.documentElement as? HTMLElement ?: run {
-            kotlinx.browser.window.asDynamic().console.warn(
-                "[applyUi] BAIL: documentElement is null"
-            )
-            return
-        }
-        // Seed `:root` with the main palette + prefixed section vars so
-        // any new elements that [rerender] produces have a baseline
-        // `var(--t-*)` chain to read from on their first frame.
-        // [rerender] itself runs Pass 3 again on the freshly built chrome
-        // (every rerender wipes the topbar / sidebar / bottombar slots),
-        // so the per-element section paint stays consistent across every
-        // rerender path — tab switches, sidebar toggles, theme manager
-        // close, layout changes, …
-        applyUiSettings(docEl, ui, isDarkActive(ui.appearance))
+    fun applyThemeSnapshot(snap: ThemeSnapshotV2) {
+        this.snapshot = snap
+        // Mirror into the default theme-manager state so the theme list's
+        // selection highlight reads the live values after the topbar cycle
+        // button flips Auto/Dark/Light. Apps that supply their own
+        // [ThemeManagerHost] (e.g. termtastic) bypass [themeState] entirely
+        // and aren't affected.
+        themeState.applySnapshotV2(snap)
+        val docEl = document.documentElement as? HTMLElement ?: return
+        // Seed `:root` with the active theme so any new elements that
+        // [rerender] produces have a baseline `var(--t-*)` chain to read from
+        // on their first frame.
+        val isDark = isDarkActive(snap.appearance)
+        applyTheme(docEl, snap.resolve(isDark), isDark)
         applyHostFontVars()
         applyCustomTitleBar()
         rerender()
@@ -788,21 +749,18 @@ private class ShellState(
 
     /**
      * Sync path for apps that own theme resolution outside the toolkit
-     * (e.g. termtastic's `TermtasticThemeManagerHost`). Updates the
-     * stored snapshot + paints in place; deliberately omits [rerender]
-     * for the same reason [onThemeManagerChanged] does — the user may
-     * be mid-interaction in the theme editor.
+     * (e.g. termtastic's `TermtasticThemeManagerHost`). Updates the stored
+     * snapshot + paints in place; deliberately omits [rerender] for the same
+     * reason [onThemeManagerChanged] does — the user may be mid-interaction in
+     * the theme editor.
      *
-     * Called by [AppShellHandle.setUiSettings].
+     * Called by [AppShellHandle.setThemeSnapshot].
      */
-    fun syncUiFromHost(ui: UiSettings) {
-        kotlinx.browser.window.asDynamic().console.log(
-            "[syncUiFromHost] entry: ui.appearance=${ui.appearance} ui.theme=${ui.theme.name} " +
-                "prev.this.ui.appearance=${this.ui.appearance}"
-        )
-        this.ui = ui
+    fun syncThemeFromHost(snap: ThemeSnapshotV2) {
+        this.snapshot = snap
         val docEl = document.documentElement as? HTMLElement ?: return
-        applyUiSettings(docEl, ui, isDarkActive(ui.appearance))
+        val isDark = isDarkActive(snap.appearance)
+        applyTheme(docEl, snap.resolve(isDark), isDark)
         applyHostFontVars()
         applyCustomTitleBar()
     }
@@ -813,20 +771,29 @@ private class ShellState(
      * after [applyUi] (which establishes the palette) and after any
      * theme-manager change.
      *
-     * Reads from the assembler's [themeHost] — the same source the
-     * Settings sidebar's pill rows mutate — so app surfaces wired to the
-     * `var(--dt-font-*)` chain pick up persisted values on first paint
-     * without an explicit settings sync from the host.
+     * Reads from `spec.settingsHost ?: themeHost` — the same `settingsHost ?:
+     * themeHost` ladder the Settings sidebar's pill rows read/mutate — so app
+     * surfaces wired to the `var(--dt-font-*)` chain pick up persisted values
+     * on first paint without an explicit settings sync from the host.
+     *
+     * Reading the resolved host (not the internal [themeHost]) matters for
+     * apps that own theme resolution outside the toolkit and supply their own
+     * [AppShellSpec.settingsHost] (e.g. termtastic): the internal [themeHost]
+     * never receives their font preferences, so reading it here would clear
+     * the `--dt-font-*` vars (via the `removeProperty` branch) and clobber the
+     * chrome fonts on first paint, leaving the tab bar / sidebars on defaults
+     * until the user re-picks a font in Appearance settings.
      */
     private fun applyHostFontVars() {
-        applyMonoFontFamily(themeHost.monoFontFamily)
-        applyMonoFontSizePx(themeHost.monoFontSizePx)
-        applyProportionalFontFamily(themeHost.proportionalFontFamily)
-        applyProportionalFontSizePx(themeHost.proportionalFontSizePx)
-        applySidebarFontFamily(themeHost.sidebarFontFamily)
-        applySidebarFontSizePx(themeHost.sidebarFontSizePx)
-        applyTabbarFontFamily(themeHost.tabbarFontFamily)
-        applyTabbarFontSizePx(themeHost.tabbarFontSizePx)
+        val host = spec.settingsHost ?: themeHost
+        applyMonoFontFamily(host.monoFontFamily)
+        applyMonoFontSizePx(host.monoFontSizePx)
+        applyProportionalFontFamily(host.proportionalFontFamily)
+        applyProportionalFontSizePx(host.proportionalFontSizePx)
+        applySidebarFontFamily(host.sidebarFontFamily)
+        applySidebarFontSizePx(host.sidebarFontSizePx)
+        applyTabbarFontFamily(host.tabbarFontFamily)
+        applyTabbarFontSizePx(host.tabbarFontSizePx)
     }
 
     /** Last value pushed to the Electron main process; lets us skip
@@ -874,28 +841,25 @@ private class ShellState(
     }
 
     /**
-     * Invoked by [DefaultThemeManagerHost.onChange] whenever the user
-     * picks a theme / scheme / appearance in the theme manager sidebar.
-     * Resolves the manager's typed state into a fresh [UiSettings],
-     * paints it onto the live document via [applyUiSettings] (which
-     * updates root CSS vars and per-section inline styles in place),
-     * persists, and asks the theme manager to refresh its own selection
-     * highlight.
+     * Invoked by [DefaultThemeManagerHost.onChange] whenever the user picks a
+     * theme / appearance in the theme manager sidebar. Reads the manager's
+     * typed state into a fresh [ThemeSnapshotV2], paints it onto the live
+     * document via [applyTheme] (updating root CSS vars in place), persists,
+     * and asks the theme manager to refresh its own selection highlight.
      *
-     * Critically, this path does NOT call [rerender]. A full rerender
-     * would tear down the right-side theme-manager panel mid-interaction
-     * (the user is still hovering a card), and would also discard the
-     * per-section paint that [applyUiSettings] just installed on the
-     * existing `.dt-sidebar` / `.dt-topbar` / etc. elements — leaving
-     * freshly-rebuilt elements painted only by the document-root vars,
-     * which on themes with low chrome contrast reads as the panel
-     * "going all black".
+     * Critically, this path does NOT call [rerender]. A full rerender would
+     * tear down the right-side theme-manager panel mid-interaction (the user
+     * is still hovering a row), and would also discard the paint that
+     * [applyTheme] just installed on the existing chrome elements.
      */
     fun onThemeManagerChanged() {
-        val resolved = resolveActiveUiSettings(themeState, ui, paneToSection = spec.appPanes)
-        this.ui = resolved
+        val resolved = themeState.toSnapshotV2()
+        this.snapshot = resolved
         val docEl = document.documentElement as? HTMLElement
-        if (docEl != null) applyUiSettings(docEl, resolved, isDarkActive(resolved.appearance))
+        if (docEl != null) {
+            val isDark = isDarkActive(resolved.appearance)
+            applyTheme(docEl, resolved.resolve(isDark), isDark)
+        }
         applyHostFontVars()
         applyCustomTitleBar()
         persistUi()
@@ -1121,7 +1085,8 @@ private class ShellState(
         // paint still happens at the end (panes don't exist yet).
         val chromeDocEl = document.documentElement as? HTMLElement
         if (chromeDocEl != null) {
-            applyUiSettings(chromeDocEl, ui, isDarkActive(ui.appearance))
+            val isDark = isDarkActive(snapshot.appearance)
+            applyTheme(chromeDocEl, snapshot.resolve(isDark), isDark)
         }
 
         // Main: ensure a LayoutRenderer is mounted and re-render its panes.
@@ -1310,11 +1275,16 @@ private class ShellState(
                     // Restore from the dock: clear `isMinimized`; the pane
                     // re-enters the layout at its preserved geometry and the
                     // remaining panes re-tile under a non-Custom preset.
+                    // Then bring it to the front and make it the active pane
+                    // — restoring from the dock should land the user on the
+                    // pane they just un-minimized, matching the sidebar row
+                    // restore.
                     onFloatingRestored = { paneId ->
                         viewActiveTabId()?.let { tabId ->
                             updateGeometry(tabId, paneId) {
                                 it.copy(isMinimized = false)
                             }
+                            bringPaneToFront(tabId, paneId, raise = true)
                             reflowAfterMinimizeChange(tabId)
                         }
                     },
@@ -1379,23 +1349,16 @@ private class ShellState(
         // pane the user just toggled to maximized on the click that
         // followed the mousedown. See `LayoutRenderer.focusPane`.
         activePaneForActiveTab()?.let { renderer!!.focusPane(it, autoUnmaximize = false) }
-        // Section repaint. Every rerender wipes & rebuilds the chrome
-        // slots (`topSlot.innerHTML = ""`, ditto sidebar / bottom),
-        // discarding every Pass-3 inline `--t-*` var that
-        // [applyUiSettings] previously stamped on `.dt-topbar` /
-        // `.dt-sidebar` / `.dt-pane`. Without re-applying here, themes
-        // whose per-section schemes differ from the main scheme — e.g.
-        // Emerald Garden's tabs = Hot Magenta Bar — lose their section
-        // paint on every rerender path (tab switch, sidebar toggle,
-        // theme manager close, layout change, …) and the chrome falls
-        // back to the main palette inherited from `:root`. Apps that
-        // never noticed because their themes happened to be section-
-        // uniform (the toolkit demo's Neon Green) wouldn't repro this.
-        // Restoring the section paint here makes `rerender` self-
-        // consistent: callers don't need to remember to repaint after.
+        // Theme repaint. Every rerender wipes & rebuilds the chrome slots
+        // (`topSlot.innerHTML = ""`, ditto sidebar / bottom). Re-stamp the
+        // flat `--t-*` palette on `:root` here so the freshly built chrome
+        // resolves its `var(--t-*)` references against the active theme on
+        // its first frame; this keeps `rerender` self-consistent so callers
+        // don't need to remember to repaint after.
         val docEl = document.documentElement as? HTMLElement
         if (docEl != null) {
-            applyUiSettings(docEl, ui, isDarkActive(ui.appearance))
+            val isDark = isDarkActive(snapshot.appearance)
+            applyTheme(docEl, snapshot.resolve(isDark), isDark)
         }
 
         // Host-side paint reapply. The toolkit's Pass 3 above only
@@ -1694,59 +1657,31 @@ private class ShellState(
         // reflects the current appearance every rerender.
         trailing.appendChild(
             buildAppearanceCycleButton(
-                appearance = ui.appearance,
+                appearance = snapshot.appearance,
                 onCycle = {
-                    val cur = ui.appearance
+                    val cur = snapshot.appearance
                     val next = when (cur) {
                         Appearance.Auto -> Appearance.Dark
                         Appearance.Dark -> Appearance.Light
                         Appearance.Light -> Appearance.Auto
                     }
-                    kotlinx.browser.window.asDynamic().console.log(
-                        "[cycle] click: cur=$cur next=$next " +
-                            "themeStateSlots=${themeState.lightThemeName}/${themeState.darkThemeName}"
-                    )
-                    // Re-resolve the active theme from the [themeState] slot
-                    // bindings for the new appearance. Without this we'd
-                    // reuse the cached [ui.theme] from the previous mode —
-                    // user-visible symptom: pick Theme A in Light, cycle to
-                    // Dark, Dark mode paints with A's colors instead of the
-                    // dark slot's bound theme. Apps that own theme
-                    // resolution outside the default host (termtastic) leave
-                    // [themeState]'s slot pointers null, so the resolver
-                    // would fall back to DEFAULT_LIGHT/DARK_THEME_NAME and
-                    // clobber their picks; the guard below routes those apps
-                    // through the previous bare-appearance path and lets
-                    // them re-paint via [AppShellHandle.setUiSettings].
-                    val flipped = ui.copy(appearance = next)
-                    val resolved = if (themeState.lightThemeName != null ||
-                        themeState.darkThemeName != null) {
-                        resolveActiveUiSettings(themeState, flipped, paneToSection = spec.appPanes)
-                    } else flipped
-                    kotlinx.browser.window.asDynamic().console.log(
-                        "[cycle] calling applyUi: resolved.appearance=${resolved.appearance} " +
-                            "resolved.theme=${resolved.theme.name}"
-                    )
-                    applyUi(resolved)
-                    kotlinx.browser.window.asDynamic().console.log(
-                        "[cycle] applyUi done; calling persistUi (async)"
-                    )
-                    // Pass [resolved] explicitly rather than relying on
-                    // [persistUi] reading `this.ui`. The synchronous
-                    // [applyUi] above runs `rerender()`, which fires
-                    // `spec.onAfterRefresh`; hosts that bridge the
-                    // toolkit's `setUiSettings` back into their own state
-                    // (e.g. termtastic's [applyAppearanceClass]) read from
-                    // their backing model — which still holds the *previous*
-                    // appearance at this point because nothing has yet
-                    // propagated the cycle's new value into it. That
-                    // bridge call lands `syncUiFromHost(staleUi)` which
-                    // overwrites `this.ui` back to the previous
-                    // appearance. Reading `this.ui` here would then
-                    // persist the previous value, the host's own
-                    // appVm-blob check would early-return as "no change,"
-                    // and the cycle would silently no-op for the user.
-                    persistUi(resolved)
+                    // Flip the appearance on the stored snapshot; [resolve]
+                    // picks the slot theme for the new appearance from the
+                    // snapshot's own slot bindings (built-ins ∪ custom),
+                    // falling back to the slot default when unbound.
+                    val flipped = snapshot.copy(appearance = next)
+                    applyThemeSnapshot(flipped)
+                    // Pass [flipped] explicitly rather than relying on
+                    // [persistUi] reading `this.snapshot`. The synchronous
+                    // [applyThemeSnapshot] above runs `rerender()`, which
+                    // fires `spec.onAfterRefresh`; hosts that bridge the
+                    // toolkit's `setThemeSnapshot` back into their own state
+                    // read from their backing model — which still holds the
+                    // *previous* appearance at this point. That bridge call
+                    // lands `syncThemeFromHost(staleSnapshot)` which would
+                    // overwrite `this.snapshot` back to the previous value, so
+                    // we persist the explicit `flipped` instead.
+                    persistUi(flipped)
                 },
             )
         )
@@ -1940,6 +1875,48 @@ private class ShellState(
         // hidden→visible edge" behaviour.
         val cb = spec.onGeometryChanged ?: return
         kotlinx.browser.window.setTimeout({ cb.invoke(tabId) }, MINIMIZE_REFLOW_SETTLE_MS)
+    }
+
+    /**
+     * Makes [paneId] the active pane of [tabId] and, when [raise] is set,
+     * bumps its z-index above every sibling so it returns to the front.
+     *
+     * Called by both un-minimize affordances — the dock-chip restore
+     * ([LayoutCallbacks.onFloatingRestored]) and the sidebar row click —
+     * so a pane coming back from minimized lands on top *and* active no
+     * matter which surface restored it.
+     *
+     * Activation is mode-specific: source mode notifies the host via
+     * [TabSource.onPaneSelect] (the host's `activePaneId` wins in
+     * [activePaneForActiveTab], so a controller-only `setActive` wouldn't
+     * stick); local mode marks it on the tab's [LayoutController]. Neither
+     * branch switches the *active tab* — callers handle that beforehand
+     * (the dock only shows active-tab panes; the sidebar row click does
+     * its own cross-tab switch first).
+     *
+     * The z-raise mirrors the double-click raise in
+     * [LayoutCallbacks.onFloatingFocused]; unlike that path this never
+     * pokes the live `--dt-fp-z` var because every caller follows up with
+     * a reflow/rerender that re-applies the geometry z-index.
+     *
+     * @param tabId  the tab owning the pane; must already be the active tab.
+     * @param paneId the pane to activate (and optionally raise).
+     * @param raise  when `true`, bump the pane's z-index to one past the
+     *   current max so an overlapping (Custom-layout) restore lands in front.
+     * @see reflowAfterMinimizeChange
+     */
+    private fun bringPaneToFront(tabId: String, paneId: String, raise: Boolean) {
+        if (raise) {
+            val current = geometryState.geometryByTab[tabId].orEmpty()
+            val maxZ = current.values.maxOfOrNull { it.zIndex } ?: 0
+            updateGeometry(tabId, paneId) { it.copy(zIndex = maxZ + 1) }
+        }
+        if (spec.tabSource != null) {
+            spec.tabSource.onPaneSelect?.invoke(tabId, paneId)
+                ?: spec.tabSource.onSelect(tabId)
+        } else {
+            controllerFor(tabId).setActive(paneId)
+        }
     }
 
     private fun activePaneCountForPresets(): Int {
@@ -2157,28 +2134,26 @@ private class ShellState(
             if (wasMinimized) {
                 updateGeometry(tabId, paneId) { it.copy(isMinimized = false) }
             }
+            // Switch the active tab to the clicked row's tab first. In
+            // source mode `onPaneSelect` only changes pane focus inside
+            // its tab and `buildPaneLayout` only renders the active tab,
+            // so a click on a row in a non-active tab section would
+            // otherwise appear to do nothing; in local mode `mutateLocal`
+            // owns the active-tab switch. Neither touches paneOrder —
+            // that order is owned by the user via drag-to-reorder.
             if (spec.tabSource != null) {
-                // Activate the parent tab first when the clicked pane is
-                // not in the currently active tab — `onPaneSelect` only
-                // changes pane focus inside its tab, and `buildPaneLayout`
-                // only renders panes for the active tab, so without this
-                // a click on a row in a non-active tab section appears to
-                // do nothing. With both calls the user lands on the pane
-                // they clicked regardless of which tab section it was in.
                 if (tabId != viewActiveTabId()) {
                     spec.tabSource.onSelect(tabId)
                 }
-                spec.tabSource.onPaneSelect?.invoke(tabId, paneId)
-                    ?: spec.tabSource.onSelect(tabId)
             } else {
-                // Local mode: clicking a row marks the pane as active
-                // (drives the row's dt-active highlight via
-                // [activePaneForActiveTab]) and switches tabs. The
-                // click does NOT touch paneOrder — that order is owned
-                // by the user via the sidebar drag-to-reorder.
-                controllerFor(tabId).setActive(paneId)
                 mutateLocal { it.copy(activeTabId = tabId) }
             }
+            // Activate the clicked pane (drives the row's dt-active
+            // highlight via [activePaneForActiveTab]); when it was just
+            // un-minimized, also raise it to the front so a sidebar
+            // restore brings the pane forward exactly like the dock-chip
+            // restore does.
+            bringPaneToFront(tabId, paneId, raise = wasMinimized)
             // Reflow once after the host-select calls so the restore FLIP
             // plays; for source mode the host's activePaneId catches up on
             // its snapshot round-trip and focuses the freshly-restored pane.
@@ -2698,31 +2673,17 @@ private class ShellState(
         )
     }
 
-    private fun persistUi(snap: UiSettings = ui) {
-        kotlinx.browser.window.asDynamic().console.log(
-            "[persistUi] launching: ui.appearance=${snap.appearance} ui.theme=${snap.theme.name}"
-        )
+    private fun persistUi(snap: ThemeSnapshotV2 = snapshot) {
         scope.launch {
             try {
-                kotlinx.browser.window.asDynamic().console.log(
-                    "[persistUi] writing UI_SETTINGS (appearance=${snap.appearance})"
-                )
-                spec.persister.write(PersistKeys.UI_SETTINGS, snap.toJsonString())
-                kotlinx.browser.window.asDynamic().console.log(
-                    "[persistUi] UI_SETTINGS write returned; writing THEME_SNAPSHOT"
-                )
-                // Also persist the ThemeSnapshot so font preferences,
-                // favorites, and custom themes/schemes round-trip across
-                // launches. Apps that bypass `mountAppShell` and own their
-                // own snapshot persistence (termtastic's TermtasticThemeManagerHost
-                // → flat-KV server settings) won't go through here, since
-                // they pass an explicit `settingsHost` whose setters route
-                // around DefaultThemeManagerState.
-                val snapshotJson = themeState.toSnapshot().encodeAsJsonObject().toString()
-                spec.persister.write(PersistKeys.THEME_SNAPSHOT, snapshotJson)
-                kotlinx.browser.window.asDynamic().console.log(
-                    "[persistUi] THEME_SNAPSHOT write returned (done)"
-                )
+                // Per-app selection (slots + appearance) and the shared custom
+                // themes are written under their two v2 keys. Apps that bypass
+                // `mountAppShell` and own their own persistence (termtastic's
+                // TermtasticThemeManagerHost → flat-KV server settings) won't
+                // go through here, since they pass an explicit `settingsHost`
+                // whose setters route around DefaultThemeManagerState.
+                spec.persister.write(PersistKeys.THEME_V2_SELECTION, snap.selectionJson())
+                spec.persister.write(PersistKeys.THEME_V2_CUSTOM, snap.customThemesJson())
             } catch (t: Throwable) {
                 kotlinx.browser.window.asDynamic().console.error(
                     "[persistUi] threw: ${t.message}"

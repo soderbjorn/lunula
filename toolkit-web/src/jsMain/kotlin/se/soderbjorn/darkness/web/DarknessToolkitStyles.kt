@@ -130,9 +130,10 @@ fun setDtMacFullscreenBodyClass(enabled: Boolean) {
  * Toggle `dt-custom-titlebar` on `<body>` from the host Electron app's
  * authoritative boot-time flag, exposed as `globalThis.darknessApi.customTitleBar`.
  *
- * Why this exists: `useCustomTitleBar` is part of [ThemeSnapshot], but the
- * stock [ElectronIpcPersister] doesn't round-trip the snapshot, so apps
- * using the default persistence pipeline lose the flag across restarts.
+ * Why this exists: `useCustomTitleBar` is a per-app preference that is no
+ * longer carried in the persisted theme snapshot, and the stock
+ * [ElectronIpcPersister] doesn't round-trip it, so apps using the default
+ * persistence pipeline lose the flag across restarts.
  * The main process keeps its own `electron-chrome.json` cache and uses
  * that to pick `titleBarStyle` at BrowserWindow construction; passing the
  * same boolean into the renderer via preload (`darknessApi.customTitleBar`)

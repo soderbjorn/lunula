@@ -20,15 +20,12 @@
  * inevitable self-fired event.
  *
  * @see defaultSharedThemesPath
- * @see readUiSettings
- * @see writeUiSettings
+ * @see readUiSettingsRaw
+ * @see writeUiSettingsRaw
  * @see watchUiSettings
  */
 package se.soderbjorn.darkness.store
 
-import se.soderbjorn.darkness.core.ColorScheme
-import se.soderbjorn.darkness.core.UiSettings
-import se.soderbjorn.darkness.core.recommendedColorSchemes
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -40,8 +37,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.io.path.exists
 import kotlin.io.path.readText
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 
 /**
  * Resolve the OS-conventional Darkness data directory.
@@ -85,25 +80,6 @@ actual fun defaultSharedThemesPath(): String? =
 actual fun defaultAppUiSettingsPath(appName: String): String? =
     darknessDataDir()?.resolve("$appName.json")?.toString()
 
-/**
- * Reads and parses a [UiSettings] from a JSON file on disk.
- *
- * Returns null on missing file, IO error, or unparseable JSON. Callers
- * should fall back to [UiSettings.defaults] in that case.
- *
- * @param path the absolute file path to read
- * @param extraSchemes user-defined custom schemes to consider during name lookup
- * @return the parsed settings, or null
- */
-actual fun readUiSettings(path: String, extraSchemes: List<ColorScheme>): UiSettings? {
-    val text = readUiSettingsRaw(path) ?: return null
-    if (text.isBlank()) return null
-    val obj = runCatching { Json.parseToJsonElement(text) as? JsonObject }
-        .getOrNull() ?: return null
-    val pool = if (extraSchemes.isEmpty()) recommendedColorSchemes else recommendedColorSchemes + extraSchemes
-    return UiSettings.resolveAgainst(obj, pool)
-}
-
 /** Reads the raw file as text. Returns null on missing/IO error. */
 actual fun readUiSettingsRaw(path: String): String? {
     val p = Paths.get(path)
@@ -113,14 +89,14 @@ actual fun readUiSettingsRaw(path: String): String? {
 
 /**
  * Per-path "bytes most recently written from this process". Both
- * [writeUiSettings] and [watchUiSettings] consult this so a writer that
+ * [writeUiSettingsRaw] and [watchUiSettings] consult this so a writer that
  * also watches doesn't bounce on its own write. Cleared when the file
  * is overwritten by a third party (the entry simply stops matching).
  */
 private val lastWrittenBytes = ConcurrentHashMap<String, ByteArray>()
 
 /**
- * Writes a [UiSettings] to a JSON file on disk atomically.
+ * Atomic-write a raw JSON string to disk.
  *
  * Writes to `<path>.tmp` first and then renames into place via
  * [Files.move] with [StandardCopyOption.ATOMIC_MOVE]. Parent dirs are
@@ -128,15 +104,8 @@ private val lastWrittenBytes = ConcurrentHashMap<String, ByteArray>()
  * so a co-resident [watchUiSettings] suppresses the matching event.
  *
  * @param path the absolute file path to write to
- * @param settings the settings to persist
+ * @param jsonString a complete JSON document to persist verbatim
  * @return true on success, false if any step failed
- */
-actual fun writeUiSettings(path: String, settings: UiSettings): Boolean =
-    writeUiSettingsRaw(path, settings.toJsonString())
-
-/**
- * Atomic-write a raw JSON string. Implementation detail shared with the
- * structured [writeUiSettings] entry point.
  */
 actual fun writeUiSettingsRaw(path: String, jsonString: String): Boolean {
     return runCatching {
@@ -173,12 +142,12 @@ actual fun writeUiSettingsRaw(path: String, jsonString: String): Boolean {
  * Returned [Closeable] stops the daemon and closes the watch service.
  *
  * @param path the absolute file path to watch
- * @param onChange invoked on the watcher's daemon thread with the parsed [UiSettings]
+ * @param onChange invoked on the watcher's daemon thread with the raw file contents
  * @return a handle that, when closed, stops watching
  */
 actual fun watchUiSettings(
     path: String,
-    onChange: (UiSettings) -> Unit,
+    onChange: (String) -> Unit,
 ): Closeable {
     val target = Paths.get(path).toAbsolutePath()
     val parent = target.parent ?: throw IllegalArgumentException("Path has no parent: $path")
@@ -222,13 +191,9 @@ actual fun watchUiSettings(
             val bytes = runCatching { Files.readAllBytes(target) }.getOrNull() ?: continue
             val mine = lastWrittenBytes[path]
             if (mine != null && bytes.contentEquals(mine)) continue
-            val settings = runCatching {
-                val text = bytes.toString(Charsets.UTF_8)
-                if (text.isBlank()) null
-                else (Json.parseToJsonElement(text) as? JsonObject)
-                    ?.let { UiSettings.resolveAgainst(it, recommendedColorSchemes) }
-            }.getOrNull() ?: continue
-            runCatching { onChange(settings) }
+            val text = bytes.toString(Charsets.UTF_8)
+            if (text.isBlank()) continue
+            runCatching { onChange(text) }
         }
     }, "darkness-ui-settings-watch:${target.fileName}")
     thread.isDaemon = true

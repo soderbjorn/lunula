@@ -30,8 +30,8 @@ html, body {
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background: var(--t-surface-base, #1e1e1e);
-    color: var(--t-text-primary, #e6e6e6);
+    background: var(--t-bg, #1e1e1e);
+    color: var(--t-text, #e6e6e6);
     /* Chrome font cascades to every shell element (topbar, tabs, sidebar,
        pane headers, bottom bar). Pane content opts back out via the rule on
        `.dt-pane-content` so host editors (notegrow's MainScreen, termtastic's
@@ -92,7 +92,7 @@ html, body {
     /* Same tone as topbar/bottombar so the 4px frame around the main
        pane reads as one continuous chrome band wrapping the topbar,
        sides, and bottombar — rather than a third "recessed body" tone. */
-    background: var(--t-surface-base, #1e1e1e);
+    background: var(--t-bg, #1e1e1e);
     padding: var(--dt-frame-pad, 8px);
     gap: var(--dt-frame-pad, 8px);
 }
@@ -121,8 +121,8 @@ html, body {
     /* Match the topbar's chrome surface exactly — same fallback chain as
        .dt-topbar above so the bottom row reads as the same chrome
        material as the tab strip, not a separate footer. */
-    background: var(--t-surface-base, var(--t-chrome-titlebar, #1e1e1e));
-    color: var(--t-chrome-titleText, var(--t-text-secondary, #b8b8b8));
+    background: var(--t-bg, var(--t-surface-alt, #1e1e1e));
+    color: var(--t-text-bright, var(--t-text-dim, #b8b8b8));
     /* No top border — chrome surfaces themselves provide enough
        delineation; the hairline reads as a "sizing line" against the
        flat chrome and adds visual noise. */
@@ -171,12 +171,12 @@ html, body {
        [TopBarSpec.maxHeightPx] allows. */
     padding: var(--dt-topbar-pad-y, 8px) var(--dt-topbar-pad-x, 20px);
     min-height: var(--dt-topbar-h, 48px);
-    /* Use `--t-surface-base` (the darkest surface in the palette) so the
+    /* Use `--t-bg` (the darkest surface in the palette) so the
        chrome reads as a deep frame around the lighter pane chrome below.
-       Falls back to `--t-chrome-titlebar` for themes that haven't set the
+       Falls back to `--t-surface-alt` for themes that haven't set the
        surface scale, then to a neutral dark. */
-    background: var(--t-surface-base, var(--t-chrome-titlebar, #161616));
-    color: var(--t-chrome-titleText, #e6e6e6);
+    background: var(--t-bg, var(--t-surface-alt, #161616));
+    color: var(--t-text-bright, #e6e6e6);
     /* No bottom border + no drop shadow — chrome surfaces themselves
        delineate the topbar from the body adequately, and the hairline
        reads as a "sizing line" against the flat chrome below. */
@@ -279,14 +279,17 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 .dt-topbar-tab {
     padding: 6px 12px;
     background: transparent;
-    color: var(--t-text-primary, #e6e6e6);
+    color: var(--t-text, #e6e6e6);
     border: 0;
     border-radius: 4px;
     cursor: pointer;
     font-size: 13px;
 }
 .dt-topbar-tab.dt-selected {
-    background: var(--t-surface-raised, rgba(255, 255, 255, 0.06));
+    background: var(--t-surface, rgba(255, 255, 255, 0.06));
+    /* Active tab title lifts to the brightest text token (white on Termtastic
+       Dark), matching the Theme Studio reference. */
+    color: var(--t-text-bright, var(--t-text, #e6e6e6));
 }
 .dt-topbar-trailing {
     display: flex;
@@ -309,7 +312,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     appearance: none;
     background: transparent;
     border: 0;
-    color: var(--t-text-secondary, #b8b8b8);
+    color: var(--t-text-dim, #b8b8b8);
     cursor: pointer;
     /* Centred 30×30 hit area so every icon (16-unit OR 24-unit viewbox)
        sits at the same baseline as the tab strip. Matches termtastic's
@@ -333,11 +336,11 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     display: block;
 }
 .dt-topbar-icon-button:hover {
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.08));
-    color: var(--t-text-primary, #e6e6e6);
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.08));
+    color: var(--t-text, #e6e6e6);
 }
 /* Active state — corresponding pane is currently open. Earlier attempts
-   used `color: --t-accent-primary` (sometimes plus `bg: accent-primarySoft`),
+   used `color: --t-accent` (sometimes plus `bg: accent-primarySoft`),
    but on light themes whose tabs-section accent lands near the cream/white
    surface, the icon stroke became invisible against the topbar.
    Bulletproof fix: paint a SOLID accent chip and draw the icon in
@@ -346,13 +349,13 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    construction), so the icon stroke always reads. The active state now
    visually says "selected pill" regardless of theme. */
 .dt-topbar-icon-button.dt-active {
-    color: var(--t-accent-onPrimary, var(--t-surface-base, #1e1e1e));
-    background: var(--t-accent-primary, var(--t-text-primary, #e6e6e6));
+    color: var(--t-bg, var(--t-bg, #1e1e1e));
+    background: var(--t-accent, var(--t-text, #e6e6e6));
     box-shadow: none;
 }
 .dt-topbar-icon-button.dt-active:hover {
-    color: var(--t-accent-onPrimary, var(--t-surface-base, #1e1e1e));
-    background: var(--t-accent-primary, var(--t-text-primary, #e6e6e6));
+    color: var(--t-bg, var(--t-bg, #1e1e1e));
+    background: var(--t-accent, var(--t-text, #e6e6e6));
     filter: brightness(1.08);
 }
 
@@ -407,9 +410,12 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     align-items: center;
     gap: 6px;
     padding: var(--dt-tab-pad, 6px 14px);
-    background: var(--t-surface-raised, rgba(255, 255, 255, 0.06));
-    color: var(--t-text-secondary, #b8b8b8);
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.10));
+    /* Inactive tabs are transparent over the topbar canvas (just a faint
+       border + dim text), blending into the bar like the Theme Studio
+       reference; the active tab gets the accent-soft tint below. */
+    background: transparent;
+    color: var(--t-text-dim, #b8b8b8);
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.10));
     border-radius: var(--dt-tab-radius, 6px);
     cursor: pointer;
     font-family: inherit;
@@ -426,8 +432,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 .dt-tab:hover {
-    color: var(--t-text-primary, #e6e6e6);
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.10));
+    color: var(--t-text, #e6e6e6);
+    background: var(--t-accent-soft, rgba(255, 255, 255, 0.10));
 }
 /* The active tab is a fully-closed rounded pill outlined in the accent
    colour on all four sides (termtastic parity). Unlike inactive tabs
@@ -442,17 +448,20 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
        tab reads at the same hue as the content the tab is showing
        (notegrow's editor body, the demo's pane label, etc.) rather
        than at a brighter chrome-titleText shade that would tint the
-       selection. `--t-terminal-fg` is the body token notegrow's editor
+       selection. `--t-text` is the body token notegrow's editor
        and the toolkit demo's pane content both use; it falls back
-       through `--t-text-primary` for hosts that don't define it. Same
+       through `--t-text` for hosts that don't define it. Same
        active-treatment rule applies to `.dt-sidebar-row.dt-active`
        and `.dt-sidebar-section.active-tab`'s header. */
-    background: var(--t-surface-sunken, var(--t-surface-base, #161616));
-    color: var(--t-terminal-fg, var(--t-text-primary, #e6e6e6));
-    border: 1px solid var(--t-active-accent, var(--t-accent-primary, #ff8a3d));
+    /* Active tab: accent-soft tint + accent ring, brightest text — matching
+       the Theme Studio reference (where the active "Orbit" tab is an
+       accent-soft fill, not a neutral surface). */
+    background: var(--t-accent-soft, var(--t-surface-alt, #161616));
+    color: var(--t-text-bright, var(--t-text, #e6e6e6));
+    border: 1px solid var(--t-accent, var(--t-accent, #ff8a3d));
     border-radius: var(--dt-tab-radius, 6px);
     margin-bottom: 0;
-    box-shadow: inset 0 0 0 1px var(--t-active-accent, var(--t-accent-primary, #ff8a3d));
+    box-shadow: inset 0 0 0 1px var(--t-accent, var(--t-accent, #ff8a3d));
     font-weight: 700;
     z-index: 1;
 }
@@ -476,7 +485,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     appearance: none;
     background: transparent;
     border: none;
-    color: var(--t-text-secondary, #b8b8b8);
+    color: var(--t-text-dim, #b8b8b8);
     font: inherit;
     font-size: 18px;
     line-height: 1;
@@ -488,8 +497,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 }
 .dt-tabbar-menu-button:hover,
 .dt-tabbar-menu.dt-open .dt-tabbar-menu-button {
-    color: var(--t-text-primary, #e6e6e6);
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.10));
+    color: var(--t-text, #e6e6e6);
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.10));
 }
 .dt-tabbar-menu-list {
     display: none;
@@ -499,13 +508,13 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     top: 0;
     left: 0;
     min-width: 200px;
-    background: var(--t-surface-base, #252526);
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.18));
+    background: var(--t-bg, #252526);
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.18));
     border-radius: 6px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     padding: 4px;
     z-index: 1000;
-    color: var(--t-text-primary, #e6e6e6);
+    color: var(--t-text, #e6e6e6);
     /* The menu list is mounted on document.body (not inside .dt-app-frame)
        so `font-family: inherit` would resolve to the host's body font, which
        can be missing entirely. Spell the chrome font out so the menu always
@@ -524,7 +533,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     padding: 6px 10px;
     border-radius: 4px;
     font-size: 12px;
-    color: var(--t-text-primary, #e6e6e6);
+    color: var(--t-text, #e6e6e6);
     cursor: pointer;
 }
 /* Fixed-width icon column so labels in the menu line up vertically even
@@ -538,7 +547,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     flex-shrink: 0;
     width: 14px;
     height: 14px;
-    color: var(--t-text-secondary, #b8b8b8);
+    color: var(--t-text-dim, #b8b8b8);
 }
 .dt-tabbar-menu-item-icon svg {
     width: 14px;
@@ -553,14 +562,14 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     white-space: nowrap;
 }
 .dt-tabbar-menu-item:hover {
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.10));
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.10));
 }
 .dt-tabbar-menu-item:hover .dt-tabbar-menu-item-icon {
-    color: var(--t-text-primary, #e6e6e6);
+    color: var(--t-text, #e6e6e6);
 }
 .dt-tabbar-menu-separator {
     height: 1px;
-    background: var(--t-border-subtle, rgba(255, 255, 255, 0.10));
+    background: var(--t-border, rgba(255, 255, 255, 0.10));
     margin: 4px 2px;
 }
 .dt-tabbar-menu-heading {
@@ -569,14 +578,14 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--t-text-secondary, #b8b8b8);
+    color: var(--t-text-dim, #b8b8b8);
     user-select: none;
     pointer-events: none;
 }
 .dt-tabbar-menu-item.dt-active {
-    color: var(--t-accent-primary, #ff8a3d);
+    color: var(--t-accent, #ff8a3d);
     font-weight: 700;
-    box-shadow: inset 0 0 0 2px var(--t-accent-primary, #ff8a3d);
+    box-shadow: inset 0 0 0 2px var(--t-accent, #ff8a3d);
 }
 
 /* ── Layout-preset preview-tile dropdown ─────────────────────
@@ -593,13 +602,13 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     grid-template-columns: repeat(3, min-content);
     gap: 4px;
     padding: 6px;
-    background: var(--t-surface-base, #252526);
+    background: var(--t-bg, #252526);
     /* Stronger rectangular border so the popover separates from the
        topbar. The previous 1px subtle border blended into the chrome on
        themes whose surface colour was close to the topbar's background;
        a definite outline on top of the box-shadow makes the popover
        read as its own surface regardless of theme. */
-    border: 1px solid var(--t-border-strong, var(--t-border-prominent, rgba(255, 255, 255, 0.45)));
+    border: 1px solid var(--t-border, var(--t-border, rgba(255, 255, 255, 0.45)));
     border-radius: 6px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
     /* Termtastic's #layout-menu max-* clamps so the full 21-tile palette
@@ -612,7 +621,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     appearance: none;
     background: transparent;
     border: 1px solid transparent;
-    color: var(--t-text-secondary, #b8b8b8);
+    color: var(--t-text-dim, #b8b8b8);
     padding: 6px 8px;
     border-radius: 4px;
     cursor: pointer;
@@ -620,9 +629,9 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 .dt-layout-preset-tile:hover {
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.08));
-    border-color: var(--t-border-subtle, rgba(255, 255, 255, 0.20));
-    color: var(--t-text-primary, #e6e6e6);
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.08));
+    border-color: var(--t-border, rgba(255, 255, 255, 0.20));
+    color: var(--t-text, #e6e6e6);
 }
 /* Active preset — the layout currently driving this tab's geometry.
    Painted with the accent ring (matches the sidebar row's dt-active
@@ -630,15 +639,15 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    that clicking it again will toggle it off. The aria-pressed="true"
    attribute on the tile carries the same meaning for screen readers. */
 .dt-layout-preset-tile.is-active {
-    border-color: var(--t-active-accent, var(--t-accent-primary, #ff8a3d));
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.06));
-    box-shadow: inset 0 0 0 1px var(--t-active-accent, var(--t-accent-primary, #ff8a3d));
-    color: var(--t-text-primary, #e6e6e6);
+    border-color: var(--t-accent, var(--t-accent, #ff8a3d));
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.06));
+    box-shadow: inset 0 0 0 1px var(--t-accent, var(--t-accent, #ff8a3d));
+    color: var(--t-text, #e6e6e6);
 }
 .dt-layout-preset-tile.is-active:hover {
     /* Stronger tint on hover — invites the toggle-off click without
        losing the accent ring. */
-    background: var(--t-surface-overlay-strong, rgba(255, 255, 255, 0.12));
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.12));
 }
 .dt-layout-preset-tile svg {
     display: block;
@@ -648,16 +657,16 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     border-radius: 3px;
 }
 .dt-layout-preview-primary {
-    fill: var(--t-accent-primary, var(--termtastic-orange, #f4b869));
+    fill: var(--t-accent, var(--termtastic-orange, #f4b869));
     stroke: none;
 }
 .dt-layout-preview-secondary {
-    fill: var(--t-accent-primary, var(--termtastic-orange, #f4b869));
+    fill: var(--t-accent, var(--termtastic-orange, #f4b869));
     opacity: 0.55;
     stroke: none;
 }
 .dt-layout-preview-other {
-    fill: var(--t-text-secondary, #888);
+    fill: var(--t-text-dim, #888);
     opacity: 0.5;
     stroke: none;
 }
@@ -665,7 +674,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     grid-column: 1 / -1;
     padding: 12px 16px;
     font-size: 12px;
-    color: var(--t-text-secondary, #888);
+    color: var(--t-text-dim, #888);
     text-align: center;
 }
 .dt-tab.dt-dragging {
@@ -681,7 +690,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     top: 4px;
     bottom: 4px;
     width: 2px;
-    background: var(--t-accent-primary, currentColor);
+    background: var(--t-accent, currentColor);
     border-radius: 1px;
     pointer-events: none;
 }
@@ -697,9 +706,9 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
        the "Tab bar size" / "Sidebar size" pickers) so the rename input
        matches the tab text it's replacing. */
     font: inherit;
-    color: var(--t-text-primary, #e6e6e6);
+    color: var(--t-text, #e6e6e6);
     background: var(--t-surface, rgba(255, 255, 255, 0.04));
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.18));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.18));
     border-radius: 3px;
     padding: 1px 5px;
     outline: none;
@@ -715,7 +724,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     appearance: none;
     background: transparent;
     border: 0;
-    color: var(--t-text-secondary, #b3b3b3);
+    color: var(--t-text-dim, #b3b3b3);
     font: inherit;
     font-size: 14px;
     line-height: 1;
@@ -725,14 +734,14 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: background-color 120ms ease-in-out, color 120ms ease-in-out;
 }
 .dt-tab-close:hover {
-    background: var(--t-border-subtle, rgba(255, 255, 255, 0.16));
-    color: var(--t-text-primary, #e6e6e6);
+    background: var(--t-border, rgba(255, 255, 255, 0.16));
+    color: var(--t-text, #e6e6e6);
 }
 .dt-tab-add {
     appearance: none;
     background: transparent;
     border: 0;
-    color: var(--t-text-secondary, #b3b3b3);
+    color: var(--t-text-dim, #b3b3b3);
     font: inherit;
     font-size: 16px;
     line-height: 1;
@@ -742,8 +751,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     flex-shrink: 0;
 }
 .dt-tab-add:hover {
-    background: var(--t-surface-raised, rgba(255, 255, 255, 0.06));
-    color: var(--t-text-primary, #e6e6e6);
+    background: var(--t-surface, rgba(255, 255, 255, 0.06));
+    color: var(--t-text, #e6e6e6);
 }
 
 /* ── Sidebar shells ───────────────────────────────────────── */
@@ -772,11 +781,11 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
        row-flex, so allowing vertical shrink does not affect width. */
     flex-grow: 1;
     min-height: 0;
-    /* Inherit the topbar's chrome surface so the sidebar reads as a
-       contiguous chrome with the topbar above it (termtastic pattern) —
-       falls back to the legacy `--t-sidebar-bg` then a hardcoded value. */
-    background: var(--t-sidebar-bg, var(--t-chrome-titlebar, #161616));
-    color: var(--t-sidebar-text, #d6d6d6);
+    /* The sidebar is part of the app canvas (like the topbar), so it uses the
+       base `--t-bg` token and reads as one contiguous chrome with the topbar
+       above it. Panes sit one level up on `--t-surface`. */
+    background: var(--t-bg, var(--t-surface, #161616));
+    color: var(--t-text, #d6d6d6);
     font-family: var(--dt-font-sidebar, -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", sans-serif);
     /* Default sidebar-row size: 12px. Children (`.dt-sidebar-row`)
        inherit this so the Settings panel "Sidebar size" picker takes
@@ -806,7 +815,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 .dt-sidebar-header {
     padding: 8px 12px;
     font-size: 12px;
-    color: var(--t-sidebar-textDim, #888);
+    color: var(--t-text-dim, #888);
     text-transform: uppercase;
     letter-spacing: 0.04em;
 }
@@ -887,7 +896,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
        that the strip is grabbable. At rest the handle stays
        invisible — only when the cursor is actually over it does the
        affordance appear. */
-    background: var(--t-border-default, #444);
+    background: var(--t-border, #444);
 }
 /* Drag-to-restore affordance: when SidebarController has collapsed the
    sidebar to 0 width (placeholder state), keep the handle's hairline
@@ -963,12 +972,12 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     /* Always-on hairline when the sidebar is collapsed. Without it the
        sidebar is 0px wide and the user has no visible cue that
        drag-to-restore is available. */
-    background: var(--t-border-default, #444);
+    background: var(--t-border, #444);
 }
 .dt-sidebar-resize-handle.dt-dragging::after {
     /* While actually dragging, paint the accent so the user has clear
        visual feedback that the gesture is engaged. */
-    background: var(--t-accent-primary, #ff8a3d);
+    background: var(--t-accent, #ff8a3d);
     width: 2px;
 }
 .dt-sidebar-resize-handle-right.dt-dragging::after {
@@ -1017,18 +1026,18 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 .dt-bar-resize-handle:hover::after {
     /* Faint hairline on hover so the bar's resize affordance is
        discoverable. Stays transparent when the cursor isn't over it. */
-    background: var(--t-border-default, #444);
+    background: var(--t-border, #444);
 }
 /* Collapsed bar: paint the hairline at all times so the user has a
    visible cue that the strip is still grabbable (the bar itself is
    0px tall, so without paint there's nothing to click). */
 .dt-bar-collapsed > .dt-bar-resize-handle::after {
-    background: var(--t-border-default, #444);
+    background: var(--t-border, #444);
 }
 .dt-bar-resize-handle.dt-dragging::after {
     /* Accent fill while dragging — clear visual feedback that the
        gesture is engaged. */
-    background: var(--t-accent-primary, #ff8a3d);
+    background: var(--t-accent, #ff8a3d);
     height: 2px;
 }
 .dt-bar-resize-handle-bottom.dt-dragging::after {
@@ -1043,7 +1052,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 .dt-sidebar-section {
     display: flex;
     flex-direction: column;
-    border-bottom: 1px solid var(--t-border-subtle, transparent);
+    border-bottom: 1px solid var(--t-border, transparent);
 }
 .dt-sidebar-section:last-child {
     border-bottom: none;
@@ -1054,7 +1063,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     gap: 6px;
     padding: 8px 10px 4px;
     background: transparent;
-    color: var(--t-sidebar-textDim, var(--t-text-tertiary, #7a7a7a));
+    color: var(--t-text-dim, var(--t-text-dim, #7a7a7a));
     border: 0;
     text-align: left;
     cursor: pointer;
@@ -1069,7 +1078,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     cursor: default;
 }
 .dt-sidebar-section-header:hover:not([disabled]) {
-    color: var(--t-sidebar-text, #d6d6d6);
+    color: var(--t-text, #d6d6d6);
 }
 /* Active-tab indicator: when the host marks a section with the
    `.active-tab` class, the section header keeps its normal text colour.
@@ -1077,7 +1086,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    ring (`.dt-sidebar-row.dt-active`); doubling up by tinting the tab
    name itself reads as two competing "selected" cues for one entry. */
 .dt-sidebar-section.active-tab > .dt-sidebar-section-header {
-    color: var(--t-sidebar-text, #d6d6d6);
+    color: var(--t-text, #d6d6d6);
     background: transparent;
     border-radius: 6px;
 }
@@ -1124,7 +1133,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     border: 0;
     text-align: left;
     font-family: inherit;
-    color: var(--t-sidebar-text, #d6d6d6);
+    color: var(--t-text, #d6d6d6);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -1140,19 +1149,20 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: background 0.12s, color 0.12s;
 }
 .dt-sidebar-row:hover {
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.06));
-    color: var(--t-text-primary, #fff);
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.06));
+    color: var(--t-text, #fff);
 }
 .dt-sidebar-row.dt-active {
-    /* Active row is marked by the 1px inset accent ring only — the row
-       label keeps its normal sidebar-text colour so the accent reads
-       cleanly as a "selection rectangle" without doubling as a text
-       tint. No filled background either; the ring alone is the cue. */
-    color: var(--t-sidebar-text, #d6d6d6);
+    /* Active row is marked by the 1px inset accent ring; its label is lifted
+       to the brightest text token so the selected item reads as prominent
+       (matching the Theme Studio reference, where the active sidebar item is
+       --textBright). The ring — not a filled background — is the selection
+       rectangle. */
+    color: var(--t-text-bright, var(--t-text, #d6d6d6));
     background: transparent;
     font-weight: 600;
     border-radius: 6px;
-    box-shadow: inset 0 0 0 1px var(--t-active-accent, var(--t-accent-primary, #ff8a3d));
+    box-shadow: inset 0 0 0 1px var(--t-accent, var(--t-accent, #ff8a3d));
 }
 /* Minimized pane: parked in the dock, not participating in layout. Dim the
    row (and let it blend toward the sidebar background) so it reads as
@@ -1173,7 +1183,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     justify-content: center;
     width: 14px;
     height: 14px;
-    color: var(--t-sidebar-textDim, #888);
+    color: var(--t-text-dim, #888);
     flex-shrink: 0;
 }
 .dt-sidebar-row.dt-active .dt-sidebar-row-icon {
@@ -1211,7 +1221,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
        legible at a glance instead of shrinking into the row's dim band. */
     font-size: 15px;
     line-height: 1;
-    color: var(--t-sidebar-textDim, #888);
+    color: var(--t-text-dim, #888);
     opacity: 0.85;
     user-select: none;
     -webkit-user-select: none;
@@ -1242,7 +1252,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
        hover doesn't push the icon/label sideways — the grip slots
        into existing whitespace rather than reflowing the row. */
     margin-left: -8px;
-    color: var(--t-sidebar-textDim, #888);
+    color: var(--t-text-dim, #888);
     flex-shrink: 0;
     cursor: grab;
     opacity: 0;
@@ -1264,7 +1274,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     left: 4px;
     right: 4px;
     height: 2px;
-    background: var(--t-active-accent, var(--t-accent-primary, #ff8a3d));
+    background: var(--t-accent, var(--t-accent, #ff8a3d));
     pointer-events: none;
     border-radius: 1px;
 }
@@ -1288,7 +1298,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     min-width: 0;
     min-height: 0;
     box-sizing: border-box;
-    background: var(--t-surface-base, #1e1e1e);
+    background: var(--t-bg, #1e1e1e);
     position: relative;
 }
 
@@ -1312,8 +1322,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     align-items: center;
     gap: 6px;
     padding: 6px 8px;
-    background: var(--t-surface-base, #1e1e1e);
-    border-top: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.08));
+    background: var(--t-bg, #1e1e1e);
+    border-top: 1px solid var(--t-border, rgba(255, 255, 255, 0.08));
 }
 
 /* One dock chip == a parked title bar: fixed width, title-bar height,
@@ -1328,8 +1338,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     height: 30px;
     padding: 0 4px 0 8px;
     border-radius: var(--dt-frame-radius, 6px);
-    background: var(--t-chrome-titlebar, #1e1e1e);
-    color: var(--t-chrome-titleText, var(--t-text-secondary, #b0b0b0));
+    background: var(--t-surface-alt, #1e1e1e);
+    color: var(--t-text-bright, var(--t-text-dim, #b0b0b0));
     /* Reserve a transparent outline so hover only swaps the colour without
        shifting layout — same trick as `.dt-pane`. */
     outline: 1px solid transparent;
@@ -1338,7 +1348,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     overflow: hidden;
 }
 .dt-pane-dock-item:hover {
-    outline-color: var(--t-active-accent, var(--t-accent-primary, #4f8cff));
+    outline-color: var(--t-accent, var(--t-accent, #4f8cff));
 }
 .dt-pane-dock-item-icon {
     display: inline-flex;
@@ -1347,7 +1357,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     flex-shrink: 0;
     width: 16px;
     height: 16px;
-    color: var(--t-chrome-titleText, var(--t-text-secondary, #b0b0b0));
+    color: var(--t-text-bright, var(--t-text-dim, #b0b0b0));
 }
 .dt-pane-dock-item-icon svg {
     width: 14px;
@@ -1387,17 +1397,29 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     min-height: 0;
     overflow: hidden;
     border-radius: var(--dt-frame-radius, 6px);
-    background: var(--t-chrome-titlebar, #1e1e1e);
-    /* Outline reservation: panes paint a transparent outline always so the
-       focused state (`.dt-pane-focused`) flips its colour without altering
-       layout. `outline-offset: -2px` keeps the ring inside the pane's
-       rounded corners, which matters when adjacent panes touch in a split. */
-    outline: 2px solid transparent;
+    /* Panes sit on `--t-surface` (one level above the `--t-bg` canvas/sidebar);
+       sunken wells inside a pane (code blocks, gutters) use `--t-surface-alt`. */
+    background: var(--t-surface, #1e1e1e);
+    /* Every pane carries a resting frame in `--t-border` (the Theme Studio
+       token contract documents `--border` as "inactive pane frames"), and the
+       focused state (`.dt-pane-focused`) flips that same outline to the accent
+       colour without altering layout. `outline-offset: -2px` keeps the ring
+       inside the pane's rounded corners, which matters when adjacent panes
+       touch in a split. */
+    outline: 2px solid var(--t-border, rgba(255, 255, 255, 0.1));
     outline-offset: -2px;
-    transition: outline-color 120ms ease-in-out;
+    transition: outline-color 120ms ease-in-out, box-shadow 120ms ease-in-out;
 }
+/* Focused pane: the accent frame (outline flip) plus a soft accent glow halo,
+   matching the Theme Studio reference's active pane (`box-shadow: 0 0 22px -4px
+   var(--glow)`). `--t-glow` is the accent at ~34% alpha and falls back to
+   transparent for themes whose glow sits near the background, so the halo is a
+   no-op there. Non-floating panes carry no resting box-shadow, so this rule
+   owns the shadow outright; focused floating panes are handled separately below
+   to preserve their depth drop shadow. */
 .dt-pane.dt-pane-focused {
-    outline-color: var(--t-active-accent, var(--t-accent-primary, #4f8cff));
+    outline-color: var(--t-accent, var(--t-accent, #4f8cff));
+    box-shadow: 0 0 22px -4px var(--t-glow, transparent);
 }
 /* Floating overlay panes (PaneLayout.floatingPanes). Drawn on top of the
    split tree, positioned by inline `--dt-fp-x / -y / -w / -h` percentages
@@ -1437,6 +1459,17 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 .dt-pane.dt-pane-floating.dt-pane-no-anim {
     transition: none;
 }
+/* Focused floating pane: keep the depth drop shadow that separates the float
+   from the split tree, and layer the accent glow halo on top (the plain
+   `.dt-pane-focused` glow rule above would otherwise replace the drop shadow,
+   since box-shadow does not stack across rules). The three-class selector
+   outranks `.dt-pane.dt-pane-floating`, so the drop shadow is preserved
+   regardless of source order. */
+.dt-pane.dt-pane-floating.dt-pane-focused {
+    box-shadow:
+        0 16px 40px rgba(0, 0, 0, 0.45),
+        0 0 22px -4px var(--t-glow, transparent);
+}
 /* Closing-pane ghost: a chrome replica appended at the closed pane's
    last-known geometry. The renderer adds `.dt-pane-closing-active` on
    the next animation frame after mount; this rule sets the target
@@ -1467,55 +1500,29 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     gap: 6px;
     /* Padding gives the title strip enough vertical weight to read as a
        distinct chrome strip rather than a thin band. The lit gradient top
-       lifts the band visually; `--t-chrome-titlebar` is the resting tone. */
+       lifts the band visually; `--t-surface-alt` is the resting tone. */
     padding: var(--dt-pane-header-pad, 9px 8px 9px 10px);
     flex-shrink: 0;
     overflow: hidden;
-    color: var(--t-chrome-titleText, var(--t-text-secondary, #b0b0b0));
-    /* Three-stop gradient: lit highlight at the top, mid tone, then a slight
-       shadow at the bottom — gives the titlebar a subtle bevel that reads
-       across themes whose `--t-text-primary` is itself dark. The bottom 1px
-       border provides delineation from the content even on themes where the
-       gradient bottom and content background coincide. */
-    background: linear-gradient(
-        180deg,
-        color-mix(in oklab, var(--t-chrome-titlebar, #1e1e1e), var(--t-text-primary, #fff) 18%) 0%,
-        var(--t-chrome-titlebar, #1e1e1e) 60%,
-        color-mix(in oklab, var(--t-chrome-titlebar, #1e1e1e), #000 12%) 100%
-    );
-    border-bottom: 1px solid color-mix(
-        in oklab,
-        var(--t-chrome-titlebar, #1e1e1e),
-        #000 22%
-    );
+    color: var(--t-text-bright, var(--t-text-dim, #b0b0b0));
+    /* The titlebar shares the pane's `--t-surface` (it reads as part of the
+       pane, like the Theme Studio reference) with a single `--t-border`
+       divider below it — no darker band. */
+    background: var(--t-surface, #1e1e1e);
+    border-bottom: 1px solid var(--t-border, rgba(255, 255, 255, 0.1));
 }
-/* Focused-pane titlebar override. When the theme assigns
-   `Sections.ActiveChrome` to a scheme, ThemeCssVars.applyUiSettings writes
-   raw bg/fg from that scheme into `--t-chrome-titlebar-active` /
-   `--t-chrome-titleText-active`. The rule below repaints `.dt-pane-header`
-   on the focused pane with those values (no mix-softening — the active
-   bar should read saturated and prominent). When the var is absent the
-   `var(... , fallback)` second arg keeps the pane visually identical to
-   inactive panes — themes that haven't opted in (e.g. every Neon theme)
-   see no change. The leading icon and any inline children inherit the
-   flipped color so the entire titlebar reads as one band. */
+/* Focused-pane titlebar. In the revamped theme system the focused pane is
+   indicated by the accent outline + glow on the pane itself (see
+   `.dt-pane.dt-pane-focused` above), NOT by a coloured titlebar band. The
+   header therefore keeps the same `--t-surface-alt` tone as an inactive pane;
+   only the title text is lifted to `--t-text-bright` for prominence. (The old
+   per-theme "active chrome" accent band was removed with the section model.) */
 .dt-pane.dt-pane-focused .dt-pane-header {
-    color: var(--t-chrome-titleText-active, var(--t-chrome-titleText, var(--t-text-secondary, #b0b0b0)));
-    background: linear-gradient(
-        180deg,
-        color-mix(in oklab, var(--t-chrome-titlebar-active, var(--t-chrome-titlebar, #1e1e1e)), var(--t-text-primary, #fff) 6%) 0%,
-        var(--t-chrome-titlebar-active, var(--t-chrome-titlebar, #1e1e1e)) 60%,
-        color-mix(in oklab, var(--t-chrome-titlebar-active, var(--t-chrome-titlebar, #1e1e1e)), #000 8%) 100%
-    );
-    border-bottom: 1px solid color-mix(
-        in oklab,
-        var(--t-chrome-titlebar-active, var(--t-chrome-titlebar, #1e1e1e)),
-        #000 22%
-    );
+    color: var(--t-text-bright, var(--t-text-dim, #b0b0b0));
 }
 .dt-pane.dt-pane-focused .dt-pane-header-icon,
 .dt-pane.dt-pane-focused .dt-pane-title {
-    color: var(--t-chrome-titleText-active, var(--t-chrome-titleText, var(--t-text-secondary, #b0b0b0)));
+    color: var(--t-text-bright, var(--t-text-bright, var(--t-text-dim, #b0b0b0)));
 }
 /* Per-pane content-type icon (file / git / terminal / link) rendered at
    the start of the header. Doubles as the cross-tab drag handle when the
@@ -1528,7 +1535,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     flex-shrink: 0;
     width: 16px;
     height: 16px;
-    color: var(--t-chrome-titleText, var(--t-text-secondary, #b0b0b0));
+    color: var(--t-text-bright, var(--t-text-dim, #b0b0b0));
 }
 .dt-pane-header-icon[draggable="true"]:active {
     cursor: grabbing;
@@ -1614,7 +1621,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     cursor: pointer;
 }
 .dt-pane-breadcrumb-segment-link:hover {
-    color: var(--t-text-primary, #e6e6e6);
+    color: var(--t-text, #e6e6e6);
     text-decoration: underline;
     text-underline-offset: 2px;
 }
@@ -1657,9 +1664,9 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     text-transform: none;
     letter-spacing: normal;
     white-space: nowrap;
-    color: var(--t-text-primary, #e6e6e6);
-    background: var(--t-surface-overlay, rgba(20, 20, 20, 0.95));
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.18));
+    color: var(--t-text, #e6e6e6);
+    background: var(--t-surface-alt, rgba(20, 20, 20, 0.95));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.18));
     border-radius: 3px;
     pointer-events: none;
 }
@@ -1683,9 +1690,9 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     text-transform: none;
     letter-spacing: normal;
     white-space: nowrap;
-    color: var(--t-text-primary, #e6e6e6);
-    background: var(--t-surface-overlay, rgba(20, 20, 20, 0.95));
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.18));
+    color: var(--t-text, #e6e6e6);
+    background: var(--t-surface-alt, rgba(20, 20, 20, 0.95));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.18));
     border-radius: 3px;
     pointer-events: none;
     /* RTL titles invert direction on the parent — neutralise here so the
@@ -1702,9 +1709,9 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.6px;
-    color: var(--t-text-primary, #e6e6e6);
-    background: var(--t-surface-base, rgba(255, 255, 255, 0.06));
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.18));
+    color: var(--t-text, #e6e6e6);
+    background: var(--t-bg, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.18));
     border-radius: 3px;
     padding: 1px 5px;
     outline: none;
@@ -1735,14 +1742,10 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     appearance: none;
     background: transparent;
     border: 0;
-    /* Match `.dt-pane-header-icon` (leading icon) — `--t-chrome-titleText`
-       is the colour the chrome scheme designed for legibility against the
-       chrome titlebar. Plain `--t-text-secondary` here would only see the
-       main scheme's value from `:root` (Pass 2 only overlays prefixed
-       `--t-chrome-*` vars), which on themes where chrome differs from
-       main (e.g. Emerald Garden Light: chrome = Forest Panel, main = Mint
-       Chip) leaves these icons unreadable against the dark chrome. */
-    color: var(--t-chrome-titleText, var(--t-text-secondary, #b0b0b0));
+    /* Match `.dt-pane-header-icon` (leading icon) — `--t-text-bright` is
+       the token designed for legibility against the title-bar surface, with
+       `--t-text-dim` as a fallback. */
+    color: var(--t-text-bright, var(--t-text-dim, #b0b0b0));
     line-height: 0;
     width: 24px;
     height: 24px;
@@ -1756,20 +1759,20 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: background-color 120ms ease-in-out, color 120ms ease-in-out;
 }
 .dt-pane-action:hover {
-    background: var(--t-border-subtle, rgba(255, 255, 255, 0.12));
-    color: var(--t-chrome-titleText, var(--t-text-primary, #e6e6e6));
+    background: var(--t-border, rgba(255, 255, 255, 0.12));
+    color: var(--t-text-bright, var(--t-text, #e6e6e6));
 }
 .dt-pane-action.dt-active {
     /* The icon stays in the chrome-titleText colour so it remains legible
        against the chrome titlebar even when the main scheme's
-       `--t-accent-primary` (which Pass 2 doesn't recolour for chrome) is
+       `--t-accent` (which Pass 2 doesn't recolour for chrome) is
        low-contrast against the chrome surface — e.g. Mint Chip's pale
        accent over Forest Panel chrome on Emerald Garden Light. The
        active state is communicated by a persistent backdrop (matching
        the hover background) so the button stays visually distinct from
        the resting siblings regardless of accent legibility. */
-    color: var(--t-chrome-titleText, var(--t-accent-primary, #4f8cff));
-    background: var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    color: var(--t-text-bright, var(--t-accent, #4f8cff));
+    background: var(--t-border, rgba(255, 255, 255, 0.12));
 }
 .dt-pane-action svg {
     display: block;
@@ -1794,10 +1797,10 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     /* Same chrome-titleText fallback as `.dt-pane-header-icon` and
        `.dt-pane-action` — the encircled glyph sits on the chrome
        titlebar, so it needs the chrome scheme's legibility colour
-       rather than the main scheme's `--t-text-secondary` (which on
+       rather than the main scheme's `--t-text-dim` (which on
        themes like Emerald Garden Light would render too low-contrast
        against Forest Panel chrome). */
-    color: var(--t-chrome-titleText, var(--t-text-secondary, #b0b0b0));
+    color: var(--t-text-bright, var(--t-text-dim, #b0b0b0));
     opacity: 0.85;
     user-select: none;
     -webkit-user-select: none;
@@ -1864,7 +1867,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     overflow: hidden;
     margin: 0 4px 4px;
     border-radius: 4px;
-    background: var(--t-surface-base, #1e1e1e);
+    background: var(--t-bg, #1e1e1e);
 }
 
 /* Corner resize grips on floating panes. Mounted on all four corners of
@@ -1881,7 +1884,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--t-text-tertiary, rgba(255, 255, 255, 0.55));
+    color: var(--t-text-dim, rgba(255, 255, 255, 0.55));
     z-index: 4;
     opacity: 0;
     transition: opacity 120ms ease, color 120ms ease;
@@ -1915,7 +1918,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 }
 .dt-pane-corner-resize:hover,
 .dt-pane-corner-resize.dt-dragging {
-    color: var(--t-accent-primary, #ff8a3d);
+    color: var(--t-accent, #ff8a3d);
     opacity: 1;
 }
 /* The pane needs a positioning context for the absolutely-positioned
@@ -1960,7 +1963,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 }
 .dt-pane-separator:hover,
 .dt-pane-separator.dt-dragging {
-    background: color-mix(in srgb, var(--t-accent-primary, #ff8a3d) 18%, transparent);
+    background: color-mix(in srgb, var(--t-accent, #ff8a3d) 18%, transparent);
 }
 .dt-pane-placeholder {
     display: flex;
@@ -1968,7 +1971,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     justify-content: center;
     width: 100%;
     height: 100%;
-    color: var(--t-text-tertiary, #888);
+    color: var(--t-text-dim, #888);
     font-size: 13px;
 }
 /* Tab-level empty state shipped via renderEmptyTabPlaceholder — used when
@@ -1983,7 +1986,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     align-items: center;
     justify-content: center;
     gap: 24px;
-    color: var(--t-text-secondary, #b0b0b0);
+    color: var(--t-text-dim, #b0b0b0);
     text-align: center;
 }
 .dt-empty-tab-message {
@@ -1993,9 +1996,9 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 }
 .dt-empty-tab-button {
     appearance: none;
-    background: var(--t-surface-base, #252526);
-    color: var(--t-text-primary, #e6e6e6);
-    border: 1px solid var(--t-border-default, rgba(255, 255, 255, 0.12));
+    background: var(--t-bg, #252526);
+    color: var(--t-text, #e6e6e6);
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
     border-radius: 8px;
     padding: 14px 28px;
     font-family: inherit;
@@ -2004,8 +2007,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: background-color 120ms ease-in-out, border-color 120ms ease-in-out;
 }
 .dt-empty-tab-button:hover {
-    background: var(--t-surface-raised, #2d2d30);
-    border-color: var(--t-text-secondary, #b0b0b0);
+    background: var(--t-surface, #2d2d30);
+    border-color: var(--t-text-dim, #b0b0b0);
 }
 
 /* Default empty-state shipped via renderEmptyPanePlaceholder — centered,
@@ -2019,10 +2022,10 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     height: 100%;
     padding: 24px;
     box-sizing: border-box;
-    color: var(--t-text-tertiary, #888);
+    color: var(--t-text-dim, #888);
     font-size: 12px;
     user-select: none;
-    border: 1px dashed var(--t-border-subtle, rgba(255, 255, 255, 0.08));
+    border: 1px dashed var(--t-border, rgba(255, 255, 255, 0.08));
     border-radius: 4px;
     background: transparent;
 }
@@ -2042,9 +2045,9 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     z-index: 1001;
     min-width: 184px;
     padding: 4px;
-    background: var(--t-surface-overlay, #2a2a2a);
-    color: var(--t-text-primary, #e6e6e6);
-    border: 1px solid var(--t-border-default, rgba(255, 255, 255, 0.12));
+    background: var(--t-surface-alt, #2a2a2a);
+    color: var(--t-text, #e6e6e6);
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
     border-radius: 6px;
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
     user-select: none;
@@ -2068,17 +2071,17 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: background-color 100ms ease-in-out;
 }
 .dt-pane-menu-item:hover:not(:disabled) {
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.08));
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.08));
 }
 .dt-pane-menu-item:disabled {
     opacity: 0.45;
     cursor: not-allowed;
 }
 .dt-pane-menu-item.dt-pane-menu-item-active {
-    color: var(--t-accent-primary, #4f8cff);
+    color: var(--t-accent, #4f8cff);
 }
 .dt-pane-menu-item.dt-pane-menu-item-danger {
-    color: var(--t-text-danger, #ff6b6b);
+    color: var(--t-danger, #ff6b6b);
 }
 .dt-pane-menu-item-icon {
     display: inline-flex;
@@ -2087,7 +2090,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     flex-shrink: 0;
     width: 14px;
     height: 14px;
-    color: var(--t-text-secondary, #b0b0b0);
+    color: var(--t-text-dim, #b0b0b0);
 }
 .dt-pane-menu-item.dt-pane-menu-item-danger .dt-pane-menu-item-icon,
 .dt-pane-menu-item.dt-pane-menu-item-active .dt-pane-menu-item-icon {
@@ -2106,7 +2109,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 .dt-pane-menu-separator {
     height: 1px;
     margin: 4px 6px;
-    background: var(--t-border-subtle, rgba(255, 255, 255, 0.1));
+    background: var(--t-border, rgba(255, 255, 255, 0.1));
 }
 
 /* ── Confirm dialog ───────────────────────────────────────── */
@@ -2127,11 +2130,11 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
        ~18px/20px padding, raised surface, default border. The chrome font
        stack is set explicitly because the modal is appended to <body>,
        outside the .dt-app-frame whose `font-family` would otherwise cascade. */
-    background: var(--t-surface-raised, #1e1e1e);
-    color: var(--t-text-primary, #e6e6e6);
-    border: 1px solid var(--t-border-default, rgba(255, 255, 255, 0.12));
+    background: var(--t-surface, #1e1e1e);
+    color: var(--t-text, #e6e6e6);
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
     border-radius: 8px;
-    box-shadow: var(--t-toolbar-shadow, 0 8px 24px rgba(0, 0, 0, 0.45));
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
     padding: 18px 20px 20px;
     min-width: 300px;
     max-width: 420px;
@@ -2146,14 +2149,14 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     margin: 0 0 10px 0;
     font-size: 15px;
     font-weight: 600;
-    color: var(--t-text-primary, #d4d4d4);
+    color: var(--t-text-bright, var(--t-text, #d4d4d4));
 }
 .dt-modal-message {
     /* Termtastic confirm-message: 13px / 1.45 line-height, primary text. */
     margin: 0 0 16px 0;
     font-size: 13px;
     line-height: 1.45;
-    color: var(--t-text-primary, #d4d4d4);
+    color: var(--t-text, #d4d4d4);
 }
 /* Inline emphasis used in confirm messages (e.g. <strong>pane name</strong>)
    inherits the modal's text colour. Without this, host stylesheets that
@@ -2176,19 +2179,19 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     font-size: 13px;
     cursor: pointer;
     font-family: inherit;
-    border: 1px solid var(--t-border-default, #3c3c3c);
+    border: 1px solid var(--t-border, #3c3c3c);
     appearance: none;
 }
 .dt-modal-btn-cancel {
-    background: var(--t-surface-base, #252526);
-    color: var(--t-text-primary, #d4d4d4);
+    background: var(--t-bg, #252526);
+    color: var(--t-text, #d4d4d4);
 }
 .dt-modal-btn-cancel:hover {
-    background: var(--t-surface-raised, #2d2d30);
+    background: var(--t-surface, #2d2d30);
 }
 .dt-modal-btn-confirm {
-    background: var(--t-accent-primary, #4f8cff);
-    color: var(--t-accent-onPrimary, #ffffff);
+    background: var(--t-accent, #4f8cff);
+    color: var(--t-bg, #ffffff);
     border-color: transparent;
     font-weight: 600;
 }
@@ -2196,11 +2199,11 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     filter: brightness(1.12);
 }
 .dt-modal-btn-confirm:focus {
-    outline: 2px solid var(--t-accent-primary, #4f8cff);
+    outline: 2px solid var(--t-accent, #4f8cff);
     outline-offset: 2px;
 }
 .dt-modal-btn-confirm.dt-destructive {
-    background: var(--t-semantic-danger, #b33a36);
+    background: var(--t-danger, #b33a36);
 }
 
 /* ── Theme manager sidebar (right-side panel) ─────────────── */
@@ -2220,12 +2223,12 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     min-width: 0;
     min-height: 0;
     overflow: hidden;
-    background: var(--t-sidebar-bg, #252526);
-    border-left: 1px solid var(--t-border-subtle, #333);
+    background: var(--t-surface, #252526);
+    border-left: 1px solid var(--t-border, #333);
     display: flex;
     flex-direction: column;
     position: relative;
-    color: var(--t-sidebar-text, #d4d4d4);
+    color: var(--t-text, #d4d4d4);
     font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", sans-serif;
     opacity: 0;
     transition: opacity 160ms ease;
@@ -2248,14 +2251,14 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     appearance: none;
     background: none;
     border: none;
-    color: var(--t-text-secondary, #999);
+    color: var(--t-text-dim, #999);
     font-size: 22px;
     cursor: pointer;
     padding: 4px 8px;
     line-height: 1;
 }
 .dt-theme-manager-close:hover {
-    color: var(--t-text-primary, #d4d4d4);
+    color: var(--t-text, #d4d4d4);
 }
 .dt-theme-manager-header {
     position: relative;
@@ -2263,14 +2266,16 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     flex-direction: column;
     gap: 10px;
     padding: 18px 20px 12px;
-    border-bottom: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.08));
-    background: var(--t-surface-raised, rgba(255, 255, 255, 0.03));
+    border-bottom: 1px solid var(--t-border, rgba(255, 255, 255, 0.08));
+    background: var(--t-surface, rgba(255, 255, 255, 0.03));
 }
 .dt-theme-manager-title {
     margin: 0;
     font-size: 16px;
     font-weight: 600;
-    color: var(--t-text-primary, #d4d4d4);
+    /* Brightest text token so the panel heading reads as a crisp title, the
+       same treatment as `.pane-modal-title` (the info/settings modal). */
+    color: var(--t-text-bright, var(--t-text, #d4d4d4));
     padding-right: 28px;
 }
 .dt-theme-manager-tabs {
@@ -2280,7 +2285,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 .dt-theme-manager-tab {
     background: transparent;
     border: 1px solid transparent;
-    color: var(--t-text-secondary, #c8c8c8);
+    color: var(--t-text-dim, #c8c8c8);
     padding: 6px 14px;
     border-radius: 6px;
     font-size: 13px;
@@ -2288,12 +2293,12 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 .dt-theme-manager-tab:hover {
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.06));
-    color: var(--t-text-primary, #d4d4d4);
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.06));
+    color: var(--t-text, #d4d4d4);
 }
 .dt-theme-manager-tab.dt-selected {
-    background: var(--t-accent-primary, #4f8cff);
-    color: var(--t-accent-onPrimary, #fff);
+    background: var(--t-accent, #4f8cff);
+    color: var(--t-bg, #fff);
     border-color: transparent;
 }
 /* Settings tab — vertical stack of titled sections, each with a
@@ -2312,7 +2317,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: var(--t-sidebar-textDim, var(--t-text-secondary, #999));
+    color: var(--t-text-dim, var(--t-text-dim, #999));
     margin-bottom: 8px;
 }
 .dt-settings-button-row {
@@ -2325,9 +2330,9 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 }
 .dt-settings-choice-btn {
     appearance: none;
-    background: var(--t-surface-overlay, var(--t-surface-raised, #252526));
-    border: 1px solid var(--t-border-subtle, #3c3c3c);
-    color: var(--t-text-primary, #d4d4d4);
+    background: var(--t-surface-alt, var(--t-surface, #252526));
+    border: 1px solid var(--t-border, #3c3c3c);
+    color: var(--t-text, #d4d4d4);
     font: inherit;
     font-size: 12px;
     padding: 6px 14px;
@@ -2336,12 +2341,12 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: background 80ms ease, border-color 80ms ease;
 }
 .dt-settings-choice-btn:hover {
-    background: var(--t-border-subtle, rgba(255, 255, 255, 0.06));
+    background: var(--t-border, rgba(255, 255, 255, 0.06));
 }
 .dt-settings-choice-btn.dt-selected {
-    border-color: var(--t-accent-primary, #4f8cff);
-    color: var(--t-accent-primary, #4f8cff);
-    background: var(--t-border-subtle, rgba(255, 255, 255, 0.04));
+    border-color: var(--t-accent, #4f8cff);
+    color: var(--t-accent, #4f8cff);
+    background: var(--t-border, rgba(255, 255, 255, 0.04));
     font-weight: 600;
 }
 .dt-settings-size-row .dt-settings-choice-btn {
@@ -2372,6 +2377,223 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     display: block;
     box-sizing: border-box;
 }
+
+/* ── Theme thumbnail grid (post-revamp editor) ─────────────────────────
+   The manager renders a Dark and a Light group of theme cards laid out in a
+   reflowing grid: as many thumbnails per row as the (resizable) sidebar width
+   allows. Each card shows the theme name above a mini-window thumbnail (built
+   inline from the theme's tokens). The per-theme actions (View/Edit, Clone,
+   Delete) are not inline — they live in a hover menu that pops up over the
+   thumbnail, which keeps the cards compact so they can pack side by side. All
+   colours read the toolkit's own --t-* tokens so the editor is themed by the
+   active selection. */
+.dt-theme-group-heading {
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--t-text-dim, #9aa0a8);
+    margin: 4px 2px 9px;
+}
+.dt-theme-group-heading:not(:first-child) {
+    margin-top: 18px;
+}
+.dt-theme-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    /* Tight row-gap: each card reserves two name lines, so single-line names
+       (the common case) leave a blank line above the name that already acts as
+       inter-row spacing. Column-gap stays comfortable. */
+    gap: 3px 12px;
+    align-items: start;
+}
+.dt-theme-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    cursor: pointer;
+}
+/* Title row: name on the left, open-editor arrow on the right. Both align to
+   the bottom so the arrow sits next to the name's last line, just above the
+   thumbnail. */
+.dt-theme-card-title {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    min-width: 0;
+}
+/* Fixed two-line-tall name area; text is bottom-anchored, so a single-line
+   name drops to the bottom (right above the thumbnail) and a two-line name
+   fills the area. ~12px × 1.25 line-height × 2 lines ≈ 30px. */
+.dt-theme-card-name-area {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: flex-end;
+    min-height: 30px;
+}
+.dt-theme-card-name {
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.25;
+    color: var(--t-text-bright, #f3f4f6);
+    /* Clamp to two lines; overflow past that is ellipsised. */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+}
+/* Open-editor arrow: hidden until the card is hovered (or the button is
+   keyboard-focused), then shown in the accent colour so it's hard to miss. */
+.dt-theme-card-open {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--t-accent, #4f8cff);
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 110ms ease, color 110ms ease, background 110ms ease, border-color 110ms ease;
+}
+.dt-theme-card:hover .dt-theme-card-open,
+.dt-theme-card-open:focus-visible {
+    opacity: 1;
+}
+.dt-theme-card-open:hover {
+    color: var(--t-bg, #0b0b0b);
+    background: var(--t-accent, #4f8cff);
+    border-color: var(--t-accent, #4f8cff);
+}
+/* The thumbnail is the realistic `.dt-config-silhouette` (tab strip + sidebar +
+   two panes), sized by aspect-ratio so it stays proportional as the grid column
+   width changes. Hover/assigned states swap its outer ring to the accent. */
+.dt-theme-card .dt-config-silhouette {
+    width: 100%;
+    transition: box-shadow 120ms ease;
+}
+.dt-theme-card:hover .dt-config-silhouette {
+    box-shadow: 0 0 0 1px var(--t-accent, #4f8cff);
+}
+.dt-theme-card-assigned .dt-config-silhouette,
+.dt-theme-card-assigned:hover .dt-config-silhouette {
+    box-shadow: 0 0 0 2px var(--t-accent, #4f8cff);
+}
+
+/* ── Flat 20-token colour viewer/editor ────────────────────────────── */
+.dt-theme-editor-preview-chip {
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+}
+.dt-theme-editor-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-top: 12px;
+}
+.dt-theme-editor-token {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.dt-theme-editor-token-label {
+    flex: 1;
+    min-width: 0;
+    font-size: 12.5px;
+    color: var(--t-text, #d4d4d4);
+}
+.dt-theme-editor-token-input {
+    width: 42px;
+    height: 26px;
+    flex: 0 0 42px;
+    padding: 0;
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.16));
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+}
+/* Read-only (built-in) inspection: swatches are shown but not interactive. */
+.dt-theme-editor-token-input:disabled {
+    cursor: default;
+    opacity: 0.9;
+}
+.dt-theme-editor-token-hex {
+    flex: 0 0 auto;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    color: var(--t-text-dim, #9aa0a8);
+    min-width: 62px;
+    text-align: right;
+}
+.dt-theme-editor-readonly-note {
+    margin: 4px 0 2px;
+    padding: 8px 11px;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--t-text-dim, #9aa0a8);
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.05));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.1));
+}
+.dt-theme-editor-done-row {
+    margin-top: 16px;
+    display: flex;
+    gap: 9px;
+}
+.dt-theme-editor-done-btn {
+    padding: 7px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--t-accent, #4f8cff);
+    background: var(--t-accent, #4f8cff);
+    color: var(--t-bg, #0b0b0b);
+}
+/* Clone-to-edit is the primary action in read-only mode; the plain Back
+   button next to it is de-emphasised (outline only). */
+.dt-theme-editor-clone-btn ~ .dt-theme-editor-done-btn {
+    background: transparent;
+    color: var(--t-text, #d4d4d4);
+    border-color: var(--t-border, rgba(255, 255, 255, 0.16));
+}
+/* Secondary footer actions for an editable theme (Clone / Delete) — outlined,
+   so the primary Done button stays the accent-filled one. */
+.dt-theme-editor-secondary-btn {
+    padding: 7px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.16));
+    background: transparent;
+    color: var(--t-text, #d4d4d4);
+    transition: border-color 110ms ease, color 110ms ease;
+}
+.dt-theme-editor-secondary-btn:hover {
+    border-color: var(--t-accent, #4f8cff);
+}
+.dt-theme-editor-delete-btn {
+    color: var(--t-danger, #e5534b);
+}
+.dt-theme-editor-delete-btn:hover {
+    border-color: var(--t-danger, #e5534b);
+}
+
 .dt-theme-manager-back-bar {
     display: flex;
     align-items: center;
@@ -2379,9 +2601,9 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     margin-bottom: 12px;
 }
 .dt-theme-manager-back-btn {
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.04));
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
-    color: var(--t-text-primary, #d4d4d4);
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
+    color: var(--t-text, #d4d4d4);
     width: 28px;
     height: 28px;
     border-radius: 6px;
@@ -2394,13 +2616,13 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: background 0.12s, border-color 0.12s;
 }
 .dt-theme-manager-back-btn:hover {
-    background: var(--t-surface-raised, rgba(255, 255, 255, 0.08));
-    border-color: var(--t-border-strong, rgba(255, 255, 255, 0.22));
+    background: var(--t-surface, rgba(255, 255, 255, 0.08));
+    border-color: var(--t-border, rgba(255, 255, 255, 0.22));
 }
 .dt-theme-manager-back-label {
     font-size: 13px;
     font-weight: 600;
-    color: var(--t-text-primary, #d4d4d4);
+    color: var(--t-text, #d4d4d4);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2421,8 +2643,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 }
 .dt-theme-manager-chip {
     background: transparent;
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
-    color: var(--t-text-secondary, #c8c8c8);
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
+    color: var(--t-text-dim, #c8c8c8);
     padding: 4px 10px;
     border-radius: 999px;
     font-size: 12px;
@@ -2430,18 +2652,18 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 .dt-theme-manager-chip:hover {
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.06));
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.06));
 }
 .dt-theme-manager-chip.dt-selected {
-    background: var(--t-accent-primary, #4f8cff);
-    color: var(--t-accent-onPrimary, #fff);
+    background: var(--t-accent, #4f8cff);
+    color: var(--t-bg, #fff);
     border-color: transparent;
 }
 .dt-theme-manager-group-title {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--t-text-tertiary, #999);
+    color: var(--t-text-dim, #999);
     margin: 14px 0 8px;
 }
 .dt-theme-manager-grid {
@@ -2451,90 +2673,10 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     margin-bottom: 4px;
 }
 
-/* ── Theme/scheme cards ───────────────────────────────────── */
-.dt-theme-card {
-    position: relative;
-    background: var(--t-surface-raised, rgba(255, 255, 255, 0.02));
-    border: 1.5px solid transparent;
-    border-radius: 10px;
-    padding: 30px 8px 10px;
-    cursor: pointer;
-    transition: border-color 0.12s, transform 0.1s, background 0.12s;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    min-height: 120px;
-}
-.dt-theme-card:hover {
-    border-color: var(--t-border-strong, rgba(255, 255, 255, 0.2));
-}
-.dt-theme-card.dt-selected {
-    border-color: var(--t-accent-primary, #4f8cff);
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.05));
-}
-.dt-theme-card-silhouette {
-    display: block;
-    width: 100%;
-    flex-shrink: 0;
-    pointer-events: none;
-}
-.dt-theme-card-name {
-    font-size: 12px;
-    color: var(--t-text-primary, #d4d4d4);
-    text-align: center;
-    word-break: break-word;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    line-height: 1.25;
-    width: 100%;
-}
-.dt-theme-card-star {
-    position: absolute;
-    top: 4px;
-    left: 4px;
-    background: var(--star-bg, var(--t-surface-overlay, rgba(0, 0, 0, 0.28)));
-    border: none;
-    color: var(--star-fg, var(--t-text-secondary, #ddd));
-    font-size: 14px;
-    line-height: 1;
-    padding: 2px 5px;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: color 0.12s, background 0.12s;
-}
-.dt-theme-card-star.dt-active {
-    color: var(--star-active-fg, var(--t-accent-primary, #ffc857));
-}
-.dt-theme-card-star:hover {
-    background: var(--star-bg-hover, var(--t-surface-sunken, rgba(0, 0, 0, 0.5)));
-    color: var(--star-active-fg, var(--t-accent-primary, #ffc857));
-}
-.dt-theme-card-kebab {
-    position: absolute;
-    top: 4px;
-    right: 4px;
-    background: var(--kebab-bg, var(--t-surface-overlay, rgba(0, 0, 0, 0.28)));
-    border: none;
-    color: var(--kebab-fg, var(--t-text-secondary, #ddd));
-    font-size: 14px;
-    line-height: 1;
-    padding: 2px 8px;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background 0.12s, color 0.12s;
-}
-.dt-theme-card-kebab:hover {
-    background: var(--kebab-bg-hover, var(--t-surface-sunken, rgba(0, 0, 0, 0.5)));
-    color: var(--kebab-fg-hover, var(--t-text-primary, #fff));
-}
-
 /* New tile (create theme/scheme) and empty-state */
 .dt-new-tile {
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.04));
-    border: 2px dashed var(--t-border-strong, rgba(255, 255, 255, 0.18));
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.04));
+    border: 2px dashed var(--t-border, rgba(255, 255, 255, 0.18));
     border-radius: 10px;
     cursor: pointer;
     display: flex;
@@ -2548,27 +2690,27 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 }
 .dt-new-tile-plus {
     font-size: 18px;
-    color: var(--t-text-tertiary, #888);
+    color: var(--t-text-dim, #888);
     line-height: 1;
 }
 .dt-new-tile-label {
     font-size: 13px;
-    color: var(--t-text-secondary, #c8c8c8);
+    color: var(--t-text-dim, #c8c8c8);
 }
 .dt-theme-manager-empty {
     padding: 20px 0;
-    color: var(--t-text-tertiary, #888);
+    color: var(--t-text-dim, #888);
     font-size: 13px;
     text-align: center;
-    border: 1px dashed var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    border: 1px dashed var(--t-border, rgba(255, 255, 255, 0.12));
     border-radius: 8px;
 }
 
 /* ── Floating menus (kebab + scheme picker) ───────────────── */
 .dt-popover-menu {
-    background: var(--t-surface-raised, #1e1f22);
-    color: var(--t-text-primary, #d4d4d4);
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    background: var(--t-surface, #1e1f22);
+    color: var(--t-text, #d4d4d4);
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
     border-radius: 8px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
     padding: 4px;
@@ -2590,7 +2732,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     font-family: inherit;
 }
 .dt-popover-menu-item:hover {
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.08));
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.08));
 }
 
 /* ── Theme editor pane ────────────────────────────────────── */
@@ -2618,14 +2760,14 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--t-text-tertiary, #888);
+    color: var(--t-text-dim, #888);
     padding-left: 11px;
 }
 .dt-theme-editor-input,
 .dt-theme-editor-select {
-    background: var(--t-surface-base, #252526);
-    color: var(--t-text-primary, #d4d4d4);
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.15));
+    background: var(--t-bg, #252526);
+    color: var(--t-text, #d4d4d4);
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.15));
     border-radius: 6px;
     padding: 6px 10px;
     font-size: 13px;
@@ -2651,9 +2793,9 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     gap: 8px;
     margin-bottom: 16px;
     padding: 12px;
-    background: var(--t-surface-raised, rgba(255, 255, 255, 0.02));
+    background: var(--t-surface, rgba(255, 255, 255, 0.02));
     border-radius: 8px;
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.06));
 }
 .dt-theme-editor-section-row {
     display: grid;
@@ -2663,7 +2805,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 }
 .dt-theme-editor-section-label {
     font-size: 12px;
-    color: var(--t-text-secondary, #c8c8c8);
+    color: var(--t-text-dim, #c8c8c8);
 }
 
 /* ── Area headers ("Sections", "Per-pane overrides") ──────── */
@@ -2673,7 +2815,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--t-text-tertiary, #888);
+    color: var(--t-text-dim, #888);
 }
 
 /* ── Per-section scheme picker ────────────────────────────── */
@@ -2682,9 +2824,9 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     align-items: center;
     gap: 10px;
     width: 100%;
-    background: var(--t-surface-base, #252526);
-    color: var(--t-text-primary, #d4d4d4);
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    background: var(--t-bg, #252526);
+    color: var(--t-text, #d4d4d4);
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
     border-radius: 6px;
     padding: 5px 10px;
     font-family: inherit;
@@ -2694,7 +2836,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: border-color 0.12s, background 0.12s;
 }
 .dt-scheme-picker:hover:not(:disabled) {
-    border-color: var(--t-border-strong, rgba(255, 255, 255, 0.25));
+    border-color: var(--t-border, rgba(255, 255, 255, 0.25));
 }
 .dt-scheme-picker:disabled {
     opacity: 0.55;
@@ -2709,7 +2851,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 }
 .dt-scheme-picker-chevron {
     flex-shrink: 0;
-    color: var(--t-text-tertiary, #888);
+    color: var(--t-text-dim, #888);
     font-size: 10px;
     pointer-events: none;
 }
@@ -2727,10 +2869,10 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 13px;
-    color: var(--t-text-primary, #d4d4d4);
+    color: var(--t-text, #d4d4d4);
 }
 .dt-scheme-row-label.dt-muted {
-    color: var(--t-text-secondary, #c8c8c8);
+    color: var(--t-text-dim, #c8c8c8);
     font-style: italic;
 }
 .dt-scheme-menu {
@@ -2738,8 +2880,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     z-index: 100000;
     max-height: 440px;
     overflow-y: auto;
-    background: var(--t-surface-raised, #1e1f22);
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    background: var(--t-surface, #1e1f22);
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
     border-radius: 8px;
     padding: 4px;
     box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
@@ -2750,7 +2892,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--t-text-tertiary, #888);
+    color: var(--t-text-dim, #888);
     user-select: none;
 }
 .dt-scheme-menu-option {
@@ -2769,11 +2911,11 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: background 0.1s, border-color 0.1s;
 }
 .dt-scheme-menu-option:hover {
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.06));
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.06));
 }
 .dt-scheme-menu-option.dt-selected {
-    border-color: var(--t-accent-primary, #4f8cff);
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.05));
+    border-color: var(--t-accent, #4f8cff);
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.05));
 }
 .dt-scheme-menu-option-content {
     display: flex;
@@ -2792,9 +2934,9 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     align-items: center;
 }
 .dt-theme-editor-btn {
-    background: var(--t-surface-raised, rgba(255, 255, 255, 0.04));
-    color: var(--t-text-primary, #d4d4d4);
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.15));
+    background: var(--t-surface, rgba(255, 255, 255, 0.04));
+    color: var(--t-text, #d4d4d4);
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.15));
     border-radius: 6px;
     padding: 6px 14px;
     font-size: 13px;
@@ -2803,7 +2945,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: background 0.12s, border-color 0.12s, opacity 0.12s;
 }
 .dt-theme-editor-btn:hover:not(:disabled):not(.dt-disabled) {
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.08));
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.08));
 }
 .dt-theme-editor-btn:disabled,
 .dt-theme-editor-btn.dt-disabled {
@@ -2813,15 +2955,15 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     pointer-events: none;
 }
 .dt-theme-editor-btn.dt-primary {
-    background: var(--t-accent-primary, #4f8cff);
-    color: var(--t-accent-onPrimary, #fff);
+    background: var(--t-accent, #4f8cff);
+    color: var(--t-bg, #fff);
     border-color: transparent;
 }
 .dt-theme-editor-btn.dt-primary:hover:not(:disabled):not(.dt-disabled) {
-    background: color-mix(in oklab, var(--t-accent-primary, #4f8cff) 82%, white);
+    background: color-mix(in oklab, var(--t-accent, #4f8cff) 82%, white);
 }
 .dt-theme-editor-btn.dt-danger {
-    color: var(--t-semantic-danger, #ff6b6b);
+    color: var(--t-danger, #ff6b6b);
     border-color: rgba(255, 107, 107, 0.35);
 }
 .dt-theme-editor-btn.dt-danger:hover:not(:disabled):not(.dt-disabled) {
@@ -2829,7 +2971,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 }
 .dt-theme-editor-hint {
     font-size: 12px;
-    color: var(--t-text-tertiary, #888);
+    color: var(--t-text-dim, #888);
     font-style: italic;
     flex-basis: 100%;
 }
@@ -2840,9 +2982,9 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     grid-template-columns: 1fr 1fr;
     gap: 10px 16px;
     padding: 12px;
-    background: var(--t-surface-raised, rgba(255, 255, 255, 0.02));
+    background: var(--t-surface, rgba(255, 255, 255, 0.02));
     border-radius: 8px;
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.06));
     margin-bottom: 16px;
 }
 .dt-scheme-editor-fgbg-row {
@@ -2853,13 +2995,13 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 }
 .dt-scheme-editor-fgbg-label {
     font-size: 12px;
-    color: var(--t-text-secondary, #c8c8c8);
+    color: var(--t-text-dim, #c8c8c8);
 }
 .dt-scheme-editor-fgbg-picker {
     width: 34px;
     height: 24px;
     border-radius: 4px;
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
     background: transparent;
     cursor: pointer;
 }
@@ -2874,7 +3016,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     font-size: 13px;
     font-weight: 600;
     margin-bottom: 8px;
-    color: var(--t-text-primary, #d4d4d4);
+    color: var(--t-text, #d4d4d4);
 }
 .dt-scheme-editor-overrides-grid {
     display: flex;
@@ -2883,8 +3025,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     max-height: 320px;
     overflow-y: auto;
     padding: 6px;
-    background: var(--t-surface-base, #252526);
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.08));
+    background: var(--t-bg, #252526);
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.08));
     border-radius: 6px;
 }
 .dt-scheme-editor-overrides-head,
@@ -2909,15 +3051,15 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     margin-bottom: 10px;
 }
 .dt-scheme-editor-overrides-head {
-    color: var(--t-text-tertiary, #888);
+    color: var(--t-text-dim, #888);
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    border-bottom: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.08));
+    border-bottom: 1px solid var(--t-border, rgba(255, 255, 255, 0.08));
     padding-bottom: 4px;
     margin-bottom: 4px;
 }
 .dt-scheme-editor-overrides-label {
-    color: var(--t-text-secondary, #c8c8c8);
+    color: var(--t-text-dim, #c8c8c8);
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 11px;
 }
@@ -2925,20 +3067,20 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     width: 100%;
     height: 22px;
     padding: 0;
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.15));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.15));
     border-radius: 3px;
     background: transparent;
     cursor: pointer;
     position: relative;
 }
 .dt-scheme-editor-overrides-picker[data-set="1"] {
-    border-color: var(--t-accent-primary, #4f8cff);
-    box-shadow: 0 0 0 1px var(--t-accent-primary, #4f8cff);
+    border-color: var(--t-accent, #4f8cff);
+    box-shadow: 0 0 0 1px var(--t-accent, #4f8cff);
 }
 .dt-scheme-editor-overrides-reset {
     background: transparent;
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
-    color: var(--t-text-tertiary, #888);
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
+    color: var(--t-text-dim, #888);
     border-radius: 4px;
     font-size: 14px;
     line-height: 1;
@@ -2950,8 +3092,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     font-family: inherit;
 }
 .dt-scheme-editor-overrides-reset:hover:not(:disabled) {
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.06));
-    color: var(--t-text-primary, #d4d4d4);
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.06));
+    color: var(--t-text, #d4d4d4);
 }
 .dt-scheme-editor-overrides-reset.dt-inactive,
 .dt-scheme-editor-overrides-reset:disabled {
@@ -2972,8 +3114,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 }
 .dt-name-prompt {
     position: relative;
-    background: var(--t-surface-base, #1e1e1e);
-    border: 1px solid var(--t-border-default, #444);
+    background: var(--t-bg, #1e1e1e);
+    border: 1px solid var(--t-border, #444);
     border-radius: 12px;
     box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
     padding: 18px 20px 20px;
@@ -2982,18 +3124,19 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     max-height: 80vh;
     display: flex;
     flex-direction: column;
-    color: var(--t-text-primary, #d4d4d4);
+    color: var(--t-text, #d4d4d4);
 }
 .dt-name-prompt-title {
     margin: 0 0 14px;
     font-size: 15px;
     font-weight: 600;
+    color: var(--t-text-bright, var(--t-text, #f5f5f5));
 }
 .dt-name-prompt-label {
     display: block;
     font-size: 12px;
     font-weight: 600;
-    color: var(--t-text-secondary, #c8c8c8);
+    color: var(--t-text-dim, #c8c8c8);
     margin: 0 0 5px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -3005,20 +3148,20 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     padding: 7px 10px;
     font-size: 13px;
     font-family: inherit;
-    border: 1px solid var(--t-border-default, #3c3c3c);
+    border: 1px solid var(--t-border, #3c3c3c);
     border-radius: 5px;
-    background: var(--t-surface-base, #252526);
-    color: var(--t-text-primary, #d4d4d4);
+    background: var(--t-bg, #252526);
+    color: var(--t-text, #d4d4d4);
     margin-bottom: 12px;
     outline: none;
 }
 .dt-name-prompt-input:focus {
-    border-color: var(--t-accent-primary, #569cd6);
+    border-color: var(--t-accent, #569cd6);
     box-shadow: 0 0 0 2px rgba(86, 156, 214, 0.25);
 }
 .dt-name-prompt-error {
     font-size: 12px;
-    color: var(--t-semantic-danger, #e06c75);
+    color: var(--t-danger, #e06c75);
     margin-bottom: 8px;
 }
 .dt-name-prompt-buttons {
@@ -3028,7 +3171,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 }
 .dt-name-prompt-btn {
     appearance: none;
-    border: 1px solid var(--t-border-default, #3c3c3c);
+    border: 1px solid var(--t-border, #3c3c3c);
     border-radius: 6px;
     padding: 7px 18px;
     font-size: 13px;
@@ -3036,15 +3179,15 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     font-family: inherit;
 }
 .dt-name-prompt-btn-cancel {
-    background: var(--t-surface-base, #252526);
-    color: var(--t-text-primary, #d4d4d4);
+    background: var(--t-bg, #252526);
+    color: var(--t-text, #d4d4d4);
 }
 .dt-name-prompt-btn-cancel:hover {
-    background: var(--t-surface-overlay, #2d2d30);
+    background: var(--t-surface-alt, #2d2d30);
 }
 .dt-name-prompt-btn-ok {
-    background: var(--t-accent-primary, #4f8cff);
-    color: var(--t-accent-onPrimary, #fff);
+    background: var(--t-accent, #4f8cff);
+    color: var(--t-bg, #fff);
     border-color: transparent;
 }
 .dt-name-prompt-btn-ok:hover {
@@ -3065,7 +3208,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     border-radius: 6px;
     overflow: hidden;
     cursor: pointer;
-    box-shadow: 0 0 0 1px var(--t-border-subtle, rgba(255, 255, 255, 0.08));
+    box-shadow: 0 0 0 1px var(--t-border, rgba(255, 255, 255, 0.08));
     font-size: 0;
 }
 
@@ -3260,7 +3403,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     font-size: 11px;
     font-weight: 500;
     line-height: 1;
-    box-shadow: 0 0 0 1px var(--t-border-subtle, rgba(255, 255, 255, 0.08));
+    box-shadow: 0 0 0 1px var(--t-border, rgba(255, 255, 255, 0.08));
 }
 .dt-swatch-prompt {
     font-weight: 700;
@@ -3295,27 +3438,29 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     flex: 1 1 auto;
     min-height: 0;
     width: 100%;
-    background: var(--t-sidebar-bg, var(--t-chrome-titlebar, #161616));
-    color: var(--t-sidebar-text, #d6d6d6);
+    background: var(--t-surface, var(--t-surface-alt, #161616));
+    color: var(--t-text, #d6d6d6);
 }
 .dt-settings-sidebar-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 14px 16px 8px;
-    border-bottom: 1px solid var(--t-border-subtle, rgba(255,255,255,0.08));
+    border-bottom: 1px solid var(--t-border, rgba(255,255,255,0.08));
 }
 .dt-settings-sidebar-title {
     margin: 0;
     font-size: 16px;
     font-weight: 600;
-    color: var(--t-text-primary, #e6e6e6);
+    /* Brightest text token so the panel heading reads as a crisp title, the
+       same treatment as `.pane-modal-title` (the info/settings modal). */
+    color: var(--t-text-bright, var(--t-text, #e6e6e6));
 }
 .dt-settings-sidebar-close {
     appearance: none;
     background: transparent;
     border: 0;
-    color: var(--t-text-secondary, #b8b8b8);
+    color: var(--t-text-dim, #b8b8b8);
     cursor: pointer;
     font-size: 22px;
     line-height: 1;
@@ -3323,8 +3468,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     border-radius: 4px;
 }
 .dt-settings-sidebar-close:hover {
-    background: var(--t-surface-overlay, rgba(255,255,255,0.08));
-    color: var(--t-text-primary, #e6e6e6);
+    background: var(--t-surface-alt, rgba(255,255,255,0.08));
+    color: var(--t-text, #e6e6e6);
 }
 .dt-settings-sidebar-sections {
     flex: 1 1 auto;
@@ -3349,11 +3494,11 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--t-text-tertiary, #9a9a9a);
+    color: var(--t-text-dim, #9a9a9a);
 }
 .dt-settings-hint {
     font-size: 11px;
-    color: var(--t-text-tertiary, #9a9a9a);
+    color: var(--t-text-dim, #9a9a9a);
     margin-top: -4px;
     line-height: 1.35;
 }
@@ -3368,9 +3513,9 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 }
 .dt-settings-choice-btn {
     appearance: none;
-    background: var(--t-surface-raised, rgba(255,255,255,0.04));
-    color: var(--t-text-secondary, #b8b8b8);
-    border: 1px solid var(--t-border-subtle, rgba(255,255,255,0.10));
+    background: var(--t-surface, rgba(255,255,255,0.04));
+    color: var(--t-text-dim, #b8b8b8);
+    border: 1px solid var(--t-border, rgba(255,255,255,0.10));
     border-radius: 4px;
     cursor: pointer;
     padding: 5px 10px;
@@ -3379,21 +3524,21 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 .dt-settings-choice-btn:hover {
-    background: var(--t-surface-overlay, rgba(255,255,255,0.10));
-    color: var(--t-text-primary, #e6e6e6);
+    background: var(--t-surface-alt, rgba(255,255,255,0.10));
+    color: var(--t-text, #e6e6e6);
 }
 .dt-settings-choice-btn.dt-selected {
-    background: var(--t-surface-sunken, var(--t-surface-base, #161616));
-    color: var(--t-text-primary, #e6e6e6);
-    border-color: var(--t-accent-primary, #ff8a3d);
-    box-shadow: inset 0 0 0 1px var(--t-accent-primary, #ff8a3d);
+    background: var(--t-surface-alt, var(--t-bg, #161616));
+    color: var(--t-text, #e6e6e6);
+    border-color: var(--t-accent, #ff8a3d);
+    box-shadow: inset 0 0 0 1px var(--t-accent, #ff8a3d);
     font-weight: 600;
 }
 .dt-settings-link-btn {
     appearance: none;
-    background: var(--t-surface-raised, rgba(255,255,255,0.04));
-    color: var(--t-text-primary, #e6e6e6);
-    border: 1px solid var(--t-border-subtle, rgba(255,255,255,0.10));
+    background: var(--t-surface, rgba(255,255,255,0.04));
+    color: var(--t-text, #e6e6e6);
+    border: 1px solid var(--t-border, rgba(255,255,255,0.10));
     border-radius: 4px;
     padding: 8px 12px;
     cursor: pointer;
@@ -3402,7 +3547,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     width: 100%;
 }
 .dt-settings-link-btn:hover {
-    background: var(--t-surface-overlay, rgba(255,255,255,0.10));
+    background: var(--t-surface-alt, rgba(255,255,255,0.10));
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -3419,14 +3564,18 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    hover-activated menu. See TabBarMenu.kt for the DOM builder. */
 
 .tab-bar-menu.open .tab-bar-menu-button {
-    color: var(--t-text-primary);
-    background: var(--t-border-subtle);
+    color: var(--t-text);
+    background: var(--t-border);
 }
 .pane-status-spinner {
     display: none;
     border-radius: 50%;
-    border: 2px solid var(--t-text-secondary, #555);
-    border-top-color: var(--t-text-primary, #f5f5f5);
+    /* Inherit the colour of the surrounding icons via `currentColor` (the
+       pane-header / sidebar-row text colour), so the spinner reads as the same
+       hue as its neighbours. The track is a faded version of that colour and
+       the top arc the full colour, which keeps the rotation legible. */
+    border: 2px solid color-mix(in srgb, currentColor 28%, transparent);
+    border-top-color: currentColor;
     animation: spin 0.8s linear infinite;
     flex-shrink: 0;
     box-sizing: border-box;
@@ -3445,7 +3594,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     justify-content: center;
     border: none;
     animation: fade-warning 2.5s ease-in-out infinite;
-    color: var(--t-semantic-warn, #FFD60A);
+    color: var(--t-warn, #FFD60A);
 }
 .pane-menu {
     position: relative;
@@ -3487,7 +3636,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     appearance: none;
     background: transparent;
     border: none;
-    color: var(--t-text-secondary);
+    color: var(--t-text-dim);
     cursor: pointer;
     width: 24px;
     height: 24px;
@@ -3499,8 +3648,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: background-color 120ms ease-in-out, color 120ms ease-in-out;
 }
 .pane-action-btn:hover {
-    background: var(--t-border-subtle);
-    color: var(--t-text-primary);
+    background: var(--t-border);
+    color: var(--t-text);
 }
 .pane-action-btn.close {
     margin-left: 0;
@@ -3511,8 +3660,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     top: calc(100% + 4px);
     right: 0;
     min-width: 168px;
-    background: var(--t-surface-raised);
-    border: 1px solid var(--t-border-subtle);
+    background: var(--t-surface);
+    border: 1px solid var(--t-border);
     border-radius: 6px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     padding: 6px;
@@ -3522,11 +3671,11 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     display: block;
 }
 .pane-action-btn.active {
-    color: var(--t-accent-primary, #f4b869);
+    color: var(--t-accent, #f4b869);
 }
 .pane-action-btn.active:hover {
-    color: var(--t-accent-primary, #f4b869);
-    background: var(--t-border-subtle);
+    color: var(--t-accent, #f4b869);
+    background: var(--t-border);
 }
 /* ---------- Layout picker dropdown ------------------------------------ */
 
@@ -3560,8 +3709,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: background-color 120ms ease, border-color 120ms ease;
 }
 .layout-option:hover {
-    background: var(--t-border-subtle);
-    border-color: var(--t-text-secondary);
+    background: var(--t-border);
+    border-color: var(--t-text-dim);
 }
 .layout-preview {
     display: block;
@@ -3572,7 +3721,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     grid-column: 1 / -1;
     padding: 12px 4px;
     font-size: 12px;
-    color: var(--t-text-secondary);
+    color: var(--t-text-dim);
     text-align: center;
 }
 /* Dropdowns in header */
@@ -3583,7 +3732,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     appearance: none;
     background: transparent;
     border: none;
-    color: var(--t-text-secondary);
+    color: var(--t-text-dim);
     padding: 0 8px;
     border-radius: 6px;
     cursor: pointer;
@@ -3595,7 +3744,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: color 120ms ease-in-out;
 }
 .icon-button:hover {
-    color: var(--t-text-primary);
+    color: var(--t-text);
 }
 .theme-swatch {
     display: flex;
@@ -3614,7 +3763,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     font-size: 11px;
     font-weight: 500;
     line-height: 1;
-    box-shadow: 0 0 0 1px var(--t-border-subtle);
+    box-shadow: 0 0 0 1px var(--t-border);
 }
 .theme-swatch .swatch-prompt {
     font-weight: 700;
@@ -3680,7 +3829,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     align-items: center;
     justify-content: center;
     gap: 24px;
-    color: var(--t-text-secondary);
+    color: var(--t-text-dim);
     text-align: center;
 }
 /* Picker shown inside a freshly-split (empty) pane until the user chooses a kind. */
@@ -3693,7 +3842,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     justify-content: center;
     gap: clamp(8px, 4cqi, 24px);
     padding: clamp(8px, 4cqi, 24px);
-    background: var(--t-sidebar-bg, #1e1e1e);
+    background: var(--t-surface, #1e1e1e);
     container-type: inline-size;
     overflow: hidden;
 }
@@ -3703,8 +3852,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     min-height: 0;
     min-width: 0;
     overflow: hidden;
-    background: var(--t-surface-raised, #252526);
-    border-right: 1px solid var(--t-border-subtle, #333);
+    background: var(--t-surface, #252526);
+    border-right: 1px solid var(--t-border, #333);
 }
 /* ── Pane header icon (terminal / link / markdown) ── */
 .pane-header-icon {
@@ -3713,7 +3862,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     margin-right: 5px;
     opacity: 0.55;
     flex-shrink: 0;
-    color: var(--t-chrome-titleText, var(--t-text-secondary));
+    color: var(--t-text-bright, var(--t-text-dim));
 }
 /* ── Confirm dialog ── */
 .pane-modal.confirm-modal {
@@ -3730,7 +3879,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     margin: 0 0 16px;
     font-size: 13px;
     line-height: 1.45;
-    color: var(--t-text-primary, #d4d4d4);
+    color: var(--t-text, #d4d4d4);
 }
 .confirm-buttons {
     display: flex;
@@ -3747,18 +3896,18 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     font-family: inherit;
 }
 .confirm-cancel {
-    background: var(--t-surface-raised, #252526);
-    color: var(--t-text-primary, #d4d4d4);
+    background: var(--t-surface, #252526);
+    color: var(--t-text, #d4d4d4);
 }
-.confirm-cancel:hover { background: var(--t-surface-overlay, #2d2d30); }
+.confirm-cancel:hover { background: var(--t-surface-alt, #2d2d30); }
 .confirm-ok {
-    background: var(--t-accent-primary, var(--t-accent-primary));
-    color: var(--t-accent-onPrimary, #fff);
+    background: var(--t-accent, var(--t-accent));
+    color: var(--t-bg, #fff);
     border-color: transparent;
 }
 .confirm-ok:hover { filter: brightness(1.12); }
 .confirm-ok:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }
-.confirm-ok:focus { outline: 2px solid var(--t-accent-primary, var(--t-accent-primary)); outline-offset: 2px; }
+.confirm-ok:focus { outline: 2px solid var(--t-accent, var(--t-accent)); outline-offset: 2px; }
 body.appearance-light .confirm-cancel {
     background: #fff;
     border-color: rgba(0,0,0,0.18);
@@ -3782,7 +3931,7 @@ body.appearance-light .confirm-cancel {
        surface that matches the app background — the near-black sidebar bg —
        exactly as the Android/iOS dialogs do, rather than a washed-out grey
        panel floating over a darker app. */
-    background: var(--bg-primary, var(--t-sidebar-bg, #1e1e1e));
+    background: var(--bg-primary, var(--t-surface, #1e1e1e));
     /* Now that the modal background tracks the (near-black) app background, a
        faint subtle border + a black-on-black drop shadow left the dialog
        blending into the content behind it. Use a bold 2px accent-coloured
@@ -3791,11 +3940,11 @@ body.appearance-light .confirm-cancel {
        reads as a clearly separated, floating surface. The glow falls back to
        transparent for themes whose accent glow is a near-background colour
        (border + drop shadow still separate it there). */
-    border: 2px solid var(--border, var(--t-border-focus, var(--t-accent-primary, rgba(255, 255, 255, 0.4))));
+    border: 2px solid var(--border, var(--t-accent, var(--t-accent, rgba(255, 255, 255, 0.4))));
     border-radius: 12px;
     box-shadow:
         0 24px 70px -16px rgba(0, 0, 0, 0.85),
-        0 0 44px -8px var(--t-accent-primaryGlow, transparent);
+        0 0 44px -8px var(--t-glow, transparent);
     padding: 24px 28px 28px;
     min-width: 420px;
     max-width: 90vw;
@@ -3803,7 +3952,7 @@ body.appearance-light .confirm-cancel {
     max-height: 80vh;
     display: flex;
     flex-direction: column;
-    color: var(--t-text-primary, #d4d4d4);
+    color: var(--t-text, #d4d4d4);
 }
 .pane-modal-close {
     position: absolute;
@@ -3812,17 +3961,21 @@ body.appearance-light .confirm-cancel {
     appearance: none;
     background: none;
     border: none;
-    color: var(--t-text-secondary, #999);
+    color: var(--t-text-dim, #999);
     font-size: 22px;
     cursor: pointer;
     padding: 4px 8px;
     line-height: 1;
 }
-.pane-modal-close:hover { color: var(--t-text-primary, #d4d4d4); }
+.pane-modal-close:hover { color: var(--t-text, #d4d4d4); }
 .pane-modal-title {
     margin: 0 0 16px;
     font-size: 18px;
     font-weight: 600;
+    /* Modal headings use the brightest text token so the title reads as a
+       crisp heading against the dialog body (white-ish on Termtastic Dark;
+       the theme-appropriate brightest tone on other themes). */
+    color: var(--t-text-bright, var(--t-text, #f5f5f5));
 }
 .pane-modal-body {
     flex: 1;
@@ -3837,10 +3990,10 @@ body.appearance-light .confirm-cancel {
 }
 .pane-type-card {
     appearance: none;
-    background: var(--t-surface-raised, #252526);
+    background: var(--t-surface, #252526);
     border: 1px solid var(--border, #3c3c3c);
     border-radius: 10px;
-    color: var(--t-text-primary, #d4d4d4);
+    color: var(--t-text, #d4d4d4);
     padding: 24px 20px;
     cursor: pointer;
     display: flex;
@@ -3851,7 +4004,7 @@ body.appearance-light .confirm-cancel {
     transition: background 80ms ease, border-color 80ms ease, transform 80ms ease;
 }
 .pane-type-card:hover {
-    background: var(--t-surface-overlay, #2d2d30);
+    background: var(--t-surface-alt, #2d2d30);
     border-color: var(--accent, #0e639c);
 }
 .pane-type-card:active { transform: translateY(1px); }
@@ -3869,8 +4022,8 @@ body.appearance-light .confirm-cancel {
 body.appearance-light .pane-modal {
     /* Light appearance: prefer the theme's (light) sidebar bg so the modal
        matches the app, falling back to the former neutral grey. */
-    background: var(--bg-primary, var(--t-sidebar-bg, #f5f5f5));
-    border-color: var(--border, var(--t-border-subtle, rgba(0, 0, 0, 0.18)));
+    background: var(--bg-primary, var(--t-surface, #f5f5f5));
+    border-color: var(--border, var(--t-border, rgba(0, 0, 0, 0.18)));
 }
 body.appearance-light .pane-type-card {
     background: #fff;
@@ -3893,7 +4046,7 @@ body.appearance-light .pane-type-card:hover {
 }
 .pane-modal-back:hover { text-decoration: underline; }
 .pane-modal-empty {
-    color: var(--t-text-secondary, #999);
+    color: var(--t-text-dim, #999);
     text-align: center;
     padding: 32px 0;
     font-size: 14px;
@@ -3931,7 +4084,7 @@ body.appearance-light .pane-type-card:hover {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: var(--t-sidebar-textDim, var(--t-text-secondary, #999));
+    color: var(--t-text-dim, var(--t-text-dim, #999));
     margin-bottom: 8px;
 }
 /* ─── Config category headers and card grid ──────────────────────── */
@@ -3941,7 +4094,7 @@ body.appearance-light .pane-type-card:hover {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.8px;
-    color: var(--t-text-tertiary, var(--t-text-secondary, #888));
+    color: var(--t-text-dim, var(--t-text-dim, #888));
     padding: 12px 0 4px;
 }
 .settings-config-category:first-child {
@@ -3965,10 +4118,10 @@ body.appearance-light .pane-type-card:hover {
     position: relative;
 }
 .settings-config-card:hover {
-    background: var(--t-border-subtle, var(--t-border-subtle, #333));
+    background: var(--t-border, var(--t-border, #333));
 }
 body.appearance-light .settings-config-card:hover {
-    background: var(--t-border-subtle, rgba(0, 0, 0, 0.06));
+    background: var(--t-border, rgba(0, 0, 0, 0.06));
 }
 .settings-config-card-name {
     font-size: 10px;
@@ -3976,14 +4129,14 @@ body.appearance-light .settings-config-card:hover {
     overflow: hidden;
     text-overflow: ellipsis;
     text-align: center;
-    color: var(--t-text-secondary, var(--t-text-secondary));
+    color: var(--t-text-dim, var(--t-text-dim));
     cursor: pointer;
 }
 .settings-config-card-delete {
     appearance: none;
     background: none;
     border: none;
-    color: var(--t-text-tertiary, var(--t-text-secondary, #666));
+    color: var(--t-text-dim, var(--t-text-dim, #666));
     font-size: 14px;
     cursor: pointer;
     position: absolute;
@@ -4010,10 +4163,10 @@ body.appearance-light .settings-config-card:hover {
     opacity: 0.4;
 }
 .settings-config-card.drop-before {
-    box-shadow: -3px 0 0 0 var(--t-accent-primary, var(--accent, #61afef));
+    box-shadow: -3px 0 0 0 var(--t-accent, var(--accent, #61afef));
 }
 .settings-config-card.drop-after {
-    box-shadow: 3px 0 0 0 var(--t-accent-primary, var(--accent, #61afef));
+    box-shadow: 3px 0 0 0 var(--t-accent, var(--accent, #61afef));
 }
 /* Config silhouette CSS lives in the toolkit (.dt-config-silhouette /
    .dt-cs-*) — termtastic delegates rendering via
@@ -4029,7 +4182,7 @@ body.appearance-light .settings-config-card:hover {
 .theme-config-list {
     max-height: 150px;
     overflow-y: auto;
-    border: 1px solid var(--t-border-subtle, #3c3c3c);
+    border: 1px solid var(--t-border, #3c3c3c);
     border-radius: 6px;
     margin-bottom: 12px;
 }
@@ -4037,20 +4190,20 @@ body.appearance-light .settings-config-card:hover {
     padding: 7px 12px;
     font-size: 13px;
     cursor: pointer;
-    color: var(--t-text-primary, #d4d4d4);
-    border-bottom: 1px solid var(--t-border-subtle, #3c3c3c);
+    color: var(--t-text, #d4d4d4);
+    border-bottom: 1px solid var(--t-border, #3c3c3c);
     transition: background 80ms ease;
 }
 .theme-config-list-item:last-child {
     border-bottom: none;
 }
 .theme-config-list-item:hover {
-    background: var(--t-border-subtle, #333);
+    background: var(--t-border, #333);
 }
 .theme-config-list-item.selected {
     background: color-mix(in srgb, var(--accent, #4fc1ff) 18%, transparent);
     border-left: 3px solid var(--accent, #4fc1ff);
-    color: var(--t-text-primary, #d4d4d4);
+    color: var(--t-text, #d4d4d4);
     font-weight: 600;
 }
 body.appearance-light .theme-config-list {
@@ -4079,9 +4232,9 @@ body.appearance-light .theme-config-list-item.selected {
 }
 .settings-choice-btn {
     appearance: none;
-    background: var(--t-surface-raised, #252526);
-    border: 1px solid var(--t-border-subtle, #3c3c3c);
-    color: var(--t-text-primary, #d4d4d4);
+    background: var(--t-surface, #252526);
+    border: 1px solid var(--t-border, #3c3c3c);
+    color: var(--t-text, #d4d4d4);
     font: inherit;
     font-size: 12px;
     padding: 6px 14px;
@@ -4090,12 +4243,12 @@ body.appearance-light .theme-config-list-item.selected {
     transition: background 80ms ease, border-color 80ms ease;
 }
 .settings-choice-btn:hover {
-    background: var(--t-border-subtle, #333);
+    background: var(--t-border, #333);
 }
 .settings-choice-btn.selected {
-    border-color: var(--t-active-accent, var(--t-accent-primary, var(--t-accent-primary)));
-    background: var(--t-border-subtle, #333);
-    color: var(--t-active-accent, var(--t-accent-primary, var(--t-accent-primary)));
+    border-color: var(--t-accent, var(--t-accent, var(--t-accent)));
+    background: var(--t-border, #333);
+    color: var(--t-accent, var(--t-accent, var(--t-accent)));
     font-weight: 600;
 }
 body.appearance-light .settings-choice-btn {
@@ -4107,8 +4260,8 @@ body.appearance-light .settings-choice-btn:hover {
     background: rgba(0, 0, 0, 0.04);
 }
 body.appearance-light .settings-choice-btn.selected {
-    border-color: var(--t-active-accent, var(--t-accent-primary, var(--t-accent-primary)));
-    color: var(--t-active-accent, var(--t-accent-primary, var(--t-accent-primary)));
+    border-color: var(--t-accent, var(--t-accent, var(--t-accent)));
+    color: var(--t-accent, var(--t-accent, var(--t-accent)));
     background: rgba(0, 0, 0, 0.04);
 }
 .settings-size-row .settings-choice-btn {
@@ -4124,9 +4277,9 @@ body.appearance-light .settings-choice-btn.selected {
 .settings-server-btn {
     margin: 8px 0 20px;
     appearance: none;
-    background: var(--t-surface-raised, #252526);
-    border: 1px solid var(--t-border-subtle, #3c3c3c);
-    color: var(--t-text-primary, #d4d4d4);
+    background: var(--t-surface, #252526);
+    border: 1px solid var(--t-border, #3c3c3c);
+    color: var(--t-text, #d4d4d4);
     font: inherit;
     font-size: 13px;
     padding: 8px 18px;
@@ -4136,8 +4289,8 @@ body.appearance-light .settings-choice-btn.selected {
     align-self: flex-start;
 }
 .settings-server-btn:hover {
-    background: var(--t-border-subtle, #333);
-    border-color: var(--t-text-secondary, #999);
+    background: var(--t-border, #333);
+    border-color: var(--t-text-dim, #999);
 }
 body.appearance-light .settings-server-btn {
     background: #fff;
@@ -4150,29 +4303,29 @@ body.appearance-light .settings-server-btn:hover {
 /* ─── Section theme overrides ─────────────────────────────────────── */
 .settings-hint {
     font-size: 11px;
-    color: var(--t-text-tertiary, var(--t-text-secondary));
+    color: var(--t-text-dim, var(--t-text-dim));
     margin-bottom: 8px;
     line-height: 1.4;
 }
 .settings-section-select {
     appearance: none;
-    background: var(--t-surface-raised, var(--t-surface-raised));
-    border: 1px solid var(--t-border-default, var(--t-border-subtle));
-    color: var(--t-text-primary, var(--t-text-primary));
+    background: var(--t-surface, var(--t-surface));
+    border: 1px solid var(--t-border, var(--t-border));
+    color: var(--t-text, var(--t-text));
     border-radius: 6px;
     padding: 4px 28px 4px 10px;
     font: 12px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     cursor: pointer;
     min-width: 120px;
-    background-image: linear-gradient(45deg, transparent 50%, var(--t-text-tertiary, #888) 50%),
-                      linear-gradient(135deg, var(--t-text-tertiary, #888) 50%, transparent 50%);
+    background-image: linear-gradient(45deg, transparent 50%, var(--t-text-dim, #888) 50%),
+                      linear-gradient(135deg, var(--t-text-dim, #888) 50%, transparent 50%);
     background-position: calc(100% - 12px) 52%, calc(100% - 8px) 52%;
     background-size: 4px 4px;
     background-repeat: no-repeat;
 }
 .settings-section-select:focus {
     outline: none;
-    border-color: var(--t-accent-primary, var(--t-accent-primary));
+    border-color: var(--t-accent, var(--t-accent));
 }
 body.appearance-light .settings-section-select {
     background-color: #fff;
@@ -4192,12 +4345,12 @@ body.appearance-light .settings-section-select {
     min-width: 0;
     overflow: hidden;
     flex-shrink: 0;
-    background: var(--t-sidebar-bg, var(--t-surface-raised, #252526));
-    border-left: 1px solid var(--t-border-subtle, var(--t-border-subtle, #333));
+    background: var(--t-surface, var(--t-surface, #252526));
+    border-left: 1px solid var(--t-border, var(--t-border, #333));
     display: flex;
     flex-direction: column;
     position: relative;
-    color: var(--t-sidebar-text, var(--t-text-primary, #d4d4d4));
+    color: var(--t-text, var(--t-text, #d4d4d4));
     font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", sans-serif;
     transition: width 200ms ease, min-width 200ms ease;
 }
@@ -4217,14 +4370,14 @@ body.appearance-light .settings-section-select {
     flex-direction: column;
     gap: 10px;
     padding: 18px 20px 12px;
-    border-bottom: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.08));
-    background: var(--t-surface-raised, rgba(255, 255, 255, 0.03));
+    border-bottom: 1px solid var(--t-border, rgba(255, 255, 255, 0.08));
+    background: var(--t-surface, rgba(255, 255, 255, 0.03));
 }
 .theme-manager-title {
     margin: 0;
     font-size: 16px;
     font-weight: 600;
-    color: var(--t-text-primary, var(--t-text-primary));
+    color: var(--t-text, var(--t-text));
     padding-right: 28px; /* avoid the close button */
 }
 .theme-manager-tabs {
@@ -4234,7 +4387,7 @@ body.appearance-light .settings-section-select {
 .theme-manager-tab {
     background: transparent;
     border: 1px solid transparent;
-    color: var(--t-text-secondary, var(--t-text-secondary));
+    color: var(--t-text-dim, var(--t-text-dim));
     padding: 6px 14px;
     border-radius: 6px;
     font-size: 13px;
@@ -4242,12 +4395,12 @@ body.appearance-light .settings-section-select {
     transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 .theme-manager-tab:hover {
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.06));
-    color: var(--t-text-primary, var(--t-text-primary));
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.06));
+    color: var(--t-text, var(--t-text));
 }
 .theme-manager-tab.selected {
-    background: var(--t-accent-primary, var(--t-accent-primary));
-    color: var(--t-accent-onPrimary, #fff);
+    background: var(--t-accent, var(--t-accent));
+    color: var(--t-bg, #fff);
     border-color: transparent;
 }
 .theme-manager-body {
@@ -4265,9 +4418,9 @@ body.appearance-light .settings-section-select {
     margin-bottom: 12px;
 }
 .theme-manager-back-btn {
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.04));
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
-    color: var(--t-text-primary, var(--t-text-primary));
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
+    color: var(--t-text, var(--t-text));
     width: 28px;
     height: 28px;
     border-radius: 6px;
@@ -4280,13 +4433,13 @@ body.appearance-light .settings-section-select {
     transition: background 0.12s, border-color 0.12s;
 }
 .theme-manager-back-btn:hover {
-    background: var(--t-surface-raised, rgba(255, 255, 255, 0.08));
-    border-color: var(--t-border-strong, rgba(255, 255, 255, 0.22));
+    background: var(--t-surface, rgba(255, 255, 255, 0.08));
+    border-color: var(--t-border, rgba(255, 255, 255, 0.22));
 }
 .theme-manager-back-label {
     font-size: 13px;
     font-weight: 600;
-    color: var(--t-text-primary, var(--t-text-primary));
+    color: var(--t-text, var(--t-text));
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -4305,8 +4458,8 @@ body.appearance-light .settings-section-select {
 }
 .theme-manager-chip {
     background: transparent;
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
-    color: var(--t-text-secondary, var(--t-text-secondary));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
+    color: var(--t-text-dim, var(--t-text-dim));
     padding: 4px 10px;
     border-radius: 999px;
     font-size: 12px;
@@ -4314,18 +4467,18 @@ body.appearance-light .settings-section-select {
     transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 .theme-manager-chip:hover {
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.06));
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.06));
 }
 .theme-manager-chip.selected {
-    background: var(--t-accent-primary, var(--t-accent-primary));
-    color: var(--t-accent-onPrimary, #fff);
+    background: var(--t-accent, var(--t-accent));
+    color: var(--t-bg, #fff);
     border-color: transparent;
 }
 .theme-manager-group-title {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--t-text-tertiary, #999);
+    color: var(--t-text-dim, #999);
     margin: 14px 0 8px;
 }
 .theme-manager-grid {
@@ -4368,7 +4521,7 @@ body.appearance-light .settings-section-select {
 }
 .theme-manager-card-item {
     position: relative;
-    background: var(--t-surface-raised, rgba(255, 255, 255, 0.02));
+    background: var(--t-surface, rgba(255, 255, 255, 0.02));
     border: 1.5px solid transparent;
     border-radius: 10px;
     padding: 8px;
@@ -4381,11 +4534,11 @@ body.appearance-light .settings-section-select {
     min-height: 96px;
 }
 .theme-manager-card-item:hover {
-    border-color: var(--t-border-strong, rgba(255, 255, 255, 0.2));
+    border-color: var(--t-border, rgba(255, 255, 255, 0.2));
 }
 .theme-manager-card-item.selected {
-    border-color: var(--t-accent-primary, var(--t-accent-primary));
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.05));
+    border-color: var(--t-accent, var(--t-accent));
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.05));
 }
 .theme-manager-silhouette {
     display: inline-block;
@@ -4394,7 +4547,7 @@ body.appearance-light .settings-section-select {
 }
 .theme-manager-card-name {
     font-size: 12px;
-    color: var(--t-text-primary, var(--t-text-primary));
+    color: var(--t-text, var(--t-text));
     text-align: center;
     word-break: break-word;
     display: flex;
@@ -4406,9 +4559,9 @@ body.appearance-light .settings-section-select {
     position: absolute;
     top: 4px;
     left: 4px;
-    background: var(--star-bg, var(--t-surface-overlay, rgba(0, 0, 0, 0.28)));
+    background: var(--star-bg, var(--t-surface-alt, rgba(0, 0, 0, 0.28)));
     border: none;
-    color: var(--star-fg, var(--t-text-secondary, #ddd));
+    color: var(--star-fg, var(--t-text-dim, #ddd));
     font-size: 14px;
     line-height: 1;
     padding: 2px 5px;
@@ -4417,19 +4570,19 @@ body.appearance-light .settings-section-select {
     transition: color 0.12s, background 0.12s;
 }
 .theme-manager-star.active {
-    color: var(--star-active-fg, var(--t-accent-primary, #ffc857));
+    color: var(--star-active-fg, var(--t-accent, #ffc857));
 }
 .theme-manager-star:hover {
-    background: var(--star-bg-hover, var(--t-surface-sunken, rgba(0, 0, 0, 0.5)));
-    color: var(--star-active-fg, var(--t-accent-primary, #ffc857));
+    background: var(--star-bg-hover, var(--t-surface-alt, rgba(0, 0, 0, 0.5)));
+    color: var(--star-active-fg, var(--t-accent, #ffc857));
 }
 .theme-manager-kebab {
     position: absolute;
     top: 4px;
     right: 4px;
-    background: var(--kebab-bg, var(--t-surface-overlay, rgba(0, 0, 0, 0.28)));
+    background: var(--kebab-bg, var(--t-surface-alt, rgba(0, 0, 0, 0.28)));
     border: none;
-    color: var(--kebab-fg, var(--t-text-secondary, #ddd));
+    color: var(--kebab-fg, var(--t-text-dim, #ddd));
     font-size: 14px;
     line-height: 1;
     padding: 2px 8px;
@@ -4438,13 +4591,13 @@ body.appearance-light .settings-section-select {
     transition: background 0.12s, color 0.12s;
 }
 .theme-manager-kebab:hover {
-    background: var(--kebab-bg-hover, var(--t-surface-sunken, rgba(0, 0, 0, 0.5)));
-    color: var(--kebab-fg-hover, var(--t-text-primary, #fff));
+    background: var(--kebab-bg-hover, var(--t-surface-alt, rgba(0, 0, 0, 0.5)));
+    color: var(--kebab-fg-hover, var(--t-text, #fff));
 }
 .theme-manager-menu {
-    background: var(--t-surface-raised, #1e1f22);
-    color: var(--t-text-primary, var(--t-text-primary));
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    background: var(--t-surface, #1e1f22);
+    color: var(--t-text, var(--t-text));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
     border-radius: 8px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
     padding: 4px;
@@ -4467,20 +4620,20 @@ body.appearance-light .settings-section-select {
     transition: background 0.1s;
 }
 .theme-manager-menu-item:hover {
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.08));
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.08));
 }
 .theme-manager-empty {
     padding: 20px 0;
-    color: var(--t-text-tertiary, #888);
+    color: var(--t-text-dim, #888);
     font-size: 13px;
     text-align: center;
-    border: 1px dashed var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    border: 1px dashed var(--t-border, rgba(255, 255, 255, 0.12));
     border-radius: 8px;
 }
 .new-scheme-tile,
 .new-theme-tile {
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.04));
-    border: 2px dashed var(--t-border-strong, rgba(255, 255, 255, 0.18));
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.04));
+    border: 2px dashed var(--t-border, rgba(255, 255, 255, 0.18));
     justify-content: center;
     /* Extra space above so the create-new action sits apart from the list,
        rather than reading as another card in the grid. */
@@ -4489,13 +4642,13 @@ body.appearance-light .settings-section-select {
 .new-scheme-plus,
 .new-theme-plus {
     font-size: 18px;
-    color: var(--t-text-tertiary, #888);
+    color: var(--t-text-dim, #888);
     line-height: 1;
 }
 .new-scheme-label,
 .new-theme-label {
     font-size: 13px;
-    color: var(--t-text-secondary, var(--t-text-secondary));
+    color: var(--t-text-dim, var(--t-text-dim));
 }
 /* ── Theme / Scheme editor (right pane) ───────────────────────── */
 
@@ -4523,16 +4676,16 @@ body.appearance-light .settings-section-select {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--t-text-tertiary, #888);
+    color: var(--t-text-dim, #888);
     /* Match the input/select content inset (padding 10px + 1px border)
        so the label text aligns with the value text below it. */
     padding-left: 11px;
 }
 .theme-editor-input,
 .theme-editor-select {
-    background: var(--t-surface-base, var(--t-surface-raised));
-    color: var(--t-text-primary, var(--t-text-primary));
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.15));
+    background: var(--t-bg, var(--t-surface));
+    color: var(--t-text, var(--t-text));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.15));
     border-radius: 6px;
     padding: 6px 10px;
     font-size: 13px;
@@ -4558,9 +4711,9 @@ body.appearance-light .settings-section-select {
     gap: 8px;
     margin-bottom: 16px;
     padding: 12px;
-    background: var(--t-surface-raised, rgba(255, 255, 255, 0.02));
+    background: var(--t-surface, rgba(255, 255, 255, 0.02));
     border-radius: 8px;
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.06));
 }
 .theme-editor-section-row {
     display: grid;
@@ -4570,12 +4723,12 @@ body.appearance-light .settings-section-select {
 }
 .theme-editor-section-label {
     font-size: 12px;
-    color: var(--t-text-secondary, var(--t-text-secondary));
+    color: var(--t-text-dim, var(--t-text-dim));
 }
 .theme-editor-section-select {
-    background: var(--t-surface-base, var(--t-surface-raised));
-    color: var(--t-text-primary, var(--t-text-primary));
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    background: var(--t-bg, var(--t-surface));
+    color: var(--t-text, var(--t-text));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
     border-radius: 5px;
     padding: 4px 8px;
     font-size: 12px;
@@ -4590,9 +4743,9 @@ body.appearance-light .settings-section-select {
     align-items: center;
     gap: 10px;
     width: 100%;
-    background: var(--t-surface-base, var(--t-surface-raised));
-    color: var(--t-text-primary, var(--t-text-primary));
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    background: var(--t-bg, var(--t-surface));
+    color: var(--t-text, var(--t-text));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
     border-radius: 6px;
     padding: 5px 10px;
     font-family: inherit;
@@ -4602,7 +4755,7 @@ body.appearance-light .settings-section-select {
     transition: border-color 0.12s, background 0.12s;
 }
 .section-scheme-picker:hover:not(:disabled) {
-    border-color: var(--t-border-strong, rgba(255, 255, 255, 0.25));
+    border-color: var(--t-border, rgba(255, 255, 255, 0.25));
 }
 .section-scheme-picker:disabled {
     opacity: 0.55;
@@ -4617,7 +4770,7 @@ body.appearance-light .settings-section-select {
 }
 .section-scheme-picker-chevron {
     flex-shrink: 0;
-    color: var(--t-text-tertiary, #888);
+    color: var(--t-text-dim, #888);
     font-size: 10px;
     pointer-events: none;
 }
@@ -4636,10 +4789,10 @@ body.appearance-light .settings-section-select {
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 13px;
-    color: var(--t-text-primary, var(--t-text-primary));
+    color: var(--t-text, var(--t-text));
 }
 .section-scheme-label.muted {
-    color: var(--t-text-secondary, var(--t-text-secondary));
+    color: var(--t-text-dim, var(--t-text-dim));
     font-style: italic;
 }
 /* Popover menu — attached to document.body so z-index must beat
@@ -4649,8 +4802,8 @@ body.appearance-light .settings-section-select {
     z-index: 100000;
     max-height: 440px;
     overflow-y: auto;
-    background: var(--t-surface-raised, #1e1f22);
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    background: var(--t-surface, #1e1f22);
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
     border-radius: 8px;
     padding: 4px;
     box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
@@ -4661,7 +4814,7 @@ body.appearance-light .settings-section-select {
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--t-text-tertiary, #888);
+    color: var(--t-text-dim, #888);
     user-select: none;
 }
 .section-scheme-option {
@@ -4680,11 +4833,11 @@ body.appearance-light .settings-section-select {
     transition: background 0.1s, border-color 0.1s;
 }
 .section-scheme-option:hover {
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.06));
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.06));
 }
 .section-scheme-option.selected {
-    border-color: var(--t-accent-primary, var(--t-accent-primary));
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.05));
+    border-color: var(--t-accent, var(--t-accent));
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.05));
 }
 .section-scheme-option-content {
     display: flex;
@@ -4700,7 +4853,7 @@ body.appearance-light .settings-section-select {
     font-style: italic;
 }
 .pane-palette-default {
-    border-bottom: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.08));
+    border-bottom: 1px solid var(--t-border, rgba(255, 255, 255, 0.08));
     margin-bottom: 4px;
     padding-bottom: 6px;
 }
@@ -4712,9 +4865,9 @@ body.appearance-light .settings-section-select {
     align-items: center;
 }
 .theme-editor-btn {
-    background: var(--t-surface-raised, rgba(255, 255, 255, 0.04));
-    color: var(--t-text-primary, var(--t-text-primary));
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.15));
+    background: var(--t-surface, rgba(255, 255, 255, 0.04));
+    color: var(--t-text, var(--t-text));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.15));
     border-radius: 6px;
     padding: 6px 14px;
     font-size: 13px;
@@ -4722,7 +4875,7 @@ body.appearance-light .settings-section-select {
     transition: background 0.12s, border-color 0.12s, opacity 0.12s;
 }
 .theme-editor-btn:hover:not(:disabled):not(.is-disabled) {
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.08));
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.08));
 }
 .theme-editor-btn:disabled,
 .theme-editor-btn.is-disabled {
@@ -4732,12 +4885,12 @@ body.appearance-light .settings-section-select {
     pointer-events: none;
 }
 .theme-editor-btn.primary {
-    background: var(--t-accent-primary, var(--t-accent-primary));
-    color: var(--t-accent-onPrimary, #fff);
+    background: var(--t-accent, var(--t-accent));
+    color: var(--t-bg, #fff);
     border-color: transparent;
 }
 .theme-editor-btn.primary:hover:not(:disabled):not(.is-disabled) {
-    background: color-mix(in oklab, var(--t-accent-primary, var(--t-accent-primary)) 82%, white);
+    background: color-mix(in oklab, var(--t-accent, var(--t-accent)) 82%, white);
 }
 .theme-editor-btn.danger {
     color: var(--danger, #ff6b6b);
@@ -4748,7 +4901,7 @@ body.appearance-light .settings-section-select {
 }
 .theme-editor-hint {
     font-size: 12px;
-    color: var(--t-text-tertiary, #888);
+    color: var(--t-text-dim, #888);
     font-style: italic;
     flex-basis: 100%;
 }
@@ -4759,9 +4912,9 @@ body.appearance-light .settings-section-select {
     grid-template-columns: 1fr 1fr;
     gap: 10px 16px;
     padding: 12px;
-    background: var(--t-surface-raised, rgba(255, 255, 255, 0.02));
+    background: var(--t-surface, rgba(255, 255, 255, 0.02));
     border-radius: 8px;
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.06));
     margin-bottom: 16px;
 }
 .scheme-editor-fgbg-row {
@@ -4772,13 +4925,13 @@ body.appearance-light .settings-section-select {
 }
 .scheme-editor-fgbg-label {
     font-size: 12px;
-    color: var(--t-text-secondary, var(--t-text-secondary));
+    color: var(--t-text-dim, var(--t-text-dim));
 }
 .scheme-editor-fgbg-picker {
     width: 34px;
     height: 24px;
     border-radius: 4px;
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
     background: transparent;
     cursor: pointer;
 }
@@ -4793,7 +4946,7 @@ body.appearance-light .settings-section-select {
     font-size: 13px;
     font-weight: 600;
     margin-bottom: 8px;
-    color: var(--t-text-primary, var(--t-text-primary));
+    color: var(--t-text, var(--t-text));
 }
 .scheme-editor-overrides-grid {
     display: flex;
@@ -4802,8 +4955,8 @@ body.appearance-light .settings-section-select {
     max-height: 320px;
     overflow-y: auto;
     padding: 6px;
-    background: var(--t-surface-base, var(--t-surface-raised));
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.08));
+    background: var(--t-bg, var(--t-surface));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.08));
     border-radius: 6px;
 }
 .scheme-editor-overrides-head,
@@ -4829,15 +4982,15 @@ body.appearance-light .settings-section-select {
     margin-bottom: 10px;
 }
 .scheme-editor-overrides-head {
-    color: var(--t-text-tertiary, #888);
+    color: var(--t-text-dim, #888);
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    border-bottom: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.08));
+    border-bottom: 1px solid var(--t-border, rgba(255, 255, 255, 0.08));
     padding-bottom: 4px;
     margin-bottom: 4px;
 }
 .scheme-editor-overrides-label {
-    color: var(--t-text-secondary, var(--t-text-secondary));
+    color: var(--t-text-dim, var(--t-text-dim));
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 11px;
 }
@@ -4845,7 +4998,7 @@ body.appearance-light .settings-section-select {
     width: 100%;
     height: 22px;
     padding: 0;
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.15));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.15));
     border-radius: 3px;
     background: transparent;
     cursor: pointer;
@@ -4853,13 +5006,13 @@ body.appearance-light .settings-section-select {
 }
 /* Explicit-override marker: accent ring on pickers the user has set. */
 .scheme-editor-overrides-picker[data-set="1"] {
-    border-color: var(--t-accent-primary, var(--t-accent-primary));
-    box-shadow: 0 0 0 1px var(--t-accent-primary, var(--t-accent-primary));
+    border-color: var(--t-accent, var(--t-accent));
+    box-shadow: 0 0 0 1px var(--t-accent, var(--t-accent));
 }
 .scheme-editor-overrides-reset {
     background: transparent;
-    border: 1px solid var(--t-border-subtle, rgba(255, 255, 255, 0.12));
-    color: var(--t-text-tertiary, #888);
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
+    color: var(--t-text-dim, #888);
     border-radius: 4px;
     font-size: 14px;
     line-height: 1;
@@ -4870,8 +5023,8 @@ body.appearance-light .settings-section-select {
     justify-self: center;
 }
 .scheme-editor-overrides-reset:hover:not(:disabled) {
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.06));
-    color: var(--t-text-primary, var(--t-text-primary));
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.06));
+    color: var(--t-text, var(--t-text));
 }
 .scheme-editor-overrides-reset.is-inactive,
 .scheme-editor-overrides-reset:disabled {
@@ -4899,18 +5052,18 @@ body.appearance-light .settings-section-select {
    the strip. The 2px inset box-shadow stands in for the sliding
    `.tab-active-indicator` element that adorns visible tabs. */
 .tab-bar-menu-item.active {
-    color: var(--t-accent-primary);
+    color: var(--t-accent);
     font-weight: 700;
-    box-shadow: inset 0 0 0 2px var(--t-accent-primary);
+    box-shadow: inset 0 0 0 2px var(--t-accent);
 }
 .tab-bar-menu-item.active .tab-bar-menu-icon {
-    color: var(--t-accent-primary);
+    color: var(--t-accent);
 }
 .pane-menu-button {
     appearance: none;
     background: transparent;
     border: none;
-    color: var(--t-text-secondary);
+    color: var(--t-text-dim);
     font-family: inherit;
     font-size: 16px;
     line-height: 1;
@@ -4921,8 +5074,8 @@ body.appearance-light .settings-section-select {
     transition: background-color 120ms ease-in-out, color 120ms ease-in-out;
 }
 .pane-menu-button:hover {
-    background: var(--t-border-subtle);
-    color: var(--t-text-primary);
+    background: var(--t-border);
+    color: var(--t-text);
 }
 .pane-menu-list {
     display: none;
@@ -4930,8 +5083,8 @@ body.appearance-light .settings-section-select {
     top: calc(100% + 4px);
     right: 0;
     min-width: 180px;
-    background: var(--t-surface-raised);
-    border: 1px solid var(--t-border-subtle);
+    background: var(--t-surface);
+    border: 1px solid var(--t-border);
     border-radius: 6px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     padding: 4px;
@@ -4941,11 +5094,11 @@ body.appearance-light .settings-section-select {
     padding: 6px 10px;
     border-radius: 4px;
     font-size: 12px;
-    color: var(--t-text-primary);
+    color: var(--t-text);
     cursor: pointer;
 }
 .pane-menu-item:hover {
-    background: var(--t-border-subtle);
+    background: var(--t-border);
 }
 /* Submenu (e.g. "Set state" debug menu) */
 
@@ -4956,8 +5109,8 @@ body.appearance-light .settings-section-select {
     left: calc(100% + 4px);
     top: -4px;
     min-width: 140px;
-    background: var(--t-surface-raised);
-    border: 1px solid var(--t-border-subtle);
+    background: var(--t-surface);
+    border: 1px solid var(--t-border);
     border-radius: 6px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     padding: 4px;
@@ -4997,7 +5150,7 @@ body.appearance-light .settings-section-select {
 }
 .pane-flyout-label {
     font-size: 11px;
-    color: var(--t-text-secondary, #888);
+    color: var(--t-text-dim, #888);
     padding: 4px 4px 2px;
     user-select: none;
 }
@@ -5012,11 +5165,11 @@ body.appearance-light .settings-section-select {
 
 
 .layout-preview-primary {
-    fill: var(--t-active-accent, var(--t-accent-primary, #f4b869));
+    fill: var(--t-accent, var(--t-accent, #f4b869));
     stroke: none;
 }
 .layout-preview-other {
-    fill: var(--t-text-secondary, #888);
+    fill: var(--t-text-dim, #888);
     opacity: 0.5;
     stroke: none;
 }
@@ -5026,9 +5179,9 @@ body.appearance-light .settings-section-select {
 
 .dropdown-button {
     appearance: none;
-    background: var(--t-surface-raised);
-    border: 1px solid var(--t-border-subtle);
-    color: var(--t-text-primary);
+    background: var(--t-surface);
+    border: 1px solid var(--t-border);
+    color: var(--t-text);
     font: inherit;
     font-size: 12px;
     padding: 6px 10px;
@@ -5040,11 +5193,11 @@ body.appearance-light .settings-section-select {
     height: 32px;
 }
 .dropdown-button:hover {
-    border-color: var(--t-text-secondary);
+    border-color: var(--t-text-dim);
 }
 .dropdown-caret {
     font-size: 10px;
-    color: var(--t-text-secondary);
+    color: var(--t-text-dim);
 }
 .dropdown-label {
     font-weight: 500;
@@ -5065,8 +5218,8 @@ body.appearance-light .settings-section-select {
     top: calc(100% + 6px);
     right: 0;
     min-width: 260px;
-    background: var(--t-surface-raised);
-    border: 1px solid var(--t-border-subtle);
+    background: var(--t-surface);
+    border: 1px solid var(--t-border);
     border-radius: 8px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     padding: 4px;
@@ -5081,20 +5234,20 @@ body.appearance-light .settings-section-select {
     padding: 8px 10px;
     border-radius: 5px;
     cursor: pointer;
-    color: var(--t-text-primary);
+    color: var(--t-text);
     font-size: 12px;
 }
 .dropdown-item:hover {
-    background: var(--t-border-subtle);
+    background: var(--t-border);
 }
 .dropdown-item.selected {
-    background: var(--t-border-subtle);
+    background: var(--t-border);
 }
 .dropdown-item .name {
     flex: 1;
 }
 .dropdown-item .check {
-    color: var(--t-text-secondary);
+    color: var(--t-text-dim);
     font-size: 11px;
 }
 /* ---------- Empty-tab placeholder ----------------------------------- */
@@ -5107,9 +5260,9 @@ body.appearance-light .settings-section-select {
 }
 .empty-tab-button {
     appearance: none;
-    background: var(--t-surface-raised);
-    color: var(--t-text-primary);
-    border: 1px solid var(--t-border-subtle);
+    background: var(--t-surface);
+    color: var(--t-text);
+    border: 1px solid var(--t-border);
     border-radius: 8px;
     padding: 14px 28px;
     font-family: inherit;
@@ -5118,15 +5271,15 @@ body.appearance-light .settings-section-select {
     transition: background-color 120ms ease-in-out, border-color 120ms ease-in-out;
 }
 .empty-tab-button:hover {
-    background: var(--t-border-subtle);
-    border-color: var(--t-text-secondary);
+    background: var(--t-border);
+    border-color: var(--t-text-dim);
 }
 /* Picker shown inside a freshly-split (empty) pane until the user chooses a kind. */
 .pane-picker-btn {
     appearance: none;
-    background: var(--t-surface-raised, #252526);
-    color: var(--t-text-primary, #d4d4d4);
-    border: 1px solid var(--t-border-subtle, #333);
+    background: var(--t-surface, #252526);
+    color: var(--t-text, #d4d4d4);
+    border: 1px solid var(--t-border, #333);
     border-radius: 8px;
     padding: clamp(6px, 3cqi, 24px) clamp(8px, 4cqi, 28px);
     flex: 1 1 0;
@@ -5159,7 +5312,7 @@ body.appearance-light .settings-section-select {
     white-space: nowrap;
 }
 .pane-picker-btn:hover:not(.disabled) {
-    background: var(--t-surface-overlay, #2d2d30);
+    background: var(--t-surface-alt, #2d2d30);
     border-color: var(--accent, #0e639c);
 }
 .pane-picker-btn:active:not(.disabled) {
@@ -5181,10 +5334,10 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--t-text-primary, #d4d4d4);
+    color: var(--t-text, #d4d4d4);
 }
 .pane-picker-label {
-    color: var(--t-text-primary, #d4d4d4);
+    color: var(--t-text, #d4d4d4);
     font-weight: 500;
 }
 .md-list-header {
@@ -5192,8 +5345,8 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     align-items: center;
     gap: 8px;
     padding: 8px 10px;
-    border-bottom: 1px solid var(--t-border-subtle, #333);
-    color: var(--t-text-primary, #d4d4d4);
+    border-bottom: 1px solid var(--t-border, #333);
+    color: var(--t-text, #d4d4d4);
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -5207,8 +5360,8 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
 .md-list-auto {
     appearance: none;
     background: transparent;
-    border: 1px solid var(--t-border-subtle, #333);
-    color: var(--t-text-secondary, #888);
+    border: 1px solid var(--t-border, #333);
+    color: var(--t-text-dim, #888);
     font-size: 11px;
     text-transform: none;
     letter-spacing: normal;
@@ -5219,12 +5372,12 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     font-family: inherit;
 }
 .md-list-auto:hover {
-    color: var(--t-text-primary, #d4d4d4);
-    background: var(--t-surface-overlay, #2d2d30);
+    color: var(--t-text, #d4d4d4);
+    background: var(--t-surface-alt, #2d2d30);
 }
 .md-list-auto.active {
-    color: var(--t-accent-primary, #f4b869);
-    border-color: var(--t-accent-primary, #f4b869);
+    color: var(--t-accent, #f4b869);
+    border-color: var(--t-accent, #f4b869);
     background: rgba(244, 184, 105, 0.08);
 }
 .md-list-body {
@@ -5238,7 +5391,7 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     gap: 4px;
     padding: 5px 10px 5px 4px;
     cursor: pointer;
-    color: var(--t-text-secondary);
+    color: var(--t-text-dim);
     font-size: 13px;
     white-space: nowrap;
     overflow: hidden;
@@ -5253,7 +5406,7 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    color: var(--t-text-secondary);
+    color: var(--t-text-dim);
     opacity: 0.7;
     font-size: 10px;
     line-height: 1;
@@ -5262,19 +5415,19 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     visibility: hidden;
 }
 .md-list-chevron:hover {
-    color: var(--t-text-primary);
+    color: var(--t-text);
     opacity: 1;
 }
 .md-list-item:hover {
-    background: var(--t-border-subtle);
-    color: var(--t-text-primary);
+    background: var(--t-border);
+    color: var(--t-text);
 }
 .md-list-item.active {
     background: rgba(244, 184, 105, 0.08);
-    color: var(--t-accent-primary);
+    color: var(--t-accent);
 }
 .md-list-item.active .md-list-item-age {
-    color: var(--t-accent-primary);
+    color: var(--t-accent);
     opacity: 0.7;
 }
 .md-list-item-icon {
@@ -5296,14 +5449,14 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     text-align: left;
 }
 .md-list-item-age {
-    color: var(--t-text-secondary);
+    color: var(--t-text-dim);
     font-size: 11px;
     flex-shrink: 0;
     opacity: 0.8;
 }
 .md-list-empty {
     padding: 16px 12px;
-    color: var(--t-text-secondary, #888);
+    color: var(--t-text-dim, #888);
     font-size: 12px;
     text-align: center;
 }
@@ -5313,7 +5466,7 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     gap: 4px;
     padding: 6px 10px;
     cursor: pointer;
-    color: var(--t-text-primary);
+    color: var(--t-text);
     font-size: 12px;
     font-weight: 600;
     letter-spacing: 0.3px;
@@ -5322,7 +5475,7 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     transition: background 100ms ease;
 }
 .md-list-section-header:hover {
-    background: var(--t-border-subtle);
+    background: var(--t-border);
 }
 .md-list-section-title {
     flex: 1;
@@ -5342,7 +5495,7 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     flex-shrink: 0;
     transition: transform 150ms ease;
     font-size: 14px;
-    color: var(--t-text-secondary);
+    color: var(--t-text-dim);
 }
 .md-list-section-header.collapsed-tree .md-list-section-chevron {
     transform: rotate(-90deg);
@@ -5395,25 +5548,32 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     width: 100%;
     height: 40px;
     border-radius: 6px;
-    border: 1px dashed var(--t-border-default, var(--t-border-subtle, #555));
+    border: 1px dashed var(--t-border, var(--t-border, #555));
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--t-text-tertiary, #888);
+    color: var(--t-text-dim, #888);
     font-size: 11px;
 }
 
-/* ── Syntax highlighting tokens (migrated from termtastic) ── */
-/* Syntax highlighting */
-.hl-keyword { color: #569cd6; }
-.hl-string { color: #ce9178; }
-.hl-comment { color: #6a9955; font-style: italic; }
-.hl-number { color: #b5cea8; }
-.hl-tag { color: #569cd6; }
-.hl-attr { color: #9cdcfe; }
-.hl-type { color: #4ec9b0; }
-.hl-annotation { color: #dcdcaa; }
-.hl-punctuation { color: #808080; }
+/* ── Syntax highlighting tokens ──
+   Each highlighter class maps onto one of the theme's 8 dedicated syntax
+   tokens (--t-syn-*), so code colouring follows the active theme in both
+   dark and light mode. The hardcoded hexes are dark-theme fallbacks for the
+   (unthemed) base case. Mapping: tags read as keywords; attributes &
+   annotations read as functions; punctuation reads as operators. */
+.hl-keyword    { color: var(--t-syn-keyword,  #569cd6); }
+.hl-string     { color: var(--t-syn-string,   #ce9178); }
+.hl-number     { color: var(--t-syn-number,   #b5cea8); }
+.hl-comment    { color: var(--t-syn-comment,  #6a9955); font-style: italic; }
+.hl-function   { color: var(--t-syn-function, #dcdcaa); }
+.hl-type       { color: var(--t-syn-type,     #4ec9b0); }
+.hl-operator   { color: var(--t-syn-operator, #d4d4d4); }
+.hl-constant   { color: var(--t-syn-constant, #4fc1ff); }
+.hl-tag        { color: var(--t-syn-keyword,  #569cd6); }
+.hl-attr       { color: var(--t-syn-function, #9cdcfe); }
+.hl-annotation { color: var(--t-syn-function, #dcdcaa); }
+.hl-punctuation{ color: var(--t-syn-operator, #808080); }
 
 /* ── Hover menu (attachHoverMenu / buildNewWindowSplitButton) ──
    Popover revealed when the user hovers an anchor button (e.g. the
@@ -5428,8 +5588,8 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     flex-direction: column;
     min-width: 180px;
     padding: 4px 0;
-    background: var(--t-surface-base, #252526);
-    border: 1px solid var(--t-border-strong, var(--t-border-prominent, rgba(255, 255, 255, 0.45)));
+    background: var(--t-bg, #252526);
+    border: 1px solid var(--t-border, var(--t-border, rgba(255, 255, 255, 0.45)));
     border-radius: 6px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
     max-width: calc(100vw - 24px);
@@ -5444,15 +5604,15 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     padding: 6px 12px;
     background: transparent;
     border: 0;
-    color: var(--t-text-secondary, #b8b8b8);
+    color: var(--t-text-dim, #b8b8b8);
     cursor: pointer;
     font: inherit;
     text-align: left;
     transition: background 0.12s, color 0.12s;
 }
 .dt-hover-menu-item:hover {
-    background: var(--t-surface-overlay, rgba(255, 255, 255, 0.08));
-    color: var(--t-text-primary, #e6e6e6);
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.08));
+    color: var(--t-text, #e6e6e6);
 }
 .dt-hover-menu-icon {
     width: 18px;

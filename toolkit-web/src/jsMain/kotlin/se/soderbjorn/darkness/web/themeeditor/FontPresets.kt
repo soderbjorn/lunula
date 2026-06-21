@@ -13,9 +13,11 @@
  * Each preset declares a [FontPreset.kind]: `Mono` for fixed-width
  * presets (terminals, code panes) and `Proportional` for prose presets
  * (notegrow's editor, sidebar/topbar/tabbar chrome). The Settings
- * sidebar partitions the list at render time so the Monospaced section
- * shows only [FontKind.Mono] presets and the Proportional / Sidebar /
- * Tab bar sections show only [FontKind.Proportional] presets.
+ * sidebar uses [FontPreset.kind] to order each font row: the Monospaced
+ * section offers only [FontKind.Mono] presets, while the chrome sections
+ * (Proportional / Sidebar / Tab bar) list the proportional presets first
+ * and then the monospaced ones, so a user can pick a fixed-width face for
+ * chrome if they want.
  *
  * @see ThemeManagerHost.setMonoFontFamily
  * @see ThemeManagerHost.setProportionalFontFamily

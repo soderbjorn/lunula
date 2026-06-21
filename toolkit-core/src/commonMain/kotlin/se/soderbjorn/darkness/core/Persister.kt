@@ -83,8 +83,27 @@ object PersistKeys {
      */
     const val LAYOUT_STATE: String = "darkness.layoutState"
 
-    /** Serialized [ThemeSnapshot] (theme manager state — favourites, custom schemes). */
+    /**
+     * Legacy serialized theme-snapshot key. No longer written by the toolkit;
+     * retained only so the server can *synthesize* an approximate legacy blob
+     * under this key for pre-revamp mobile apps. New code uses [THEME_V2_CUSTOM]
+     * and [THEME_V2_SELECTION].
+     */
     const val THEME_SNAPSHOT: String = "darkness.themeSnapshot"
+
+    /**
+     * Serialized array of the user's custom [Theme] definitions. **Shared**
+     * across Darkness apps via the `themes.json` file (see [SHARED_THEMES_KEYS]).
+     */
+    const val THEME_V2_CUSTOM: String = "darkness.theme.v2.custom"
+
+    /**
+     * Serialized per-app theme selection: `{darkThemeName, lightThemeName,
+     * appearance}`. Each app remembers its own slot picks.
+     *
+     * @see ThemeSnapshotV2
+     */
+    const val THEME_V2_SELECTION: String = "darkness.theme.v2.selection"
 
     /**
      * Serialized sidebar UI state — currently the set of collapsed
