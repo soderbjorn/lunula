@@ -69,6 +69,54 @@ private val IS_MAC: Boolean = run {
 }
 
 /**
+ * Detect once whether we're running inside an Electron renderer (the
+ * desktop app) rather than a plain browser tab. Checks the user-agent
+ * `Electron` token first, then falls back to the Node `process.versions`
+ * bridge that Electron exposes to the renderer.
+ */
+private val IS_ELECTRON: Boolean = js(
+    """
+    (function() {
+        try {
+            var nav = (typeof navigator !== 'undefined') ? navigator : null;
+            var ua = (nav && nav.userAgent) || '';
+            if (ua.indexOf('Electron') !== -1) return true;
+            if (typeof process !== 'undefined' && process.versions && process.versions.electron) return true;
+        } catch (e) {}
+        return false;
+    })()
+    """
+) as Boolean
+
+/**
+ * `true` when running on a macOS-class platform (Mac, iPhone, iPad),
+ * detected from the user-agent.
+ *
+ * Drives the Cmd-vs-Ctrl split for platform-aware chords — e.g. the
+ * positional tab-switch keys ([StandardHotkeys.tabSwitchHotkey]) bind to
+ * Cmd on macOS and Ctrl elsewhere — and mirrors the glyph choice already
+ * made by [toChordLabel].
+ *
+ * @return `true` on macOS / iOS user-agents, `false` otherwise.
+ */
+fun isMacPlatform(): Boolean = IS_MAC
+
+/**
+ * `true` when running inside an Electron desktop renderer rather than a
+ * plain browser tab.
+ *
+ * Used to gate chords that a real browser reserves for itself: the OS /
+ * browser owns Cmd/Ctrl+`<digit>` for switching *browser* tabs and a
+ * page `keydown` can't reliably override it, so the toolkit only arms the
+ * positional tab-switch hotkeys in the desktop shell (see
+ * `installTabNavigationHotkeys` in `TabBar.kt`).
+ *
+ * @return `true` when an Electron runtime is detected, `false` in a
+ *   normal browser.
+ */
+fun isElectronPlatform(): Boolean = IS_ELECTRON
+
+/**
  * Returns a platform-formatted chord representation as a `List<String>`
  * of cap labels, suitable for direct use as a [HotkeyEntry.chord].
  *

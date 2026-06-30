@@ -42,6 +42,29 @@ data class HotkeyEntry(
 )
 
 /**
+ * Ready-made cheat-sheet row for the positional tab-switch shortcut the
+ * shell installs (Cmd/Ctrl+1..9, where 9 jumps to the last tab — see
+ * `StandardHotkeys.tabSwitchHotkey`).
+ *
+ * Apps add this to their "Windows & tabs" [HotkeyGroup] so the
+ * toolkit-owned chord is advertised with a consistent label across every
+ * darkness app, instead of each hand-writing the same row. The chord is
+ * a digit *range* (`1…9`) rather than a single key, so the label is built
+ * here rather than via [Hotkey.toChordLabel]; the modifier glyph follows
+ * the platform ([isMacPlatform]).
+ *
+ * The underlying behaviour is Electron-only (a browser owns this chord —
+ * see [isElectronPlatform]), so apps should include this row only when
+ * running in the desktop shell.
+ *
+ * @return the cheat-sheet entry describing the tab-switch chord.
+ */
+fun tabSwitchHotkeyEntry(): HotkeyEntry = HotkeyEntry(
+    label = "Switch to tab 1–9 (9 = last)",
+    chord = listOf(if (isMacPlatform()) "⌘" else "Ctrl", "1…9"),
+)
+
+/**
  * A titled group of [HotkeyEntry] rows, rendered as one section in the
  * modal. Groups appear in the order supplied to [HotkeysModalSpec].
  */

@@ -31,6 +31,7 @@ import org.w3c.dom.events.KeyboardEvent
 import se.soderbjorn.darkness.web.escapeHtmlForConfirm
 import se.soderbjorn.darkness.web.hotkey.HotkeyRegistry
 import se.soderbjorn.darkness.web.hotkey.StandardHotkeys
+import se.soderbjorn.darkness.web.hotkey.isElectronPlatform
 import se.soderbjorn.darkness.web.showConfirmDialog
 
 /**
@@ -280,6 +281,7 @@ fun renderTabBar(spec: TabBarSpec): HTMLElement {
 private fun installTabNavigationHotkeys(spec: TabBarSpec) {
     HotkeyRegistry.register(StandardHotkeys.NextTab) { cycleTab(spec, forward = true) }
     HotkeyRegistry.register(StandardHotkeys.PreviousTab) { cycleTab(spec, forward = false) }
+    installTabNumberHotkeys(spec)
 }
 
 private fun cycleTab(spec: TabBarSpec, forward: Boolean) {
@@ -294,6 +296,84 @@ private fun cycleTab(spec: TabBarSpec, forward: Boolean) {
     val target = visible[nextIdx].id
     if (target == spec.activeTabId) return
     spec.callbacks.onSelect(target)
+}
+
+/**
+ * Bind the positional "jump to tab N" chords (Cmd/Ctrl+1..9, where 9
+ * always selects the last tab — the Safari / Chrome / iTerm convention)
+ * against [spec].
+ *
+ * Like [installTabNavigationHotkeys], this re-registers on every
+ * [renderTabBar] so each chord closes over the latest spec
+ * ([HotkeyRegistry]'s replace-on-register semantics).
+ *
+ * Gated to the Electron desktop shell ([isElectronPlatform]): a real
+ * browser reserves Cmd/Ctrl+`<digit>` for switching *browser* tabs and a
+ * page `keydown` can't reliably override it, so arming the chord there
+ * would either fight the browser or silently lose — we leave it to the
+ * browser instead.
+ *
+ * @param spec the current tab-bar spec (its visible tabs and
+ *   [TabBarCallbacks.onSelect] are read each time a chord fires).
+ * @see resolveTabSwitchIndex
+ */
+private fun installTabNumberHotkeys(spec: TabBarSpec) {
+    if (!isElectronPlatform()) return
+    for (position in 1..9) {
+        HotkeyRegistry.register(StandardHotkeys.tabSwitchHotkey(position)) {
+            switchToTabByPosition(spec, position)
+        }
+    }
+}
+
+/**
+ * Resolve [digit] against the spec's *visible* (non-hidden) tabs and fire
+ * [TabBarCallbacks.onSelect] for the target — the action behind a
+ * Cmd/Ctrl+`<digit>` press.
+ *
+ * Mirrors [cycleTab]: hidden tabs are skipped so positions line up with
+ * what the user sees in the strip, and a press resolving to the already
+ * active tab is a no-op (avoids a redundant onSelect / server round-trip
+ * in source-mode hosts).
+ *
+ * @param spec the current tab-bar spec.
+ * @param digit the pressed number key, `1`..`9`.
+ */
+private fun switchToTabByPosition(spec: TabBarSpec, digit: Int) {
+    val visible = spec.tabs.filterNot { it.isHidden }
+    val index = resolveTabSwitchIndex(digit = digit, tabCount = visible.size) ?: return
+    val target = visible[index].id
+    if (target == spec.activeTabId) return
+    spec.callbacks.onSelect(target)
+}
+
+/**
+ * Pure mapping from a Cmd/Ctrl+`<digit>` shortcut to the tab index it
+ * should activate, kept free of any DOM / spec dependency so it can be
+ * unit-tested directly.
+ *
+ * Convention (matches Safari / Chrome / iTerm):
+ * - Digits `1`–`8` select the 1st–8th tab by position (zero-based index
+ *   `digit - 1`), or nothing if that position doesn't exist.
+ * - Digit `9` always selects the **last** tab, regardless of how many
+ *   tabs there are.
+ *
+ * Called by [switchToTabByPosition] against the live count of visible
+ * tabs.
+ *
+ * @param digit the pressed number key, expected in `1..9`.
+ * @param tabCount the number of (visible) tabs currently in the strip.
+ * @return the zero-based tab index to activate, or `null` when the
+ *   shortcut should be a no-op (no tabs, out-of-range position, or a
+ *   digit outside `1..9`).
+ */
+internal fun resolveTabSwitchIndex(digit: Int, tabCount: Int): Int? {
+    if (tabCount <= 0) return null
+    return when (digit) {
+        9 -> tabCount - 1
+        in 1..8 -> (digit - 1).takeIf { it < tabCount }
+        else -> null
+    }
 }
 
 /**
