@@ -125,7 +125,8 @@ internal data class PersistedPane(
  * running in.
  *
  * @property presetByTab per-tab active [LayoutPreset] (key form). Tabs
- *   without an entry start in [LayoutPreset.Custom].
+ *   without an entry start in [LayoutPreset.Auto] (see [controllerFor]) —
+ *   brand-new tabs tile automatically until the user picks another preset.
  * @property paneOrderByTab per-tab pane importance order, head = primary
  *   slot when a preset is applied. Mutated by focus / create / remove
  *   events fed to [LayoutController].
@@ -797,12 +798,23 @@ private class ShellState(
      * Called by [AppShellHandle.setThemeSnapshot].
      */
     fun syncThemeFromHost(snap: ThemeSnapshotV2) {
+        // The topbar appearance-cycle button's icon (sun / moon / half-disc) is
+        // painted only when the chrome is rebuilt by [rerender]. A slot/colour
+        // sync repaints `:root` in place and needs no rebuild, but an
+        // *appearance* change pushed from the host (e.g. another device toggled
+        // Auto/Dark/Light, or the host's own appearance state changed) would
+        // otherwise leave the button frozen on the old icon. Detect that and
+        // rerender so the icon tracks the live appearance — while colour-only
+        // syncs still paint in place, so an open theme editor / menu isn't torn
+        // down mid-interaction.
+        val appearanceChanged = this.snapshot.appearance != snap.appearance
         this.snapshot = snap
         val docEl = document.documentElement as? HTMLElement ?: return
         val isDark = isDarkActive(snap.appearance)
         applyTheme(docEl, snap.resolve(isDark), isDark)
         applyHostFontVars()
         applyCustomTitleBar()
+        if (appearanceChanged) rerender()
     }
 
     /**
@@ -2537,7 +2549,15 @@ private class ShellState(
     private fun controllerFor(tabId: String): LayoutController =
         layoutControllers.getOrPut(tabId) {
             LayoutController(
-                initialPreset = LayoutPreset.Custom,
+                // Brand-new tabs default to Auto so panes tile themselves as
+                // they are added/removed without the user picking a preset
+                // from the dropdown. Restored tabs are unaffected: their
+                // controller is pre-seeded with the persisted preset (including
+                // "custom") by [applyPersistedLayoutState] before the first
+                // snapshot lands, so hand-placed geometry never re-tiles on
+                // reload. Only tabs the persisted state has never heard of —
+                // i.e. freshly created ones — fall through to this default.
+                initialPreset = LayoutPreset.Auto,
                 grid = DEFAULT_LAYOUT_GRID,
                 onChange = { persistLayoutState(); rerender() },
             )
