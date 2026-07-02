@@ -2171,7 +2171,13 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: background-color 100ms ease-in-out;
 }
 .dt-pane-menu-item:hover:not(:disabled) {
-    background: var(--t-surface-alt, rgba(255, 255, 255, 0.08));
+    /* The menu surface is itself `--t-surface-alt`, so a hover fill of the
+       same token is invisible (the whole menu reads "dead"). Mix a little
+       text colour into the surface instead: this lightens on dark themes
+       and darkens on light ones, staying visibly distinct from the surface
+       whatever the theme. Fallback kicks in only when `--t-surface-alt` is
+       unset. */
+    background: color-mix(in srgb, var(--t-text, #e6e6e6) 10%, var(--t-surface-alt, #2a2a2a));
 }
 .dt-pane-menu-item:disabled {
     opacity: 0.45;
@@ -2238,9 +2244,11 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 .dt-pane-menu-item-chevron svg {
     display: block;
 }
-/* Keep the row visually "on" while its flyout is open, mirroring hover. */
+/* Keep the row visually "on" while its flyout is open, mirroring hover.
+   Same reasoning as `.dt-pane-menu-item:hover` above — a plain
+   `--t-surface-alt` fill would vanish into the menu surface. */
 .dt-pane-menu-item.dt-pane-menu-item-has-submenu[aria-expanded="true"] {
-    background: var(--t-surface-alt, rgba(255, 255, 255, 0.08));
+    background: color-mix(in srgb, var(--t-text, #e6e6e6) 10%, var(--t-surface-alt, #2a2a2a));
 }
 
 /* ── Confirm dialog ───────────────────────────────────────── */
