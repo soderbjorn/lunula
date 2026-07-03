@@ -40,12 +40,15 @@ import se.soderbjorn.darkness.core.Theme
  * @property lightThemeName name of the theme bound to the light slot.
  * @property appearance     the user's appearance preference (Auto/Dark/Light).
  * @property customThemes   user-saved custom themes (order preserved).
+ * @property favorites      names of the user's starred / favorite themes.
  */
 class DefaultThemeManagerState(
     var darkThemeName: String = DEFAULT_DARK_THEME,
     var lightThemeName: String = DEFAULT_LIGHT_THEME,
     var appearance: Appearance = Appearance.Auto,
     val customThemes: MutableList<Theme> = mutableListOf(),
+    /** Names of the user's starred / favorite themes (order preserved). */
+    val favorites: MutableList<String> = mutableListOf(),
     /** Monospaced main-content font family override (terminals, code). */
     var monoFontFamily: String? = null,
     /** Monospaced main-content font size override (px). */
@@ -89,6 +92,7 @@ open class DefaultThemeManagerHost(
     override val lightThemeName: String get() = state.lightThemeName
     override val appearance: Appearance get() = state.appearance
     override val customThemes: List<Theme> get() = state.customThemes
+    override val favoriteThemeNames: Set<String> get() = state.favorites.toSet()
 
     override val monoFontFamily: String? get() = state.monoFontFamily
     override val monoFontSizePx: Int? get() = state.monoFontSizePx
@@ -113,8 +117,14 @@ open class DefaultThemeManagerHost(
 
     override fun deleteCustomTheme(name: String) {
         state.customThemes.removeAll { it.name == name }
+        state.favorites.removeAll { it == name }
         if (state.darkThemeName == name) state.darkThemeName = DEFAULT_DARK_THEME
         if (state.lightThemeName == name) state.lightThemeName = DEFAULT_LIGHT_THEME
+        onChange()
+    }
+
+    override fun toggleFavorite(name: String) {
+        if (!state.favorites.remove(name)) state.favorites.add(name)
         onChange()
     }
 
@@ -142,6 +152,7 @@ fun DefaultThemeManagerState.toSnapshotV2(): se.soderbjorn.darkness.core.ThemeSn
         lightThemeName = lightThemeName,
         customThemes = customThemes.toList(),
         appearance = appearance,
+        favorites = favorites.toList(),
     )
 
 /**
@@ -156,4 +167,6 @@ fun DefaultThemeManagerState.applySnapshotV2(snapshot: se.soderbjorn.darkness.co
     appearance = snapshot.appearance
     customThemes.clear()
     customThemes.addAll(snapshot.customThemes)
+    favorites.clear()
+    favorites.addAll(snapshot.favorites)
 }

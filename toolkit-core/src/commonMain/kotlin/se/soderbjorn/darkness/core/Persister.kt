@@ -106,6 +106,20 @@ object PersistKeys {
     const val THEME_V2_SELECTION: String = "darkness.theme.v2.selection"
 
     /**
+     * Serialized JSON array of theme *names* the user has starred / favorited
+     * (e.g. `["Solarized Dark","Ayu Light"]`). Per-app (not shared via
+     * `themes.json`): each app remembers its own starred set. A missing key
+     * means "nothing starred". Names may reference either built-in or custom
+     * themes; unknown names are simply ignored at render time.
+     *
+     * The theme picker (web/Mac + mobile) reads this to hoist starred themes to
+     * the top of the single theme list and to draw the filled/empty star.
+     *
+     * @see ThemeSnapshotV2.favorites
+     */
+    const val THEME_V2_FAVORITES: String = "darkness.theme.v2.favorites"
+
+    /**
      * Serialized sidebar UI state — currently the set of collapsed
      * section ids in the default tabs→panes tree. JSON array of string
      * ids; missing key means every section is open.

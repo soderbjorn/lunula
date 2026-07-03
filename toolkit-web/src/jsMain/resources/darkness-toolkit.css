@@ -1611,18 +1611,25 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     color: var(--t-text-bright, var(--t-text-dim, #b0b0b0));
     /* The titlebar shares the pane's `--t-surface` (it reads as part of the
        pane, like the Theme Studio reference) with a single `--t-border`
-       divider below it — no darker band. */
+       divider below it — no darker band. The accent-soft fill is applied
+       ONLY to the focused pane's header (see `.dt-pane.dt-pane-focused
+       .dt-pane-header` below, issue #104); inactive panes keep this plain
+       surface tone. */
     background: var(--t-surface, #1e1e1e);
     border-bottom: 1px solid var(--t-border, rgba(255, 255, 255, 0.1));
 }
-/* Focused-pane titlebar. In the revamped theme system the focused pane is
-   indicated by the accent outline + glow on the pane itself (see
-   `.dt-pane.dt-pane-focused` above), NOT by a coloured titlebar band. The
-   header therefore keeps the same `--t-surface-alt` tone as an inactive pane;
-   only the title text is lifted to `--t-text-bright` for prominence. (The old
-   per-theme "active chrome" accent band was removed with the section model.) */
+/* Focused-pane titlebar. The focused pane is indicated by the accent outline +
+   glow on the pane itself (see `.dt-pane.dt-pane-focused` above) AND by an
+   accent-soft fill on its titlebar — the same fill used for an active tab
+   (`.dt-tab.dt-selected`) and an active sidebar row (`.dt-sidebar-row.dt-active`),
+   so the focused pane's header matches the app's active-selection treatment
+   (issue #104). Falls through `--t-surface-alt` then a dark neutral for hosts
+   that define neither token. Inactive panes keep the plain `--t-surface` tone
+   from `.dt-pane-header` above; only the focused pane gets the accent band. The
+   title text is also lifted to `--t-text-bright` for prominence. */
 .dt-pane.dt-pane-focused .dt-pane-header {
     color: var(--t-text-bright, var(--t-text-dim, #b0b0b0));
+    background: var(--t-accent-soft, var(--t-surface-alt, var(--t-surface, #1e1e1e)));
 }
 .dt-pane.dt-pane-focused .dt-pane-header-icon,
 .dt-pane.dt-pane-focused .dt-pane-title {
@@ -2412,6 +2419,17 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 .dt-theme-manager.dt-open {
     opacity: 1;
 }
+/* Applied by [ThemeManager.showThemeManager]'s orphan-recovery branch for a
+   single frame while the panel is re-appended after a shell rerender detached
+   it (each terminal-output tick). Re-inserting a detached subtree replays CSS
+   transitions on its descendants, which made the hover-revealed card star/arrow
+   buttons flash on macOS (issue #106 follow-up). Killing transitions across the
+   reattach lets those elements snap to their current state instead of animating;
+   the class is removed on the next frame so genuine hover fades still play. */
+.dt-theme-manager.dt-no-transitions,
+.dt-theme-manager.dt-no-transitions * {
+    transition: none !important;
+}
 .dt-theme-manager-close {
     position: absolute;
     top: 14px;
@@ -2644,6 +2662,40 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     color: var(--t-bg, #0b0b0b);
     background: var(--t-accent, #4f8cff);
     border-color: var(--t-accent, #4f8cff);
+}
+/* Favorite star: sits just left of the open-editor arrow. Like the arrow it is
+   hidden until the card is hovered (or the button is focused) — but a starred
+   theme keeps its star visible at all times, so the user can spot favorites
+   without hovering. Hollow (☆) when not starred, filled + accent when starred. */
+.dt-theme-card-star {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--t-text-dim, #9aa0a8);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 110ms ease, color 110ms ease, background 110ms ease, border-color 110ms ease;
+}
+.dt-theme-card:hover .dt-theme-card-star,
+.dt-theme-card-star:focus-visible,
+.dt-theme-card-favorite .dt-theme-card-star {
+    opacity: 1;
+}
+.dt-theme-card-star-on {
+    color: var(--t-accent, #4f8cff);
+}
+.dt-theme-card-star:hover {
+    color: var(--t-accent, #4f8cff);
+    background: var(--t-accent-soft, rgba(79, 140, 255, 0.15));
 }
 /* The thumbnail is the realistic `.dt-config-silhouette` (tab strip + sidebar +
    two panes), sized by aspect-ratio so it stays proportional as the grid column

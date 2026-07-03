@@ -1254,6 +1254,18 @@ private class ShellState(
         // leaves no visible affordance and the only way back is the
         // topbar's sidebar-toggle button — which the user reasonably
         // expected (and previously had) the drag handle to also provide.
+        //
+        // Preserve the tab/pane tree's scroll position across the rebuild.
+        // rerender() fires on state changes unrelated to the sidebar (in
+        // termtastic every chunk of terminal output pushes a snapshot), and
+        // each pass replaces the `.dt-sidebar-content` scroll container with a
+        // freshly-built element — which would otherwise snap the list of
+        // session windows back to the top on every output tick (issue #106).
+        // Capture the old offset before the slot is cleared, then reapply it to
+        // the rebuilt content wrapper (same tree structure → same scrollHeight,
+        // so the offset stays valid).
+        val prevLeftScrollTop =
+            (leftSlot.querySelector(".dt-sidebar-content") as? HTMLElement)?.scrollTop
         leftSlot.innerHTML = ""
         val sidebarEl = leftSidebarController.mountSidebarOrPlaceholder(
             spec = SidebarSpec(
@@ -1285,6 +1297,12 @@ private class ShellState(
             requestRebuild = ::rerender,
         )
         leftSlot.appendChild(sidebarEl)
+        // Reapply the pre-rebuild scroll offset now that the new content
+        // wrapper is attached and laid out (see the capture above, issue #106).
+        if (prevLeftScrollTop != null) {
+            (sidebarEl.querySelector(".dt-sidebar-content") as? HTMLElement)
+                ?.let { it.scrollTop = prevLeftScrollTop }
+        }
 
         // Right sidebar — either the theme manager OR the settings
         // sidebar. Mutual exclusion is enforced at the topbar-button

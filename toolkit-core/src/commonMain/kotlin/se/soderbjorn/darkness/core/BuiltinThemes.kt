@@ -315,3 +315,40 @@ fun allThemes(custom: List<Theme>): List<Theme> {
     for (c in custom) if (c.name !in builtinNames) merged.add(c)
     return merged
 }
+
+/**
+ * Orders a theme catalog for the single-list theme picker (post issue #107,
+ * which dropped the separate "Dark" / "Light" section headings). The result is
+ * one flat list bucketed in this order:
+ *
+ *   1. starred dark themes
+ *   2. starred light themes
+ *   3. unstarred dark themes
+ *   4. unstarred light themes
+ *
+ * Within each bucket the input order is preserved (the sort is stable), so the
+ * built-in display order and any custom-theme append order carry through.
+ *
+ * ### Callers
+ * Shared by every platform's picker so they agree on ordering: the web/Mac
+ * Theme Manager (`renderThemeList`), the Android `AppearanceSheet`, and the iOS
+ * `AppearanceViewModel`.
+ *
+ * @param themes    the full pickable catalog (typically [allThemes]).
+ * @param favorites the set of starred theme names (see [ThemeSnapshotV2.favorites]).
+ * @return the themes in single-list picker order.
+ * @see allThemes
+ */
+fun orderThemesForPicker(themes: List<Theme>, favorites: Set<String>): List<Theme> {
+    fun bucket(t: Theme): Int {
+        val starred = t.name in favorites
+        val dark = t.group == ThemeGroup.Dark
+        return when {
+            starred && dark -> 0
+            starred && !dark -> 1
+            !starred && dark -> 2
+            else -> 3
+        }
+    }
+    return themes.sortedBy { bucket(it) }
+}

@@ -8,23 +8,26 @@
  *  - [refreshThemeManager] — repaint when upstream state changes.
  *
  * This file owns the panel chrome (header, Escape handling) and the shared
- * module state, then renders all themes as a reflowing thumbnail grid grouped
- * into "Dark" and "Light" sections. Each card shows the theme name above its
- * thumbnail; clicking the card assigns the theme to the active slot, and a
- * small arrow (revealed on hover) opens the theme's editor — which holds the
- * token swatches plus the Clone and Delete actions. Colour-scheme tabs,
- * favorites, and per-pane sections are gone; the editor view is the flat
- * 20-token [renderThemeColorEditor].
+ * module state, then renders all themes as a single reflowing thumbnail grid —
+ * no "Dark"/"Light" section headings (issue #107). The list is ordered starred
+ * dark → starred light → unstarred dark → unstarred light (see
+ * [se.soderbjorn.darkness.core.orderThemesForPicker]). Each card shows the theme
+ * name above its thumbnail; clicking the card assigns the theme to the active
+ * slot. On hover the card reveals two controls in its top-right corner: a star
+ * (favorite / unfavorite, synced via the host) and, to its right, a small arrow
+ * that opens the theme's editor — which holds the token swatches plus the Clone
+ * and Delete actions. Colour-scheme tabs and per-pane sections are gone; the
+ * editor view is the flat 20-token [renderThemeColorEditor].
  *
  * @see ThemeManagerHost
  */
 package se.soderbjorn.darkness.web.themeeditor
 
 import se.soderbjorn.darkness.core.Theme
-import se.soderbjorn.darkness.core.ThemeGroup
 import se.soderbjorn.darkness.core.allThemes
 import se.soderbjorn.darkness.core.argbToCss
 import se.soderbjorn.darkness.core.builtinTheme
+import se.soderbjorn.darkness.core.orderThemesForPicker
 import se.soderbjorn.darkness.web.isDarkActive
 
 import kotlinx.browser.document
@@ -56,6 +59,23 @@ internal fun themeManagerHost(): ThemeManagerHost = host
 
 /** Callback invoked after mutations to refresh the manager UI, if open. */
 private var themeManagerRerender: (() -> Unit)? = null
+
+/**
+ * Last known scroll offset of the theme-manager body (`.dt-theme-manager-body`).
+ *
+ * The app shell rerenders on state changes unrelated to the theme manager —
+ * notably, in termtastic every chunk of terminal output pushes a tab-source
+ * snapshot that runs the shell's `rerender()`, which clears the right-sidebar
+ * slot (`innerHTML = ""`) and then re-appends this *same* preserved panel
+ * element (see [showThemeManager]'s orphan-recovery branch). Detaching a
+ * scroll container from the DOM zeroes its `scrollTop`, so without this memory
+ * the theme list snapped back to the top on every output tick (issue #106).
+ *
+ * A `scroll` listener installed on the body in [showThemeManager] keeps this
+ * value current; the re-append branch restores it once the panel is back in
+ * the laid-out document.
+ */
+private var themeManagerBodyScrollTop: Double = 0.0
 
 /** Drill-down view state for the manager. */
 private enum class ManagerView { List, Editor }
@@ -112,7 +132,38 @@ fun showThemeManager(
     host = hostArg
     themeManagerPanel?.let { existing ->
         if (document.contains(existing)) return
+        // Re-inserting a detached subtree makes the browser replay every CSS
+        // transition on its descendants. The only transitioned elements here
+        // are the hover-revealed per-card controls — the favorite star
+        // (`.dt-theme-card-star`) and the open-editor arrow
+        // (`.dt-theme-card-open`), which fade in via an `opacity` transition on
+        // `.dt-theme-card:hover`. So on every output-driven shell rerender (each
+        // one detaches + re-appends this panel) those two buttons visibly
+        // flashed on macOS (issue #106 follow-up). Suppress transitions across
+        // the reattach: add `dt-no-transitions` (kills them via CSS), append,
+        // force a synchronous reflow so the transition-free computed style is
+        // committed, then drop the class on the next frame. The hovered button
+        // snaps to its current opacity with no animation, and re-enabling
+        // transitions afterwards causes no style change — so genuine hover
+        // fades still animate on real pointer moves.
+        existing.classList.add("dt-no-transitions")
         mountInto.appendChild(existing)
+        // Force layout/style flush so `dt-no-transitions` takes effect for this
+        // reattach before we re-enable transitions below.
+        existing.getBoundingClientRect()
+        // Re-appending a previously-detached scroll container resets its
+        // scrollTop to 0. This branch runs when the shell's rerender cleared
+        // the right-sidebar slot (`innerHTML = ""`) and orphaned this panel —
+        // in termtastic that fires on every chunk of terminal output. Restore
+        // the user's scroll offset once the panel is back in the laid-out
+        // document so the theme list no longer jumps to the top (issue #106).
+        // Deferred a frame because on the shell's re-mount path `mountInto` is
+        // not itself attached yet when this runs.
+        val body = existing.querySelector(".dt-theme-manager-body") as? HTMLElement
+        kotlinx.browser.window.requestAnimationFrame {
+            if (body != null) body.scrollTop = themeManagerBodyScrollTop
+            existing.classList.remove("dt-no-transitions")
+        }
         return
     }
 
@@ -144,6 +195,14 @@ fun showThemeManager(
     val body = document.createElement("div") as HTMLElement
     body.className = "dt-theme-manager-body"
     panel.appendChild(body)
+
+    // Remember the body's scroll offset as the user scrolls, so a later shell
+    // rerender (which detaches and re-appends this panel — see
+    // [themeManagerBodyScrollTop]) can restore it instead of snapping the theme
+    // list back to the top on unrelated state changes such as terminal output
+    // (issue #106). Reset to 0 here because this is a fresh panel build.
+    themeManagerBodyScrollTop = 0.0
+    body.addEventListener("scroll", { themeManagerBodyScrollTop = body.scrollTop })
 
     // ── State ──
     var view = if (focusTheme != null && builtinTheme(focusTheme) == null) {
@@ -219,6 +278,47 @@ fun showThemeManager(
     themeManagerPanel = panel
 
     kotlinx.browser.window.requestAnimationFrame { panel.classList.add("dt-open") }
+
+    // Scroll the currently-assigned theme into view the first time the picker
+    // opens, so the active theme is visible instead of the list always starting
+    // at the top (issue #105). Done only here — on the fresh panel build — and
+    // never from [renderAll]/rerenders, so it doesn't fight the scroll-offset
+    // preservation that keeps the user's place across output-driven shell
+    // rerenders (issue #106). Only meaningful in the list view; the editor view
+    // (opened via the clone flow's `focusTheme`) has nothing to centre.
+    if (view == ManagerView.List) {
+        kotlinx.browser.window.requestAnimationFrame { scrollActiveThemeIntoView(body) }
+    }
+}
+
+/**
+ * Scrolls the theme-manager [body] so the currently-assigned theme card
+ * (`.dt-theme-card-assigned`) is vertically centred in view.
+ *
+ * Called once from [showThemeManager] right after the panel is first mounted
+ * (issue #105), so opening the picker reveals the active theme rather than
+ * always starting at the top of the list. Deliberately not called from
+ * rerenders, so it does not fight the scroll-offset preservation that keeps the
+ * user's place across output-driven shell rerenders (issue #106).
+ *
+ * No-op when no card is assigned (e.g. the active theme is not in the catalog)
+ * or when the body has no overflow to scroll. Also updates
+ * [themeManagerBodyScrollTop] so the first #106 restore lands on the centred
+ * position rather than snapping back to the top.
+ *
+ * @param body the `.dt-theme-manager-body` scroll container.
+ */
+private fun scrollActiveThemeIntoView(body: HTMLElement) {
+    val card = body.querySelector(".dt-theme-card-assigned") as? HTMLElement ?: return
+    val bodyRect = body.getBoundingClientRect()
+    val cardRect = card.getBoundingClientRect()
+    // Card's top relative to the body's current scroll position, shifted up by
+    // half the leftover vertical space so the card lands centred.
+    val target = body.scrollTop + (cardRect.top - bodyRect.top) -
+        (bodyRect.height - cardRect.height) / 2.0
+    val max = (body.scrollHeight - body.clientHeight).toDouble().coerceAtLeast(0.0)
+    body.scrollTop = target.coerceIn(0.0, max)
+    themeManagerBodyScrollTop = body.scrollTop
 }
 
 /**
@@ -236,11 +336,13 @@ internal fun pokeManager() {
 }
 
 /**
- * Renders the theme catalog into [container] as a reflowing thumbnail grid: a
- * "Dark" group (themes whose [ThemeGroup] is `Dark`) and a "Light" group, each
- * card built by [renderThemeCard]. The grid packs as many thumbnails per row as
- * the (resizable) sidebar width allows. The appearance (Auto/Dark/Light) is
- * chosen from the app's toolbar, not here.
+ * Renders the theme catalog into [container] as a single reflowing thumbnail
+ * grid — one flat list with no "Dark"/"Light" section headings (issue #107).
+ * The themes are ordered starred dark → starred light → unstarred dark →
+ * unstarred light by [orderThemesForPicker]; each card is built by
+ * [renderThemeCard]. The grid packs as many thumbnails per row as the
+ * (resizable) sidebar width allows. The appearance (Auto/Dark/Light) is chosen
+ * from the app's toolbar, not here.
  *
  * @param container the body element to fill.
  * @param onOpen    invoked with a theme's name and a read-only flag when its
@@ -248,33 +350,27 @@ internal fun pokeManager() {
  *   the caller switches to the editor view.
  */
 private fun renderThemeList(container: HTMLElement, onOpen: (String, Boolean) -> Unit) {
-    val all = allThemes(host.customThemes)
-    fun section(label: String, group: ThemeGroup) {
-        val themes = all.filter { it.group == group }
-        if (themes.isEmpty()) return
-        val heading = document.createElement("h3") as HTMLElement
-        heading.className = "dt-theme-group-heading"
-        heading.textContent = label
-        container.appendChild(heading)
-        val list = document.createElement("div") as HTMLElement
-        list.className = "dt-theme-list"
-        for (theme in themes) list.appendChild(renderThemeCard(theme, onOpen))
-        container.appendChild(list)
-    }
-    section("Dark", ThemeGroup.Dark)
-    section("Light", ThemeGroup.Light)
+    val ordered = orderThemesForPicker(allThemes(host.customThemes), host.favoriteThemeNames)
+    val list = document.createElement("div") as HTMLElement
+    list.className = "dt-theme-list"
+    for (theme in ordered) list.appendChild(renderThemeCard(theme, onOpen))
+    container.appendChild(list)
 }
 
 /**
- * Builds one theme card: the name plus a small "open editor" arrow above a
- * mini-window thumbnail. Clicking the card body assigns the theme to the slot
- * for the currently-active appearance (dark mode → dark slot, light mode →
- * light slot); the assigned theme is highlighted via `dt-theme-card-assigned`.
+ * Builds one theme card: the name plus two hover-revealed top-right controls (a
+ * favorite star and an "open editor" arrow) above a mini-window thumbnail.
+ * Clicking the card body assigns the theme to the slot for the currently-active
+ * appearance (dark mode → dark slot, light mode → light slot); the assigned
+ * theme is highlighted via `dt-theme-card-assigned`.
  *
- * The arrow opens the theme's editor view ([onOpen]) — read-only for built-in
- * (default) themes, editable for custom ones. Every other per-theme action
- * (Clone, Delete) lives inside that editor, so the card stays compact and the
- * grid can pack many thumbnails per row.
+ * The star toggles the theme's favorite state ([ThemeManagerHost.toggleFavorite])
+ * — filled when starred, hollow otherwise — and is always visible while starred
+ * (so the user can see which themes are favorites without hovering). The arrow
+ * opens the theme's editor view ([onOpen]) — read-only for built-in (default)
+ * themes, editable for custom ones. Every other per-theme action (Clone, Delete)
+ * lives inside that editor, so the card stays compact and the grid can pack many
+ * thumbnails per row.
  *
  * @param theme  the theme to render.
  * @param onOpen invoked with the theme name and a read-only flag when the
@@ -283,6 +379,7 @@ private fun renderThemeList(container: HTMLElement, onOpen: (String, Boolean) ->
  */
 private fun renderThemeCard(theme: Theme, onOpen: (String, Boolean) -> Unit): HTMLElement {
     val isCustom = builtinTheme(theme.name) == null
+    val isFavorite = theme.name in host.favoriteThemeNames
     // The slot a click fills is whichever mode is *currently active* (the
     // appearance preference, or the OS when Auto) — not the theme's own group.
     // So clicking any theme while in light mode sets the light slot, etc.
@@ -291,7 +388,9 @@ private fun renderThemeCard(theme: Theme, onOpen: (String, Boolean) -> Unit): HT
         else host.lightThemeName == theme.name
 
     val card = document.createElement("div") as HTMLElement
-    card.className = "dt-theme-card" + if (assigned) " dt-theme-card-assigned" else ""
+    card.className = "dt-theme-card" +
+        (if (assigned) " dt-theme-card-assigned" else "") +
+        (if (isFavorite) " dt-theme-card-favorite" else "")
     card.setAttribute("role", "button")
     card.title = if (activeIsDark) "Use as the dark-mode theme"
         else "Use as the light-mode theme"
@@ -310,6 +409,21 @@ private fun renderThemeCard(theme: Theme, onOpen: (String, Boolean) -> Unit): HT
     nameEl.textContent = theme.name
     nameArea.appendChild(nameEl)
     titleRow.appendChild(nameArea)
+
+    // Favorite star, sitting just to the left of the open-editor arrow. Filled
+    // (★) when starred, hollow (☆) otherwise. Toggling re-sorts the list, so we
+    // poke the manager to repaint after the host persists the change.
+    val starBtn = document.createElement("button") as HTMLElement
+    starBtn.className = "dt-theme-card-star" + if (isFavorite) " dt-theme-card-star-on" else ""
+    starBtn.innerHTML = if (isFavorite) "&#9733;" else "&#9734;"
+    starBtn.title = if (isFavorite) "Unstar theme" else "Star theme"
+    starBtn.setAttribute("aria-pressed", isFavorite.toString())
+    starBtn.addEventListener("click", { ev: Event ->
+        ev.stopPropagation()
+        host.toggleFavorite(theme.name)
+        pokeManager()
+    })
+    titleRow.appendChild(starBtn)
 
     val openBtn = document.createElement("button") as HTMLElement
     openBtn.className = "dt-theme-card-open"

@@ -42,6 +42,15 @@ interface ThemeManagerHost {
     /** User-defined custom themes (named [Theme]s). */
     val customThemes: List<Theme>
 
+    /**
+     * Names of the themes the user has starred / favorited. The manager hoists
+     * these to the top of its single theme list and draws a filled star on
+     * their cards. Defaults to empty for hosts that don't support favorites.
+     *
+     * @see toggleFavorite
+     */
+    val favoriteThemeNames: Set<String> get() = emptySet()
+
     // ── Actions ────────────────────────────────────────────────────
 
     /** Set the theme bound to the *dark* slot. */
@@ -58,6 +67,17 @@ interface ThemeManagerHost {
 
     /** Remove a user-saved custom theme by [name]. */
     fun deleteCustomTheme(name: String)
+
+    /**
+     * Toggle the starred / favorite state of the theme [name] and persist it.
+     * After the write the host should call [refreshThemeManager] so the list
+     * re-sorts and the star icon repaints. No-op for hosts that don't support
+     * favorites (the default).
+     *
+     * @param name the theme whose favorite state to flip.
+     * @see favoriteThemeNames
+     */
+    fun toggleFavorite(name: String) {}
 
     // ── Per-app settings (font / size / titlebar / notifications) ─
     //

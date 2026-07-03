@@ -38,6 +38,9 @@ private val themeJson = Json {
  * @property lightThemeName name of the theme bound to the light slot.
  * @property customThemes   the user's cloned/edited themes (shared across apps).
  * @property appearance     follow-OS, or force the dark/light slot.
+ * @property favorites      names of the themes the user has starred; the theme
+ *   picker hoists these to the top of its single list. Persisted per-app under
+ *   [PersistKeys.THEME_V2_FAVORITES].
  * @see Theme
  * @see ResolvedTheme
  */
@@ -46,6 +49,7 @@ data class ThemeSnapshotV2(
     val lightThemeName: String = DEFAULT_LIGHT_THEME,
     val customThemes: List<Theme> = emptyList(),
     val appearance: Appearance = Appearance.Auto,
+    val favorites: List<String> = emptyList(),
 ) {
     /**
      * Resolves the active slot to a [ResolvedTheme].
@@ -89,16 +93,28 @@ data class ThemeSnapshotV2(
     fun customThemesJson(): String =
         themeJson.encodeToString(ListSerializer(Theme.serializer()), customThemes)
 
+    /** Encodes the starred-theme names as a JSON array of strings. */
+    fun encodeFavorites(): JsonArray =
+        JsonArray(favorites.map { JsonPrimitive(it) })
+
+    /** The favorites part as a JSON string (for flat key/value backends). */
+    fun favoritesJson(): String = themeJson.encodeToString(encodeFavorites())
+
     companion object {
         /**
-         * Parses a snapshot from its two persisted parts. Either may be null /
+         * Parses a snapshot from its persisted parts. Any part may be null /
          * blank / malformed; missing data falls back to defaults.
          *
-         * @param selection   the per-app selection JSON object, or null.
-         * @param customArray the shared custom-themes JSON array, or null.
+         * @param selection      the per-app selection JSON object, or null.
+         * @param customArray    the shared custom-themes JSON array, or null.
+         * @param favoritesArray the per-app starred-theme-names JSON array, or null.
          * @return the decoded snapshot.
          */
-        fun fromParts(selection: JsonElement?, customArray: JsonElement?): ThemeSnapshotV2 {
+        fun fromParts(
+            selection: JsonElement?,
+            customArray: JsonElement?,
+            favoritesArray: JsonElement? = null,
+        ): ThemeSnapshotV2 {
             val sel = selection as? JsonObject
             val dark = (sel?.get("darkThemeName") as? JsonPrimitive)?.contentOrNull
                 ?.takeIf { it.isNotEmpty() } ?: DEFAULT_DARK_THEME
@@ -107,21 +123,29 @@ data class ThemeSnapshotV2(
             val appearance = (sel?.get("appearance") as? JsonPrimitive)?.contentOrNull
                 ?.let { runCatching { Appearance.valueOf(it) }.getOrNull() } ?: Appearance.Auto
             val custom = parseCustomThemes(customArray)
-            return ThemeSnapshotV2(dark, light, custom, appearance)
+            val favorites = parseFavorites(favoritesArray)
+            return ThemeSnapshotV2(dark, light, custom, appearance, favorites)
         }
 
         /**
          * Convenience for flat key/value stores: parse from raw JSON strings.
          *
-         * @param selectionJson   the selection JSON string, or null/blank.
+         * @param selectionJson    the selection JSON string, or null/blank.
          * @param customThemesJson the custom-themes JSON string, or null/blank.
+         * @param favoritesJson    the starred-theme-names JSON string, or null/blank.
          */
-        fun fromStrings(selectionJson: String?, customThemesJson: String?): ThemeSnapshotV2 {
+        fun fromStrings(
+            selectionJson: String?,
+            customThemesJson: String?,
+            favoritesJson: String? = null,
+        ): ThemeSnapshotV2 {
             val sel = selectionJson?.takeIf { it.isNotBlank() }
                 ?.let { runCatching { themeJson.parseToJsonElement(it) }.getOrNull() }
             val custom = customThemesJson?.takeIf { it.isNotBlank() }
                 ?.let { runCatching { themeJson.parseToJsonElement(it) }.getOrNull() }
-            return fromParts(sel, custom)
+            val favorites = favoritesJson?.takeIf { it.isNotBlank() }
+                ?.let { runCatching { themeJson.parseToJsonElement(it) }.getOrNull() }
+            return fromParts(sel, custom, favorites)
         }
 
         /** Parses the shared custom-themes array, skipping malformed entries. */
@@ -130,6 +154,20 @@ data class ThemeSnapshotV2(
             return arr.mapNotNull { item ->
                 runCatching { themeJson.decodeFromJsonElement(Theme.serializer(), item) }.getOrNull()
             }
+        }
+
+        /**
+         * Parses the starred-theme-names array, keeping only non-blank string
+         * entries and de-duplicating while preserving order.
+         *
+         * @param el the JSON array element (or null / a JSON-string form is not
+         *   accepted here — callers pre-parse strings via [fromStrings]).
+         * @return the ordered, de-duplicated list of starred theme names.
+         */
+        fun parseFavorites(el: JsonElement?): List<String> {
+            val arr = el as? JsonArray ?: return emptyList()
+            return arr.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.takeIf { s -> s.isNotBlank() } }
+                .distinct()
         }
     }
 }
