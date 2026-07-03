@@ -1166,6 +1166,7 @@ private class ShellState(
             // carries. This is what stops a fast Cmd+digit burst from
             // flickering back to an intermediate tab before it settles.
             val pending = pendingActiveTabId
+            val prevExternal = this.external
             this.external = when {
                 pending == null -> snapshot
                 snapshot.activeTabId == pending -> {
@@ -1178,6 +1179,26 @@ private class ShellState(
                     pendingActiveTabId = null // pending tab gone (closed/rejected)
                     snapshot
                 }
+            }
+            // Label-only fast path. A [TabListSnapshot] carries tab/pane
+            // *identity*, focus, active tab and visibility — but NOT the
+            // per-pane label text, which the chrome resolves separately via
+            // [AppShellSpec.paneLabel]. So when a push produces a snapshot
+            // structurally identical to the last one, the only render input
+            // that can have changed is those labels. That happens a lot:
+            // termtastic pushes a fresh snapshot on every program-set OSC
+            // title tick while a terminal task runs (Claude Code rewrites its
+            // title with a live task summary ~once per debounce interval).
+            // A full [rerender] for that is wasteful and disruptive — it
+            // rebuilds the whole tab strip + sidebar tree, recreating the
+            // live-state badge elements apps mount in the row/header badge
+            // slots (which restarts their CSS pulse animation, making every
+            // status dot visibly "blip"), replaces the sidebar scroll
+            // container, and re-runs every pane header's gesture wiring.
+            // Refresh just the label text nodes in place instead.
+            if (changedTabs.isEmpty() && this.external == prevExternal) {
+                refreshPaneLabelsInPlace()
+                return@subscribe
             }
             rerender()
             // Auto is the only preset that re-tiles on membership
@@ -1197,6 +1218,55 @@ private class ShellState(
             changedTabs.forEach { tabId ->
                 if (presetIsAuto(tabId)) maybeReapplyPreset(tabId)
             }
+        }
+    }
+
+    /**
+     * Refreshes every rendered pane's visible label — its sidebar row label
+     * (and, in start-clip/index mode, the row tooltip) plus its pane-header
+     * title — in place from [AppShellSpec.paneLabel], without a [rerender].
+     *
+     * Fast-path companion to [bindTabSource]: invoked when a pushed snapshot is
+     * structurally identical to the last one, so the only render input that can
+     * have changed is the per-pane label (snapshots don't carry pane titles).
+     * Touches only the two text nodes that actually change, leaving the tab
+     * strip, sidebar rows (and the live-state badges apps mount in them), pane
+     * geometry, and pane content untouched.
+     *
+     * Robustness: only a pane's OWN header title is updated (the first
+     * `.dt-pane-title` in document order under its `[data-pane-id]` wrapper —
+     * the header precedes the content slot). A header currently swapped to an
+     * inline-rename `<input>` has no `.dt-pane-title` child and is left alone;
+     * a breadcrumb-mode title is skipped so its segment structure is preserved.
+     */
+    private fun refreshPaneLabelsInPlace() {
+        leftSidebarSlot?.let { sidebar ->
+            val rows = sidebar.querySelectorAll(".dt-sidebar-row")
+            for (i in 0 until rows.length) {
+                val row = rows.item(i) as? HTMLElement ?: continue
+                val tabId = row.getAttribute("data-tab-id") ?: continue
+                val paneId = row.getAttribute("data-pane-id") ?: continue
+                val label = spec.paneLabel(tabId, paneId)
+                (row.querySelector(".dt-sidebar-row-label") as? HTMLElement)?.let { labelEl ->
+                    if (labelEl.textContent != label) labelEl.textContent = label
+                }
+                // The row tooltip mirrors the label only in start-clip (index)
+                // mode, where the label is right-clipped; keep it in sync too.
+                if (row.hasAttribute("title") && row.getAttribute("title") != label) {
+                    row.setAttribute("title", label)
+                }
+            }
+        }
+        val mainEl = main ?: return
+        val activeTab = viewActiveTabId() ?: return
+        val panes = mainEl.querySelectorAll("[data-pane-id]")
+        for (i in 0 until panes.length) {
+            val pane = panes.item(i) as? HTMLElement ?: continue
+            val paneId = pane.getAttribute("data-pane-id") ?: continue
+            val titleEl = pane.querySelector(".dt-pane-title") as? HTMLElement ?: continue
+            if (titleEl.classList.contains("dt-pane-title-breadcrumbs")) continue
+            val label = spec.paneLabel(activeTab, paneId)
+            if (titleEl.textContent != label) titleEl.textContent = label
         }
     }
 
