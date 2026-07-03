@@ -560,6 +560,23 @@ data class AppShellSpec(
      */
     val paneRename: ((tabId: String, paneId: String, newLabel: String) -> Unit)? = null,
     /**
+     * When `true`, the inline pane-header rename forwards an **empty**
+     * commit to [paneRename] instead of treating it as a cancel. Hosts
+     * whose label model has a meaningful "no custom name" state (e.g.
+     * termtastic, where an empty commit clears the user-set name and the
+     * title reverts to the working directory / program title) opt in so
+     * users can clear a name by emptying the field. A commit that merely
+     * repeats the current title is still a no-op regardless of this flag.
+     *
+     * Defaults `false`, matching the historical behaviour where an empty
+     * commit is discarded — appropriate for hosts (notegrow file titles,
+     * the demo) whose labels must never be blank.
+     *
+     * @see paneRename
+     * @see se.soderbjorn.darkness.web.layout.PaneHeaderSpec.allowEmptyRename
+     */
+    val allowEmptyPaneRename: Boolean = false,
+    /**
      * Optional callback fired after pane geometry has been committed to
      * the DOM in response to a user gesture: split-bar / pane-corner
      * resize end, maximize / restore toggle, focus-driven auto-restore

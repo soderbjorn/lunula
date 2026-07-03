@@ -1475,6 +1475,7 @@ private class ShellState(
                             leadingBadge = spec.paneHeaderBadge(activeTab, paneId),
                             actions = spec.paneActions(activeTab, paneId),
                             onRename = renameCb,
+                            allowEmptyRename = spec.allowEmptyPaneRename,
                             paneIndex = spec.paneIndex(activeTab, paneId),
                         )
                     },

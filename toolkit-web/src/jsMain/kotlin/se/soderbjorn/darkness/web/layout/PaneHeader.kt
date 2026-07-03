@@ -143,6 +143,18 @@ data class PaneHeaderSpec(
     val leadingBadge: HTMLElement? = null,
     val actions: List<PaneAction> = emptyList(),
     val onRename: ((newTitle: String) -> Unit)? = null,
+    /**
+     * When `true`, an **empty** rename commit fires [onRename] with the
+     * empty string instead of being discarded as a cancel. Hosts whose
+     * label model treats "" as a distinct state — clearing a user-set
+     * name so the title reverts to a derived default — opt in. A commit
+     * equal to the current title stays a no-op regardless of this flag.
+     *
+     * Defaults `false`: an empty commit restores the original title in
+     * place (the legacy behaviour, correct for labels that must never be
+     * blank). Wired from [se.soderbjorn.darkness.web.shell.AppShellSpec.allowEmptyPaneRename].
+     */
+    val allowEmptyRename: Boolean = false,
     val isDraggable: Boolean = false,
     /**
      * Optional inline SVG (or HTML) rendered before [leadingBadge] as the
@@ -348,7 +360,7 @@ fun renderPaneHeader(paneId: PaneId, spec: PaneHeaderSpec): HTMLElement {
         // and avoids a module-level map (no leak on detach — gc'd with
         // the element).
         renameTarget.asDynamic()[DT_PANE_RENAME_FN_PROP] = {
-            startRename(renameTarget, paneId, renameSeed, onRename)
+            startRename(renameTarget, paneId, renameSeed, onRename, spec.allowEmptyRename)
         }
         if (spec.armRenameOnHover) {
             // Use a data attribute (read by .dt-pane-title[data-dt-tooltip]:hover::after
@@ -359,7 +371,7 @@ fun renderPaneHeader(paneId: PaneId, spec: PaneHeaderSpec): HTMLElement {
             // tooltip doesn't double up on the styled one.
             renameTarget.removeAttribute("title")
             renameTarget.setAttribute("data-dt-tooltip", "Hover, then click to rename")
-            wireInlineRename(renameTarget, paneId, renameSeed, onRename)
+            wireInlineRename(renameTarget, paneId, renameSeed, onRename, spec.allowEmptyRename)
         }
     }
 
@@ -512,13 +524,16 @@ private fun buildActionButton(action: PaneAction): HTMLElement {
  * @param titleEl     the `.dt-pane-title` element to rebind
  * @param paneId      pane id; passed back through [onRename]
  * @param currentTitle the title value used to detect "no-op" commits
- * @param onRename    fires on a non-empty, changed commit; receives the new title
+ * @param onRename    fires on a changed commit; receives the new title
+ * @param allowEmpty  when `true`, an empty commit is forwarded (clears the
+ *   name) rather than treated as a cancel; see [PaneHeaderSpec.allowEmptyRename]
  */
 private fun wireInlineRename(
     titleEl: HTMLElement,
     paneId: PaneId,
     currentTitle: String?,
     onRename: (String) -> Unit,
+    allowEmpty: Boolean,
 ) {
     var armTimer: Int = -1
     fun disarm() {
@@ -540,13 +555,13 @@ private fun wireInlineRename(
         if (!titleEl.classList.contains(PaneHeaderClassNames.TITLE_ARMED)) return@addEventListener
         ev.stopPropagation()
         disarm()
-        startRename(titleEl, paneId, currentTitle, onRename)
+        startRename(titleEl, paneId, currentTitle, onRename, allowEmpty)
     })
     titleEl.addEventListener("dblclick", { ev ->
         ev.stopPropagation()
         ev.preventDefault()
         disarm()
-        startRename(titleEl, paneId, currentTitle, onRename)
+        startRename(titleEl, paneId, currentTitle, onRename, allowEmpty)
     })
 }
 
@@ -560,6 +575,7 @@ private fun startRename(
     paneId: PaneId,
     currentTitle: String?,
     onRename: (String) -> Unit,
+    allowEmpty: Boolean,
 ) {
     val parent = titleEl.parentElement ?: return
     val input = document.createElement("input") as HTMLInputElement
@@ -588,9 +604,12 @@ private fun startRename(
         if (settled) return
         settled = true
         val newTitle = input.value.trim()
-        if (newTitle.isEmpty() || newTitle == (currentTitle ?: "")) {
-            // No-op: restore the original element since the host won't
-            // re-render for an unchanged title.
+        // Discard an empty commit unless the host opted into empty renames
+        // (clearing the name), and always discard a commit that just repeats
+        // the current title — in both cases the host won't re-render, so
+        // restore the original element in place.
+        val emptyAndDisallowed = newTitle.isEmpty() && !allowEmpty
+        if (emptyAndDisallowed || newTitle == (currentTitle ?: "")) {
             if (input.parentElement === parent) parent.replaceChild(titleEl, input)
             return
         }
