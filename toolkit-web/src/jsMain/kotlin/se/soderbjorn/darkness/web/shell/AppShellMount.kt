@@ -658,10 +658,49 @@ private class ShellState(
      * the pane they just navigated away from.
      *
      * Cleared for a tab once a pushed snapshot's `activePaneId` matches the
-     * held value (server confirmed) or the held pane leaves the tab
-     * (focus rejected / pane closed). See [applyPendingActivePaneHold].
+     * held value (server confirmed), the held pane leaves the tab
+     * (focus rejected / pane closed), or the hold outlives
+     * [PENDING_ACTIVE_PANE_EXPIRY_MS]. See [applyPendingActivePaneHold].
+     *
+     * The expiry exists because a hold can be seeded by a gesture that never
+     * produces a confirming push: clicking a pane the server ALREADY considers
+     * focused sends no focus command (hosts dedupe no-op focus changes), so no
+     * snapshot ever arrives whose `activePaneId` "catches up" — the hold would
+     * otherwise sit forever and permanently veto the next focus change that
+     * arrives from another surface (e.g. a sidebar pane click's round-trip, or
+     * another client). A confirming round-trip completes in milliseconds, so
+     * any hold older than a few seconds is stale by construction and is
+     * dropped rather than applied.
      */
-    private val pendingActivePaneId: MutableMap<String, String> = HashMap()
+    private val pendingActivePaneId: MutableMap<String, PendingActivePane> = HashMap()
+
+    /**
+     * One optimistic focus hold: the pane the user just picked in [tabId → this]
+     * ([pendingActivePaneId]) plus when it was seeded, so
+     * [applyPendingActivePaneHold] can age it out via
+     * [PENDING_ACTIVE_PANE_EXPIRY_MS].
+     *
+     * @property paneId the optimistically focused pane.
+     * @property seededAtMs [kotlin.js.Date.now] timestamp at seed time.
+     */
+    private class PendingActivePane(val paneId: String, val seededAtMs: Double)
+
+    /**
+     * Source-mode only: record that the user just optimistically focused
+     * [paneId] in [tabId], replacing any earlier (possibly stale) hold for the
+     * tab. Called from every user focus gesture — the renderer's capture-phase
+     * pane mousedown / spatial nav (via `onPaneFocused`) and the sidebar pane
+     * row click / dock-chip restore (via [bringPaneToFront]) — so a new
+     * gesture always supersedes an old hold instead of being vetoed by it.
+     *
+     * @param tabId the tab owning the pane.
+     * @param paneId the pane the user picked.
+     * @see pendingActivePaneId
+     * @see applyPendingActivePaneHold
+     */
+    private fun recordPendingActivePane(tabId: String, paneId: String) {
+        pendingActivePaneId[tabId] = PendingActivePane(paneId, kotlin.js.Date.now())
+    }
 
     /**
      * Reentrancy guard: true only while [rerender]'s reconciliation
@@ -1563,7 +1602,7 @@ private class ShellState(
                             // out-of-band focus changes. Local mode has no
                             // round-trip, so there is nothing to hold.
                             if (!reconcilingActivePane && spec.tabSource != null) {
-                                pendingActivePaneId[tabId] = paneId
+                                recordPendingActivePane(tabId, paneId)
                             }
                             persistLayoutState()
                             repaintSidebarActiveMark(tabId, paneId)
@@ -2382,13 +2421,14 @@ private class ShellState(
      * so a pane coming back from minimized lands on top *and* active no
      * matter which surface restored it.
      *
-     * Activation is mode-specific: source mode notifies the host via
-     * [TabSource.onPaneSelect] (the host's `activePaneId` wins in
-     * [activePaneForActiveTab], so a controller-only `setActive` wouldn't
-     * stick); local mode marks it on the tab's [LayoutController]. Neither
-     * branch switches the *active tab* — callers handle that beforehand
-     * (the dock only shows active-tab panes; the sidebar row click does
-     * its own cross-tab switch first).
+     * Activation is mode-specific: source mode activates optimistically —
+     * quiet local mark + [recordPendingActivePane] focus hold for instant
+     * feedback (and so a stale unconfirmable hold can't veto this pick) —
+     * then notifies the host via [TabSource.onPaneSelect], whose snapshot
+     * round-trip confirms and clears the hold; local mode marks it on the
+     * tab's [LayoutController]. Neither branch switches the *active tab* —
+     * callers handle that beforehand (the dock only shows active-tab panes;
+     * the sidebar row click does its own cross-tab switch first).
      *
      * The z-raise mirrors the double-click raise in
      * [LayoutCallbacks.onFloatingFocused]; unlike that path this never
@@ -2408,6 +2448,20 @@ private class ShellState(
             updateGeometry(tabId, paneId) { it.copy(zIndex = maxZ + 1) }
         }
         if (spec.tabSource != null) {
+            // A sidebar row click / dock-chip restore is just as much a user
+            // focus gesture as the renderer's capture-phase pane mousedown, so
+            // it gets the same optimistic treatment: mark the pane active
+            // locally (quiet — no onChange → rerender storm mid-click) and
+            // record the focus hold so (a) the row highlight moves instantly
+            // instead of after the host round-trip, and (b) any stale hold
+            // left by an earlier unconfirmable gesture (e.g. a click on the
+            // already-server-focused pane, which hosts dedupe into no command;
+            // see [pendingActivePaneId]) is REPLACED rather than allowed to
+            // veto this selection when the confirming snapshot arrives.
+            controllerFor(tabId).setActiveQuiet(paneId)
+            recordPendingActivePane(tabId, paneId)
+            persistLayoutState()
+            repaintSidebarActiveMark(tabId, paneId)
             spec.tabSource.onPaneSelect?.invoke(tabId, paneId)
                 ?: spec.tabSource.onSelect(tabId)
         } else {
@@ -3048,12 +3102,23 @@ private class ShellState(
      */
     private fun applyPendingActivePaneHold(snapshot: TabListSnapshot): TabListSnapshot {
         if (pendingActivePaneId.isEmpty()) return snapshot
+        // Age out stale holds before applying anything: a hold whose
+        // confirming round-trip hasn't landed within the expiry window is
+        // never going to be confirmed (see [PENDING_ACTIVE_PANE_EXPIRY_MS])
+        // and must not veto the genuine focus change this snapshot may carry.
+        val now = kotlin.js.Date.now()
+        pendingActivePaneId.keys
+            .filter { key ->
+                val hold = pendingActivePaneId[key]
+                hold != null && now - hold.seededAtMs > PENDING_ACTIVE_PANE_EXPIRY_MS
+            }
+            .forEach { pendingActivePaneId.remove(it) }
         // Forget holds for tabs the snapshot no longer carries.
         pendingActivePaneId.keys.retainAll(snapshot.tabs.map { it.id }.toSet())
         if (pendingActivePaneId.isEmpty()) return snapshot
         var changed = false
         val tabs = snapshot.tabs.map { tab ->
-            val pending = pendingActivePaneId[tab.id] ?: return@map tab
+            val pending = pendingActivePaneId[tab.id]?.paneId ?: return@map tab
             when {
                 // Server caught up to the user's choice — stop holding.
                 tab.activePaneId == pending -> {
@@ -3454,6 +3519,18 @@ private const val MAIN_RESIZE_DEBOUNCE_MS = 150
  * re-fits it — see `reflowAfterMinimizeChange`.
  */
 private const val MINIMIZE_REFLOW_SETTLE_MS = 460
+
+/**
+ * Maximum age of an optimistic focus hold ([AppShellMount.pendingActivePaneId])
+ * before [AppShellMount.applyPendingActivePaneHold] drops it instead of
+ * applying it. A confirming focus round-trip (command out → snapshot back)
+ * completes in milliseconds even over a remote link, so a hold this old can
+ * only mean no confirmation is coming — e.g. the seed gesture was a click on
+ * a pane the server already considered focused, which hosts dedupe into no
+ * command at all. Keeping such a hold alive would permanently veto the next
+ * genuine focus change (see the [AppShellMount.pendingActivePaneId] KDoc).
+ */
+private const val PENDING_ACTIVE_PANE_EXPIRY_MS = 3_000.0
 
 private const val SIDEBAR_PANE_ROW_MIME = "application/x-darkness-sidebar-pane-row"
 
