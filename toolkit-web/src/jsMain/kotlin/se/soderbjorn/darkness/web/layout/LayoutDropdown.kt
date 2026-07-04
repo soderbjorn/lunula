@@ -33,6 +33,7 @@ import kotlinx.browser.document
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.events.Event
 import org.w3c.dom.events.KeyboardEvent
+import se.soderbjorn.darkness.web.shell.ICON_LAYOUT
 
 /**
  * One layout dropdown for an app's topbar. The dropdown owns its own
@@ -331,21 +332,6 @@ class LayoutDropdown(
                 "<path d=\"M28 14 L28.6 15.2 L29.8 15.8 L28.6 16.4 L28 17.6 L27.4 16.4 " +
                 "L26.2 15.8 L27.4 15.2 Z\" class=\"dt-layout-preview-other\"/>" +
                 "</svg>"
-
-        /**
-         * Layout glyph used as the trigger button icon: one large pane on the
-         * left with two smaller panes stacked on the right. Drawn from scratch
-         * but inspired by the iOS SF Symbol `rectangle.3.group`, and shared
-         * verbatim (same 24-unit
-         * geometry) with the Android `LayoutGridIcon` and iOS `LayoutGridIcon`
-         * so every client shows an identical "layout presets" mark.
-         */
-        private const val ICON_LAYOUT: String =
-            "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" " +
-                "stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\">" +
-                "<rect x=\"4\" y=\"5\" width=\"8.5\" height=\"14\" rx=\"1.2\"/>" +
-                "<rect x=\"14.5\" y=\"5\" width=\"5.5\" height=\"6\" rx=\"1.2\"/>" +
-                "<rect x=\"14.5\" y=\"13\" width=\"5.5\" height=\"6\" rx=\"1.2\"/></svg>"
     }
 }
 

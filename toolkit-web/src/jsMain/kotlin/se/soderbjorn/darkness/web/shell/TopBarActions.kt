@@ -101,17 +101,22 @@ private const val ICON_THEME_MANAGER: String =
         "</svg>"
 
 /**
- * Inline SVG: one large pane on the left with two smaller panes stacked on the
- * right — a "layout presets" glyph drawn from scratch but inspired by the iOS
- * SF Symbol `rectangle.3.group`. Shares the same 24-unit geometry as the
- * Android/iOS `LayoutGridIcon` so every client shows an identical mark.
+ * Inline SVG: four unequal panes in a 2×2 "Mondrian" tiling with roomy 3-unit
+ * gaps — a "layout presets" glyph drawn from scratch. Shares the same 24-unit
+ * geometry as the Android/iOS `LayoutGridIcon` so every client shows an
+ * identical mark.
+ *
+ * `internal` so the layout-package trigger button ([se.soderbjorn.darkness.web
+ * .layout.LayoutDropdown]) renders the exact same glyph — this is the single
+ * source of truth for the mark; do not duplicate it.
  */
-private const val ICON_LAYOUT: String =
+internal const val ICON_LAYOUT: String =
     "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" " +
         "stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\">" +
-        "<rect x=\"4\" y=\"5\" width=\"8.5\" height=\"14\" rx=\"1.2\"/>" +
-        "<rect x=\"14.5\" y=\"5\" width=\"5.5\" height=\"6\" rx=\"1.2\"/>" +
-        "<rect x=\"14.5\" y=\"13\" width=\"5.5\" height=\"6\" rx=\"1.2\"/></svg>"
+        "<rect x=\"3\" y=\"3\" width=\"9.5\" height=\"8\" rx=\"1.6\"/>" +
+        "<rect x=\"15.5\" y=\"3\" width=\"5.5\" height=\"8\" rx=\"1.6\"/>" +
+        "<rect x=\"3\" y=\"14\" width=\"5\" height=\"7\" rx=\"1.6\"/>" +
+        "<rect x=\"11\" y=\"14\" width=\"10\" height=\"7\" rx=\"1.6\"/></svg>"
 
 /**
  * Build a generic icon-button suitable for the topbar trailing area.
