@@ -291,8 +291,14 @@ data class LayoutState(
     companion object {
         /**
          * Default layout used when no persisted state exists yet. Ships a
-         * single tab with a single leaf so apps never have to handle a
+         * single tab with a single pane so apps never have to handle a
          * "no tabs, no panes" empty state on first launch.
+         *
+         * The pane is a full-bleed maximized float (the floats-only
+         * model): id `"pane-<tabId>"`, matching the seed-pane convention
+         * host apps use for fresh tabs, so a host that later re-seeds a
+         * pane for the same tab converges on the same identity instead
+         * of minting a duplicate.
          *
          * @return a fresh [LayoutState] with safe defaults.
          */
@@ -302,6 +308,18 @@ data class LayoutState(
                 TabState(
                     id = "tab-default",
                     title = "Default",
+                    floatingPanes = listOf(
+                        FloatingPaneJson(
+                            id = "pane-tab-default",
+                            title = null,
+                            xPct = 0.0,
+                            yPct = 0.0,
+                            widthPct = 1.0,
+                            heightPct = 1.0,
+                            zIndex = 1,
+                            isMaximized = true,
+                        ),
+                    ),
                 ),
             ),
         )

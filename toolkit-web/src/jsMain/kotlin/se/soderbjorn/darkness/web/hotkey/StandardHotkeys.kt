@@ -50,6 +50,25 @@ object StandardHotkeys {
     /** Spatially focus the pane **below** the focused one (no wrap). */
     val FocusPaneDown: Hotkey = Hotkey(key = "ArrowDown", ctrl = true, alt = true)
 
+    /**
+     * Expand the focused pane one state step: minimized (docked) →
+     * normal → maximized. Opt+Cmd+Up on macOS (Alt+Meta elsewhere) —
+     * deliberately *not* Ctrl+Alt+Arrow, which the four focus chords
+     * above own, and not colliding with notegrow's Cmd+Opt+Left/Right
+     * zoom-history navigation (different arrow axis).
+     *
+     * @see CollapsePane for the opposite direction.
+     */
+    val ExpandPane: Hotkey = Hotkey(key = "ArrowUp", alt = true, meta = true)
+
+    /**
+     * Collapse the focused pane one state step: maximized → normal →
+     * minimized (docked). Opt+Cmd+Down on macOS (Alt+Meta elsewhere).
+     *
+     * @see ExpandPane for the opposite direction.
+     */
+    val CollapsePane: Hotkey = Hotkey(key = "ArrowDown", alt = true, meta = true)
+
     /** Cycle to the previous (non-hidden) tab. Wraps. */
     val PreviousTab: Hotkey = Hotkey(key = "ArrowLeft", ctrl = true, alt = true, shift = true)
 

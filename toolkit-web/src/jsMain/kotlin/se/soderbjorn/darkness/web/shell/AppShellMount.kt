@@ -640,6 +640,41 @@ private class ShellState(
     private var pendingActiveTabId: String? = null
 
     /**
+     * Source-mode only: per-tab, the pane the user last optimistically
+     * focused (Ctrl+Opt+Arrow spatial nav, a pane mousedown, a sidebar pane
+     * click) that the app hasn't yet confirmed by pushing a snapshot whose
+     * `activePaneId` matches. While an entry is set, incoming snapshots keep
+     * that pane displayed/focused for the tab instead of the stale server
+     * `activePaneId` they still carry mid-round-trip — so a pane switch never
+     * visibly reverts before the server catches up.
+     *
+     * The pane analogue of [pendingActiveTabId]. Needed because a host can
+     * re-broadcast its layout on high-frequency, focus-irrelevant events —
+     * termtastic pushes a fresh config on every program-set OSC title tick
+     * (~once per debounce interval while a terminal task runs). Such a push
+     * still carries the pre-switch `activePaneId`, and without this hold
+     * [syncControllersWithSnapshot]'s `setActive` would fire the controller's
+     * `onChange` → [rerender] → refocus the old pane, yanking the user back to
+     * the pane they just navigated away from.
+     *
+     * Cleared for a tab once a pushed snapshot's `activePaneId` matches the
+     * held value (server confirmed) or the held pane leaves the tab
+     * (focus rejected / pane closed). See [applyPendingActivePaneHold].
+     */
+    private val pendingActivePaneId: MutableMap<String, String> = HashMap()
+
+    /**
+     * Reentrancy guard: true only while [rerender]'s reconciliation
+     * `focusPane` call (which re-asserts the server/held active pane) is
+     * running, so [bindTabSource]'s `onPaneFocused` can tell that focus event
+     * apart from a genuine user gesture and NOT record it as a fresh optimistic
+     * pending. Without this, every rerender would re-seed [pendingActivePaneId]
+     * with the current server value and then block a later focus change pushed
+     * by another client. See [pendingActivePaneId].
+     */
+    private var reconcilingActivePane: Boolean = false
+
+    /**
      * Toolkit-owned layout state — per-tab active preset, pane importance
      * order, and pane geometry. Persisted under [PersistKeys.LAYOUT_STATE].
      * Single source of truth in both local and source mode; the tab-source
@@ -1157,7 +1192,12 @@ private class ShellState(
     /** Source-mode entry point: subscribes to the app's push channel. */
     fun bindTabSource(source: TabSource) {
         this.local = null
-        source.subscribe { snapshot ->
+        source.subscribe { rawSnapshot ->
+            // Hold any pane the user just optimistically focused against the
+            // stale `activePaneId` an in-flight push still carries, so a pane
+            // switch isn't reverted mid-round-trip. All downstream reconciliation
+            // (controllers, `external`, focus routing) sees the held snapshot.
+            val snapshot = applyPendingActivePaneHold(rawSnapshot)
             val changedTabs = syncControllersWithSnapshot(snapshot)
             // Honour an in-flight optimistic activation: until the app
             // confirms it by pushing a snapshot whose activeTabId matches
@@ -1509,6 +1549,22 @@ private class ShellState(
                     onPaneFocused = { paneId ->
                         viewActiveTabId()?.let { tabId ->
                             controllerFor(tabId).setActiveQuiet(paneId)
+                            // Optimistic-focus hold: a genuine user focus
+                            // gesture (this fires from the capture-phase pane
+                            // mousedown and from spatial Ctrl+Opt+Arrow nav)
+                            // runs ahead of the app's SetFocusedPane round-trip
+                            // in source mode. Record it so
+                            // [applyPendingActivePaneHold] pins this pane
+                            // against the stale `activePaneId` that in-flight
+                            // config pushes still carry. Skip when
+                            // [reconcilingActivePane] — that focus event is us
+                            // re-asserting the server/held value, not a new user
+                            // choice, and recording it would block later
+                            // out-of-band focus changes. Local mode has no
+                            // round-trip, so there is nothing to hold.
+                            if (!reconcilingActivePane && spec.tabSource != null) {
+                                pendingActivePaneId[tabId] = paneId
+                            }
                             persistLayoutState()
                             repaintSidebarActiveMark(tabId, paneId)
                         }
@@ -1728,7 +1784,15 @@ private class ShellState(
         // `true` would let that stale id immediately un-maximize the
         // pane the user just toggled to maximized on the click that
         // followed the mousedown. See `LayoutRenderer.focusPane`.
-        activePaneForActiveTab()?.let { renderer!!.focusPane(it, autoUnmaximize = false) }
+        // Re-assert the server/held active pane. Flagged as reconciliation so
+        // the `onPaneFocused` this fires does NOT capture it as a new optimistic
+        // pending (see [reconcilingActivePane] / [pendingActivePaneId]).
+        reconcilingActivePane = true
+        try {
+            activePaneForActiveTab()?.let { renderer!!.focusPane(it, autoUnmaximize = false) }
+        } finally {
+            reconcilingActivePane = false
+        }
         // Theme repaint. Every rerender wipes & rebuilds the chrome slots
         // (`topSlot.innerHTML = ""`, ditto sidebar / bottom). Re-stamp the
         // flat `--t-*` palette on `:root` here so the freshly built chrome
@@ -2961,6 +3025,54 @@ private class ShellState(
             geometryByTab = geometryState.geometryByTab + (tabId to nextTab),
         )
         persistLayoutState()
+    }
+
+    /**
+     * Applies the optimistic-focus hold to a freshly pushed [snapshot]: for
+     * every tab with a live entry in [pendingActivePaneId], either
+     * confirm-and-clear it (the snapshot now agrees), drop it (the held pane
+     * is gone from the tab), or hold it by rewriting that tab's `activePaneId`
+     * to the pending value so every downstream consumer
+     * ([syncControllersWithSnapshot]'s `setActive`, [external], and
+     * [activePaneForActiveTab]'s focus routing) sees the user's just-picked
+     * pane rather than the stale server one still in flight.
+     *
+     * The pane analogue of the [pendingActiveTabId] reconciliation in
+     * [bindTabSource]. Returns [snapshot] unchanged when no hold is active, so
+     * the common no-pending case allocates nothing.
+     *
+     * @param snapshot the raw snapshot the app just pushed.
+     * @return the snapshot with held tabs' `activePaneId` rewritten to the
+     *   pending pane; identical to [snapshot] when nothing is held.
+     * @see pendingActivePaneId
+     */
+    private fun applyPendingActivePaneHold(snapshot: TabListSnapshot): TabListSnapshot {
+        if (pendingActivePaneId.isEmpty()) return snapshot
+        // Forget holds for tabs the snapshot no longer carries.
+        pendingActivePaneId.keys.retainAll(snapshot.tabs.map { it.id }.toSet())
+        if (pendingActivePaneId.isEmpty()) return snapshot
+        var changed = false
+        val tabs = snapshot.tabs.map { tab ->
+            val pending = pendingActivePaneId[tab.id] ?: return@map tab
+            when {
+                // Server caught up to the user's choice — stop holding.
+                tab.activePaneId == pending -> {
+                    pendingActivePaneId.remove(tab.id)
+                    tab
+                }
+                // Still pending and the pane is live — pin it.
+                tab.panes.any { it.id == pending } -> {
+                    changed = true
+                    tab.copy(activePaneId = pending)
+                }
+                // The held pane vanished (closed / focus rejected) — release.
+                else -> {
+                    pendingActivePaneId.remove(tab.id)
+                    tab
+                }
+            }
+        }
+        return if (changed) snapshot.copy(tabs = tabs) else snapshot
     }
 
     /**

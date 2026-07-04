@@ -331,6 +331,19 @@ class LayoutRenderer(
         HotkeyBindings.registerAction(
             HotkeyActionSpec(ToolkitHotkeyIds.PANE_FOCUS_DOWN, "Focus pane down", listOf(StandardHotkeys.FocusPaneDown))
         ) { focusPaneInDirection(Direction.DOWN) }
+        // Pane state cycling: Opt+Cmd+Up expands one step (docked →
+        // normal → maximized), Opt+Cmd+Down collapses one step
+        // (maximized → normal → docked). Implemented on top of the
+        // host's existing maximize/minimize/restore callbacks, so any
+        // host that wires those into [PaneCallbacks] gets the chords
+        // for free; hosts that leave a callback null simply lose the
+        // corresponding step (matching the hidden header button).
+        HotkeyBindings.registerAction(
+            HotkeyActionSpec(ToolkitHotkeyIds.PANE_EXPAND, "Expand pane", listOf(StandardHotkeys.ExpandPane))
+        ) { cyclePaneStateUp() }
+        HotkeyBindings.registerAction(
+            HotkeyActionSpec(ToolkitHotkeyIds.PANE_COLLAPSE, "Collapse pane", listOf(StandardHotkeys.CollapsePane))
+        ) { cyclePaneStateDown() }
     }
 
     /**
@@ -846,6 +859,95 @@ class LayoutRenderer(
 
         val target = best ?: return
         focusPane(target.id)
+    }
+
+    /**
+     * Panes minimized via [cyclePaneStateDown], most recent last. Lets
+     * [cyclePaneStateUp] undo a hotkey-minimize even though [render]
+     * moves the focus ring off a docked pane (a minimized pane has no
+     * DOM, so `focusedLeafId` falls back to the first visible pane —
+     * without this memory, Opt+Cmd+Down / Opt+Cmd+Up wouldn't
+     * round-trip). Entries whose pane was meanwhile restored (dock chip
+     * click) or closed are dropped lazily when [cyclePaneStateUp] pops
+     * them.
+     */
+    private val hotkeyMinimizedIds = mutableListOf<PaneId>()
+
+    /**
+     * Expand one pane state step — the [StandardHotkeys.ExpandPane]
+     * (Opt+Cmd+Up) handler registered in [init].
+     *
+     * Resolution order:
+     *  1. The most recently hotkey-minimized pane that is still docked
+     *     ([hotkeyMinimizedIds]) is restored — so Opt+Cmd+Down followed
+     *     by Opt+Cmd+Up round-trips.
+     *  2. Otherwise, when *every* pane is docked, the last docked pane
+     *     in the layout is restored (covers panes minimized via the
+     *     header button / menu when nothing is left to focus).
+     *  3. Otherwise the focused pane is maximized (no-op when it
+     *     already is).
+     *
+     * Steps delegate to the host's [PaneCallbacks.onFloatingRestored] /
+     * [PaneCallbacks.onFloatingMaximizeToggled]; a `null` callback
+     * disables that step, matching the corresponding hidden header
+     * affordance.
+     *
+     * @see cyclePaneStateDown for the opposite direction.
+     */
+    private fun cyclePaneStateUp() {
+        val restore = callbacks.onFloatingRestored
+        if (restore != null) {
+            // Prefer undoing the most recent hotkey-minimize. Pop stale
+            // entries (pane restored elsewhere or closed) as we go.
+            while (hotkeyMinimizedIds.isNotEmpty()) {
+                val id = hotkeyMinimizedIds.removeAt(hotkeyMinimizedIds.size - 1)
+                val spec = lastLayout.floatingPanes.firstOrNull { it.id == id }
+                if (spec != null && spec.isMinimized) {
+                    restore(id)
+                    return
+                }
+            }
+            if (lastLayout.floatingPanes.none { !it.isMinimized }) {
+                val docked = lastLayout.floatingPanes.lastOrNull { it.isMinimized }
+                if (docked != null) {
+                    restore(docked.id)
+                    return
+                }
+            }
+        }
+        val focused = lastLayout.floatingPanes
+            .firstOrNull { it.id == focusedLeafId && !it.isMinimized } ?: return
+        if (!focused.isMaximized) {
+            callbacks.onFloatingMaximizeToggled?.invoke(focused.id)
+        }
+    }
+
+    /**
+     * Collapse one pane state step — the [StandardHotkeys.CollapsePane]
+     * (Opt+Cmd+Down) handler registered in [init]. A maximized focused
+     * pane is restored to its normal geometry; a normal one is
+     * minimized to the dock (and remembered in [hotkeyMinimizedIds] so
+     * [cyclePaneStateUp] can bring it straight back).
+     *
+     * Delegates to the host's [PaneCallbacks.onFloatingMaximizeToggled]
+     * / [PaneCallbacks.onFloatingMinimized]; a `null` callback disables
+     * that step, matching the corresponding hidden header affordance.
+     *
+     * @see cyclePaneStateUp for the opposite direction.
+     */
+    private fun cyclePaneStateDown() {
+        val focused = lastLayout.floatingPanes
+            .firstOrNull { it.id == focusedLeafId && !it.isMinimized } ?: return
+        if (focused.isMaximized) {
+            callbacks.onFloatingMaximizeToggled?.invoke(focused.id)
+            return
+        }
+        val minimize = callbacks.onFloatingMinimized ?: return
+        // Re-append rather than duplicate so the pane sits at the
+        // "most recent" end even if a stale entry for it lingered.
+        hotkeyMinimizedIds.remove(focused.id)
+        hotkeyMinimizedIds.add(focused.id)
+        minimize(focused.id)
     }
 
     /**

@@ -135,6 +135,16 @@ object ToolkitHotkeyIds {
     const val PANE_FOCUS_UP: String = "toolkit.pane.focusUp"
     /** Spatially focus the pane below ([StandardHotkeys.FocusPaneDown]). */
     const val PANE_FOCUS_DOWN: String = "toolkit.pane.focusDown"
+    /**
+     * Expand the focused pane one state step — minimized → normal →
+     * maximized ([StandardHotkeys.ExpandPane]).
+     */
+    const val PANE_EXPAND: String = "toolkit.pane.expand"
+    /**
+     * Collapse the focused pane one state step — maximized → normal →
+     * minimized ([StandardHotkeys.CollapsePane]).
+     */
+    const val PANE_COLLAPSE: String = "toolkit.pane.collapse"
     /** Cycle to the previous tab ([StandardHotkeys.PreviousTab]). */
     const val TAB_PREVIOUS: String = "toolkit.tab.previous"
     /** Cycle to the next tab ([StandardHotkeys.NextTab]). */
