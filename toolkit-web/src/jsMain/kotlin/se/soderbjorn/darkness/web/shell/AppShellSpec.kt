@@ -722,6 +722,23 @@ interface AppShellHandle {
     fun applyExternalLayoutState(layoutStateJson: String)
 
     /**
+     * Returns the shell's *live* layout state — per-tab preset, pane order,
+     * and pane geometry (fractional rects, z-order, maximize/minimize) — as
+     * the same `LAYOUT_STATE` JSON blob the toolkit persists. This is the
+     * read counterpart of [applyExternalLayoutState]: it reflects in-session
+     * drags/resizes immediately, without waiting for a persistence
+     * round-trip.
+     *
+     * Hosts use this when they need the actual pane arrangement outside the
+     * shell's own DOM — e.g. termtastic's 3D tab overview mirrors each tab's
+     * pane rectangles onto its 3D cards.
+     *
+     * @return the layout-state blob string, in the exact format accepted by
+     *   [applyExternalLayoutState].
+     */
+    fun currentLayoutStateJson(): String
+
+    /**
      * Opens the app-supplied Hotkeys sidebar (see
      * [AppShellSpec.hotkeysContent]), animating any other right-side panel
      * (Theme Manager / Appearance / App Settings) closed first so only one

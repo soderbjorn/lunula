@@ -538,6 +538,9 @@ fun mountAppShell(
             state.applyExternalLayoutState(layoutStateJson)
         }
 
+        override fun currentLayoutStateJson(): String =
+            state.currentLayoutStateJson()
+
         override fun openHotkeysSidebar() {
             state.openHotkeysSidebar()
         }
@@ -1158,6 +1161,17 @@ private class ShellState(
         reconcileAdoptedLayoutState()
         rerender()
     }
+
+    /**
+     * Encodes the live [geometryState] as the persisted `LAYOUT_STATE` blob
+     * format. Read counterpart of [applyExternalLayoutState] — backs
+     * [AppShellHandle.currentLayoutStateJson] so hosts can mirror the actual
+     * pane arrangement (including in-session drags not yet round-tripped
+     * through persistence) outside the shell's DOM.
+     *
+     * @return the blob string as produced by [encodeLayoutStateJson].
+     */
+    fun currentLayoutStateJson(): String = encodeLayoutStateJson(geometryState)
 
     /**
      * Repairs [geometryState] after an external blob was adopted so it is
