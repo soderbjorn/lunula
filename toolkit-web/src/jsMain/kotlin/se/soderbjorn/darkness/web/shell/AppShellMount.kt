@@ -1693,9 +1693,18 @@ private class ShellState(
                     },
                     onFloatingMaximizeToggled = { paneId ->
                         viewActiveTabId()?.let { tabId ->
+                            val nowMaximized = !geometryFor(tabId, paneId).isMaximized
                             updateGeometry(tabId, paneId) {
                                 it.copy(isMaximized = !it.isMaximized)
                             }
+                            // Maximizing is a focus gesture: the pane is about
+                            // to fill the screen, so it must also become the
+                            // active, focused pane — same treatment as a dock
+                            // restore ([onFloatingRestored]). Without this,
+                            // maximizing a non-active pane left focus (and
+                            // keystrokes) on a pane now hidden behind it.
+                            // Un-maximizing keeps focus where it is.
+                            if (nowMaximized) bringPaneToFront(tabId, paneId, raise = true)
                             // Maximize has no inline live-update path
                             // (drag/resize update CSS vars inline during the
                             // gesture; maximize toggles a class flip that
