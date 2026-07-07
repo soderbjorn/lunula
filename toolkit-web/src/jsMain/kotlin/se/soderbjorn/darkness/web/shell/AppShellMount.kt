@@ -1782,6 +1782,11 @@ private class ShellState(
                                 it.copy(isMinimized = false)
                             }
                             bringPaneToFront(tabId, paneId, raise = true)
+                            // Surface the pane past a full-bleed maximized
+                            // sibling — under Custom nothing re-tiles, so
+                            // without this the restored pane lands behind
+                            // it. Same sweep as the sidebar-row restore.
+                            clearMaximizedSiblings(tabId, paneId)
                             reflowAfterMinimizeChange(tabId)
                         }
                     },
@@ -2482,6 +2487,45 @@ private class ShellState(
      *   current max so an overlapping (Custom-layout) restore lands in front.
      * @see reflowAfterMinimizeChange
      */
+    /**
+     * Clears `isMaximized` on every pane in [tabId] except [exceptPaneId],
+     * returning whether any flag actually flipped.
+     *
+     * Called by the pane-surfacing gestures that bypass the renderer's
+     * `focusPane(autoUnmaximize = true)` path — the sidebar row click and
+     * the dock-chip restore ([LayoutCallbacks.onFloatingRestored]). Both
+     * make a pane active from *outside* the pane area, so a full-bleed
+     * maximized sibling would otherwise keep covering the pane the user
+     * just picked: under a non-Custom preset the restore re-tile clears
+     * `isMaximized` as a side effect, but under [LayoutPreset.Custom]
+     * nothing re-tiles and the surfaced pane stays buried. Mirrors the
+     * semantics of [LayoutCallbacks.onFloatingMaximizeCleared] ("focus
+     * moved to a different pane → un-maximize") for these out-of-pane
+     * gestures.
+     *
+     * Callers own the follow-up render: this only mutates geometry (via
+     * [updateGeometry], which persists) so it can run before a single
+     * reflow/rerender instead of forcing one per cleared pane.
+     *
+     * @param tabId        the tab whose panes to sweep.
+     * @param exceptPaneId the pane being surfaced — its own maximize flag
+     *   (if any) is left alone.
+     * @return `true` when at least one sibling was un-maximized and the
+     *   caller must re-render for the change to become visible.
+     * @see bringPaneToFront
+     * @see reflowAfterMinimizeChange
+     */
+    private fun clearMaximizedSiblings(tabId: String, exceptPaneId: String): Boolean {
+        var cleared = false
+        geometryState.geometryByTab[tabId].orEmpty().forEach { (paneId, g) ->
+            if (paneId != exceptPaneId && g.isMaximized) {
+                updateGeometry(tabId, paneId) { it.copy(isMaximized = false) }
+                cleared = true
+            }
+        }
+        return cleared
+    }
+
     private fun bringPaneToFront(tabId: String, paneId: String, raise: Boolean) {
         if (raise) {
             val current = geometryState.geometryByTab[tabId].orEmpty()
@@ -2745,10 +2789,27 @@ private class ShellState(
             // restore brings the pane forward exactly like the dock-chip
             // restore does.
             bringPaneToFront(tabId, paneId, raise = wasMinimized)
+            // Surface the pane: a maximized sibling is full-bleed and would
+            // keep covering the pane the user just picked (the post-render
+            // focus reconciliation deliberately passes autoUnmaximize=false,
+            // so nothing else clears it — the restored pane silently landed
+            // *behind* the maximized one). Under a non-Custom preset the
+            // restore re-tile clears the flag anyway; this makes Custom —
+            // and the plain row-click-while-a-sibling-is-maximized case —
+            // behave the same. See [clearMaximizedSiblings].
+            val unmaximized = clearMaximizedSiblings(tabId, paneId)
             // Reflow once after the host-select calls so the restore FLIP
             // plays; for source mode the host's activePaneId catches up on
             // its snapshot round-trip and focuses the freshly-restored pane.
-            if (wasMinimized) reflowAfterMinimizeChange(tabId)
+            if (wasMinimized) {
+                reflowAfterMinimizeChange(tabId)
+            } else if (unmaximized) {
+                // No minimize flip to reflow for, but the cleared maximize
+                // still needs a repaint (same follow-up the maximize toggle
+                // does: rerender + geometry-changed ping).
+                rerender()
+                spec.onGeometryChanged?.invoke(tabId)
+            }
         })
         return row
     }
