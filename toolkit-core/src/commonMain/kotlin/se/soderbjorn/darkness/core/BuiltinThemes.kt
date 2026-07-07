@@ -1,10 +1,12 @@
 /* BuiltinThemes.kt
- * The 60 built-in themes (30 dark, 30 light), transcribed verbatim from the
- * "Termtastic Theme Studio" design's RAW array. Each theme defines all 20
- * literal tokens (including 8 dedicated syntax slots); the three the design
- * computes by formula (accentSoft, glow, addBg) are derived at render time by
- * [Theme.resolve] applying the design's alpha to the accent/add colour, so
- * nothing else is computed.
+ * The 62 built-in themes (32 dark, 30 light): 60 transcribed verbatim from
+ * the "Termtastic Theme Studio" design's RAW array, plus two hand-tuned
+ * retro-computer palettes ("Workbench 1.3", "Commodore 64") appended at the
+ * end of the list. Each theme
+ * defines all 20 literal tokens (including 8 dedicated syntax slots); the
+ * three the design computes by formula (accentSoft, glow, addBg) are derived
+ * at render time by [Theme.resolve] applying the design's alpha to the
+ * accent/add colour, so nothing else is computed.
  */
 package se.soderbjorn.darkness.core
 
@@ -37,7 +39,8 @@ private fun theme(
 )
 
 /**
- * The 60 built-in themes in display order: 30 dark, then 30 light.
+ * The 62 built-in themes in display order: 30 dark, then 30 light, then the
+ * two retro-computer palettes (dark) last.
  * `builtinThemes.first()` is the default dark theme ([DEFAULT_DARK_THEME]).
  *
  * @see Theme
@@ -286,6 +289,15 @@ val builtinThemes: List<Theme> = listOf(
         "#efe8f0", "#f7f2f8", "#e2d6e5", "#ccbccf", "#423a4a", "#857a8c", "#281f30",
         "#8a5f9a", "#c48a3e", "#bf5670", "#5a8a7a", "#3a6a5a",
         "#8a5f9a", "#5a8a7a", "#a06a5e", "#a094a5", "#9a6aaa", "#5a7a9a", "#423a4a", "#a06a5e"),
+    // ------------------------------ Retro (dark) ------------------------------
+    theme("Workbench 1.3", ThemeGroup.Dark, "Amiga", "Workbench blue, white and that orange. Kickstart included.",
+        "#0055aa", "#004c99", "#00458c", "#3d85c9", "#eaf4ff", "#8fc0e8", "#ffffff",
+        "#ff8800", "#ffaa33", "#ff4433", "#55cc66", "#c2f0c9",
+        "#ffaa33", "#cfe8ff", "#ffd28a", "#6fa8d6", "#ffffff", "#ffcc66", "#e6f2ff", "#ffd28a"),
+    theme("Commodore 64", ThemeGroup.Dark, "C64", "38911 BASIC bytes free on VIC-II blue. READY.",
+        "#352879", "#3b2d85", "#443596", "#6c5eb5", "#a8a0e0", "#7568c0", "#ffffff",
+        "#8a7fd6", "#b8c76f", "#d0605a", "#9ad284", "#d6f0c8",
+        "#9ad284", "#b8c76f", "#70a4b2", "#6c5eb5", "#ffffff", "#70a4b2", "#a8a0e0", "#b8c76f"),
 )
 
 /** Built-in themes indexed by name, for O(1) lookup. */
