@@ -1882,11 +1882,25 @@ private class ShellState(
     /**
      * Resolves which pane should hold focus in the active tab.
      *
-     * Source mode: prefer the snapshot's `activePaneId`. Otherwise (and
-     * in local mode) fall back to the [LayoutController.activePaneId]
-     * (the last pane the user clicked / activated), then to the first
-     * pane in the user's importance order, then to the first visible
-     * pane. Returns `null` only when the active tab has no panes at all.
+     * Source mode: prefer a live optimistic-focus hold
+     * ([pendingActivePaneId]) over the snapshot's `activePaneId`, then the
+     * snapshot's `activePaneId`. Otherwise (and in local mode) fall back to
+     * the [LayoutController.activePaneId] (the last pane the user clicked /
+     * activated), then to the first pane in the user's importance order,
+     * then to the first visible pane. Returns `null` only when the active
+     * tab has no panes at all.
+     *
+     * The hold must win over the snapshot: [applyPendingActivePaneHold]
+     * only rewrites `activePaneId` on snapshots as they ARRIVE, so between
+     * pushes [external] still carries the pre-gesture pane. A local
+     * [rerender] in that window — e.g. the one [LayoutCallbacks
+     * .onFloatingMaximizeToggled] fires right after [bringPaneToFront]
+     * recorded the hold — would otherwise reconcile focus back to the stale
+     * pane, visibly flashing the old pane's header active for the length of
+     * the host round-trip before the confirming snapshot flips it again.
+     * Same liveness rules as the snapshot path: an expired hold or one whose
+     * pane is no longer visible is ignored (not cleared — snapshot arrival
+     * owns the lifecycle; see [applyPendingActivePaneHold]).
      *
      * Note: this is a UI / focus-routing signal — it does not influence
      * layout. Layout slots are assigned from [LayoutController.paneOrder]
@@ -1903,6 +1917,10 @@ private class ShellState(
             .map { it.id }
             .filterNot { geometryFor(tabId, it).isMinimized }
         if (visibleIds.isEmpty()) return null
+        pendingActivePaneId[tabId]?.let { hold ->
+            val live = kotlin.js.Date.now() - hold.seededAtMs <= PENDING_ACTIVE_PANE_EXPIRY_MS
+            if (live && hold.paneId in visibleIds) return hold.paneId
+        }
         val sourceActive = external?.tabs?.firstOrNull { it.id == tabId }?.activePaneId
         if (sourceActive != null && sourceActive in visibleIds) return sourceActive
         val ctl = controllerFor(tabId)
