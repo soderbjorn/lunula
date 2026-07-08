@@ -1,7 +1,7 @@
 /* BuiltinThemes.kt
- * The 62 built-in themes (32 dark, 30 light): 60 transcribed verbatim from
+ * The 64 built-in themes (33 dark, 31 light): 62 transcribed verbatim from
  * the "Termtastic Theme Studio" design's RAW array, plus two hand-tuned
- * retro-computer palettes ("Workbench 1.3", "Commodore 64") appended at the
+ * retro-computer palettes ("Workbench", "C64") appended at the
  * end of the list. Each theme
  * defines all 20 literal tokens (including 8 dedicated syntax slots); the
  * three the design computes by formula (accentSoft, glow, addBg) are derived
@@ -11,10 +11,10 @@
 package se.soderbjorn.darkness.core
 
 /** Default theme bound to the dark slot. */
-const val DEFAULT_DARK_THEME: String = "Termtastic Dark"
+const val DEFAULT_DARK_THEME: String = "Lunamux Dark"
 
 /** Default theme bound to the light slot. */
-const val DEFAULT_LIGHT_THEME: String = "Termtastic Light"
+const val DEFAULT_LIGHT_THEME: String = "Lunamux Light"
 
 /**
  * Constructs a [Theme] from its 20 literal design tokens. The three translucent
@@ -39,15 +39,21 @@ private fun theme(
 )
 
 /**
- * The 62 built-in themes in display order: 30 dark, then 30 light, then the
- * two retro-computer palettes (dark) last.
- * `builtinThemes.first()` is the default dark theme ([DEFAULT_DARK_THEME]).
+ * The 64 built-in themes in display order: 31 dark, then 31 light, then the
+ * two retro-computer palettes (dark) last. "Lunamux Dark" leads the dark
+ * section and "Lunamux Light" leads the light section, so the first entry of
+ * each is that slot's default — but the slot defaults are bound by name via
+ * [DEFAULT_DARK_THEME] / [DEFAULT_LIGHT_THEME], not by list position.
  *
  * @see Theme
  * @see allThemes
  */
 val builtinThemes: List<Theme> = listOf(
     // ---------------------------------- Dark ----------------------------------
+    theme("Lunamux Dark", ThemeGroup.Dark, "Signature", "The house look — deep navy with a cyan glow and a mint-white lift.",
+        "#0a1420", "#0e1a28", "#122032", "#24384f", "#a9c4dd", "#5f7590", "#eaf3fb",
+        "#4dc8f5", "#f0b24b", "#ef5f6b", "#4dd6c0", "#a7f0e4",
+        "#7ab8ff", "#6fd3c0", "#a5d8ff", "#52708a", "#4dc8f5", "#5fe0d8", "#b8d0e0", "#c0e0ff"),
     theme("Termtastic Dark", ThemeGroup.Dark, "Signature", "The house look — green-dominant glow, a faint mint-white lift.",
         "#08110c", "#0c1611", "#112019", "#20392b", "#7fd0a0", "#557e63", "#dff7e8",
         "#6ee7a0", "#f0b24b", "#ef5f57", "#6ee7a0", "#a7f0c4",
@@ -169,6 +175,14 @@ val builtinThemes: List<Theme> = listOf(
         "#b0a8ff", "#d9b26a", "#f0728a", "#8ad0a8", "#c0e8d0",
         "#b0a8ff", "#a8b0c8", "#c8c8d4", "#5a5a62", "#cfc8ff", "#a8c8d8", "#d6d6db", "#c8c8d4"),
     // ---------------------------------- Light ---------------------------------
+    theme("Lunamux Light", ThemeGroup.Light, "Daybreak", "Crisp white and cyan. Bright, on-brand daylight.",
+        "#eef5fb", "#ffffff", "#e2ecf6", "#ccdcec", "#29455c", "#6b869e", "#0d2436",
+        "#0e97c8", "#c47a1e", "#d0453f", "#10998a", "#0c7266",
+        "#0e7d9a", "#2a8a5a", "#b06a1e", "#8aa5b8", "#0e97c8", "#2f7aa8", "#29455c", "#b06a1e"),
+    theme("Termtastic Light", ThemeGroup.Light, "Brand", "On-brand green, daylight edition.",
+        "#edf3ee", "#fbfdfb", "#e1ebe3", "#c9dfce", "#29382e", "#6c8975", "#0f2b17",
+        "#1f9d57", "#c47a1e", "#c0392b", "#1f9d57", "#147a40",
+        "#0f7d6e", "#5a8a2e", "#b06a1e", "#8aa593", "#1f9d57", "#0f7d8e", "#29382e", "#b06a1e"),
     theme("Paper", ThemeGroup.Light, "Ink", "Warm paper & ink. Quiet, focused, minimal.",
         "#f3efe5", "#faf7ef", "#eae5d8", "#dbd3c2", "#44423a", "#8d877a", "#211f1a",
         "#2f7d6b", "#b9742a", "#b23f2e", "#2f7d6b", "#1c5a4c",
@@ -185,10 +199,6 @@ val builtinThemes: List<Theme> = listOf(
         "#eef3fa", "#ffffff", "#e2ecf7", "#ccdcef", "#2a3b52", "#6f88a3", "#0f2338",
         "#2563d8", "#d98324", "#d63b4a", "#1f9d6b", "#157a52",
         "#8a3ad0", "#1f9d6b", "#d9591e", "#8da7bf", "#2563d8", "#0e8aa8", "#2a3b52", "#d9591e"),
-    theme("Termtastic Light", ThemeGroup.Light, "Brand", "On-brand green, daylight edition.",
-        "#edf3ee", "#fbfdfb", "#e1ebe3", "#c9dfce", "#29382e", "#6c8975", "#0f2b17",
-        "#1f9d57", "#c47a1e", "#c0392b", "#1f9d57", "#147a40",
-        "#0f7d6e", "#5a8a2e", "#b06a1e", "#8aa593", "#1f9d57", "#0f7d8e", "#29382e", "#b06a1e"),
     theme("Gruvbox Light", ThemeGroup.Light, "Retro", "Gruvbox by daylight. Warm vintage paper.",
         "#fbf1c7", "#f6eec3", "#ebdbb2", "#d5c4a1", "#3c3836", "#7c6f64", "#282828",
         "#af3a03", "#b57614", "#9d0006", "#79740e", "#5c5709",
@@ -290,11 +300,11 @@ val builtinThemes: List<Theme> = listOf(
         "#8a5f9a", "#c48a3e", "#bf5670", "#5a8a7a", "#3a6a5a",
         "#8a5f9a", "#5a8a7a", "#a06a5e", "#a094a5", "#9a6aaa", "#5a7a9a", "#423a4a", "#a06a5e"),
     // ------------------------------ Retro (dark) ------------------------------
-    theme("Workbench 1.3", ThemeGroup.Dark, "Amiga", "Workbench blue, white and that orange. Kickstart included.",
+    theme("Workbench", ThemeGroup.Dark, "Amiga", "Workbench blue, white and that orange. Kickstart included.",
         "#0055aa", "#004c99", "#00458c", "#3d85c9", "#eaf4ff", "#8fc0e8", "#ffffff",
         "#ff8800", "#ffaa33", "#ff4433", "#55cc66", "#c2f0c9",
         "#ffaa33", "#cfe8ff", "#ffd28a", "#6fa8d6", "#ffffff", "#ffcc66", "#e6f2ff", "#ffd28a"),
-    theme("Commodore 64", ThemeGroup.Dark, "C64", "38911 BASIC bytes free on VIC-II blue. READY.",
+    theme("C64", ThemeGroup.Dark, "C64", "38911 BASIC bytes free on VIC-II blue. READY.",
         "#352879", "#3b2d85", "#443596", "#6c5eb5", "#a8a0e0", "#7568c0", "#ffffff",
         "#8a7fd6", "#b8c76f", "#d0605a", "#9ad284", "#d6f0c8",
         "#9ad284", "#b8c76f", "#70a4b2", "#6c5eb5", "#ffffff", "#70a4b2", "#a8a0e0", "#b8c76f"),
