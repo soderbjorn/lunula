@@ -50,8 +50,8 @@ private fun theme(
  */
 val builtinThemes: List<Theme> = listOf(
     // ---------------------------------- Dark ----------------------------------
-    theme("Lunamux Dark", ThemeGroup.Dark, "Signature", "The house look — deep navy with a cyan glow and a mint-white lift.",
-        "#0a1420", "#0e1a28", "#122032", "#24384f", "#a9c4dd", "#5f7590", "#eaf3fb",
+    theme("Lunamux Dark", ThemeGroup.Dark, "Signature", "The house look — near-black navy with a cyan glow and a mint-white lift.",
+        "#04090f", "#070f1a", "#0b1626", "#1b2b3f", "#a9c4dd", "#5f7590", "#eaf3fb",
         "#4dc8f5", "#f0b24b", "#ef5f6b", "#4dd6c0", "#a7f0e4",
         "#7ab8ff", "#6fd3c0", "#a5d8ff", "#52708a", "#4dc8f5", "#5fe0d8", "#b8d0e0", "#c0e0ff"),
     theme("Termtastic Dark", ThemeGroup.Dark, "Signature", "The house look — green-dominant glow, a faint mint-white lift.",
