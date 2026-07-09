@@ -8,12 +8,12 @@ plugins {
 
 allprojects {
     group = "se.soderbjorn.darkness"
-    version = "0.2.24"
+    version = "0.2.25"
 }
 
 // Default file-Maven-repo locations inside the two consumer worktrees. Each
 // consumer commits its libs-repo so it can build without the toolkit checkout.
-val termtasticLibsRepoDefault: String = "../../termtastic/main/libs-repo"
+val lunamuxLibsRepoDefault: String = "../../lunamux/main/libs-repo"
 val notegrowLibsRepoDefault: String = "../../notegrow/main/libs-repo"
 
 fun resolveRepo(propertyName: String, default: String): java.io.File {
@@ -27,8 +27,8 @@ subprojects {
         extensions.configure<PublishingExtension> {
             repositories {
                 maven {
-                    name = "TermtasticLibsRepo"
-                    url = uri(resolveRepo("termtasticLibsRepo", termtasticLibsRepoDefault))
+                    name = "LunamuxLibsRepo"
+                    url = uri(resolveRepo("lunamuxLibsRepo", lunamuxLibsRepoDefault))
                 }
                 maven {
                     name = "NotegrowLibsRepo"
@@ -41,7 +41,7 @@ subprojects {
 
 tasks.register("publishAllToLibsRepo") {
     group = "publishing"
-    description = "Publishes every toolkit module to the libs-repo of both consumer repos (termtastic and notegrow)."
+    description = "Publishes every toolkit module to the libs-repo of both consumer repos (lunamux and notegrow)."
     // Filter to toolkit-* modules only — demo modules deliberately don't apply
     // maven-publish, so they have no publishAllPublicationsTo* tasks to depend
     // on. Filtering by name keeps the dependency list resolvable at config
@@ -51,7 +51,7 @@ tasks.register("publishAllToLibsRepo") {
             .filter { it.name.startsWith("toolkit-") }
             .flatMap { sub ->
                 listOf(
-                    "${sub.path}:publishAllPublicationsToTermtasticLibsRepoRepository",
+                    "${sub.path}:publishAllPublicationsToLunamuxLibsRepoRepository",
                     "${sub.path}:publishAllPublicationsToNotegrowLibsRepoRepository",
                 )
             }

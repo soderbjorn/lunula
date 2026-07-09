@@ -27,7 +27,7 @@ kotlin {
 
     jvm {
         // Pin desktop-JVM bytecode to Java 11 (matching androidTarget) so
-        // consumers bundling a Java 17 runtime — e.g. termtastic's Electron
+        // consumers bundling a Java 17 runtime — e.g. lunamux's Electron
         // app — can load these classes. Without this the jvm() target inherits
         // whatever JDK Gradle runs on (currently 21), emitting class file
         // version 65.0 that a 17 JRE rejects with UnsupportedClassVersionError.
