@@ -303,7 +303,19 @@ fun renderPaneHeader(paneId: PaneId, spec: PaneHeaderSpec): HTMLElement {
         if (breadcrumbs.isNotEmpty()) append(' ').append(PaneHeaderClassNames.TITLE_BREADCRUMBS)
     }
     if (breadcrumbs.isEmpty()) {
-        title.textContent = spec.title ?: "—"
+        // Wrap the title text in a `<bdi>` so the text run's own direction
+        // (LTR for latin, RTL for e.g. Arabic — <bdi> defaults to dir=auto)
+        // is isolated from the element's base direction. The start-clip modes
+        // — the `.dt-pane-title-rtl` opt-in and any host-side `direction: rtl`
+        // override — set the ELEMENT direction to RTL purely so long titles
+        // clip from the left (keeping the informative tail visible). Without
+        // this isolation the RTL base would also reorder leading NEUTRAL
+        // characters: a channel name like "#commodore" renders "commodore#",
+        // a path "/a/b" renders "a/b/". The `<bdi>` keeps the glyph order
+        // intact while the outer element still clips from the left.
+        val bdi = document.createElement("bdi") as HTMLElement
+        bdi.textContent = spec.title ?: "—"
+        title.appendChild(bdi)
         // RTL truncation surfaces the rightmost segment of long titles (file
         // paths, bullet trails). Tooltip exposes the full text so users can
         // still read what's clipped.

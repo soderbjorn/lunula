@@ -118,10 +118,19 @@ class ThemeBootstrap private constructor(internal val seedDefaults: Boolean) {
  * @property tabs ordered tab list.
  * @property activeTabId the currently active tab's id (must be a member
  *   of [tabs] or `null` if the list is empty).
+ * @property worldId the id of the world these tabs belong to, when the
+ *   host is world-aware (i.e. supplies [AppShellSpec.worldLayoutProvider]).
+ *   The assembler keys pane geometry per world off this value: when it
+ *   changes between snapshots the toolkit flushes the outgoing world's
+ *   layout to its own persistence key and loads the incoming world's,
+ *   so each world keeps an independent pane arrangement. `null` (the
+ *   default) means "single-world" — geometry lives under the flat
+ *   [se.soderbjorn.darkness.core.PersistKeys.LAYOUT_STATE] key as before.
  */
 data class TabListSnapshot(
     val tabs: List<TabSnapshotEntry>,
     val activeTabId: String?,
+    val worldId: String? = null,
 )
 
 /**
@@ -296,6 +305,79 @@ class TabSource(
 )
 
 /**
+ * One world in [WorldListSnapshot.worlds] — a named workspace one level
+ * above tabs. Identity-only: the world's tabs come through the ordinary
+ * [TabSource] / [TabListSnapshot] channel (the host swaps its tab feed
+ * when the active world changes), so a world entry carries just its id
+ * and label for the switcher.
+ *
+ * @property id    stable world identifier (matches what's reported back
+ *   via [WorldSource.onSelect] / [WorldSource.onRename] / etc.).
+ * @property label visible world name shown in the switcher.
+ */
+data class WorldSnapshotEntry(
+    val id: String,
+    val label: String,
+)
+
+/**
+ * App-supplied snapshot of the current world list plus the active world.
+ * Pushed through [WorldSource.subscribe] the same way [TabListSnapshot]
+ * flows through [TabSource].
+ *
+ * @property worlds        ordered world list (first = default world).
+ * @property activeWorldId the active world's id, or `null` when empty.
+ */
+data class WorldListSnapshot(
+    val worlds: List<WorldSnapshotEntry>,
+    val activeWorldId: String?,
+)
+
+/**
+ * Push-based source of the app's **world** list — the container one level
+ * above tabs. Mirrors [TabSource]: the assembler subscribes once at mount,
+ * the host pushes a fresh [WorldListSnapshot] whenever its world model
+ * changes, and user gestures on the toolkit's globe switcher route back
+ * through these callbacks.
+ *
+ * Supplying a `worldSource` makes the toolkit render a globe world
+ * switcher in the topbar leading cluster (left of the tab strip) and add
+ * a "New world" entry to the "+" split-button dropdown. Leaving it `null`
+ * (the default) suppresses the switcher entirely — single-world apps are
+ * unaffected.
+ *
+ * Local-mode consumers (the toolkit's own demo) drive this from a
+ * [se.soderbjorn.darkness.store.WorldsState]; source-mode consumers
+ * (Lunamux) feed it from server state and forward the callbacks as world
+ * commands.
+ *
+ * @property subscribe invoked once at mount with a `push` callback the
+ *   host calls whenever its world snapshot changes. The first call should
+ *   pass the current snapshot.
+ * @property onSelect fires when the user activates a world in the switcher
+ *   list. The host makes that world active and swaps its tab feed.
+ * @property onAdd    fires when the user picks "New world" and confirms a
+ *   name. `null` hides the entry.
+ * @property onRename fires when a world rename is committed. `null` makes
+ *   worlds non-renamable.
+ * @property onClose  fires when the user closes a world (after the
+ *   toolkit's confirm dialog). `null` makes worlds non-closable. The host
+ *   is responsible for refusing to close the last world.
+ * @property onMoveTab fires when the user picks a destination world from a
+ *   tab's dot-menu "Move to world" submenu, with the tab id and the target
+ *   world id. The host moves the tab (with its panes/sessions) into that
+ *   world and pushes a fresh tab snapshot back. `null` hides the submenu.
+ */
+class WorldSource(
+    val subscribe: (push: (WorldListSnapshot) -> Unit) -> Unit,
+    val onSelect: (id: String) -> Unit,
+    val onAdd: ((name: String) -> Unit)? = null,
+    val onRename: ((id: String, newLabel: String) -> Unit)? = null,
+    val onClose: ((id: String) -> Unit)? = null,
+    val onMoveTab: ((tabId: String, worldId: String) -> Unit)? = null,
+)
+
+/**
  * Configuration handed to [mountAppShell]. Anything an app needs to
  * customize lives here; everything else is toolkit-owned.
  *
@@ -435,6 +517,41 @@ data class AppShellSpec(
     val persister: Persister,
     val paneContent: PaneContentFactory,
     val tabSource: TabSource? = null,
+    /**
+     * Optional push-based source of the app's **world** list. When
+     * supplied, the toolkit renders a globe world switcher in the topbar
+     * leading cluster (left of the tab strip) and a "New world" entry in
+     * the "+" dropdown; user gestures route back through the source's
+     * callbacks. When `null` (the default), no switcher is shown and the
+     * app behaves as a single-world app.
+     *
+     * @see WorldSource
+     */
+    val worldSource: WorldSource? = null,
+    /**
+     * Optional synchronous provider of a world's persisted layout blob,
+     * used to make pane geometry per-world. When supplied (alongside a
+     * [worldSource] and a [TabListSnapshot.worldId] on each snapshot), the
+     * toolkit calls this the instant the active world changes to load that
+     * world's saved layout — the same JSON shape [currentLayoutStateJson]
+     * returns and [applyExternalLayoutState] accepts. Returning `null` (or
+     * a blob for an unknown world) yields an empty layout, so that world's
+     * panes Auto-tile on first show.
+     *
+     * The host reads it from its own already-cached settings snapshot, so
+     * the call is synchronous and cheap; it must not block. Leaving this
+     * `null` (the default) keeps the flat single-world model — geometry
+     * stays under [se.soderbjorn.darkness.core.PersistKeys.LAYOUT_STATE]
+     * and [TabListSnapshot.worldId] is ignored.
+     *
+     * Writes remain the toolkit's job: the assembler persists each world's
+     * layout through [persister] under a per-world key derived from the
+     * world id (the default/first world keeps the flat LAYOUT_STATE key so
+     * pre-world clients and existing saved data keep working); the host's
+     * persister adapter is responsible for routing the default world's
+     * per-world key back onto LAYOUT_STATE if it needs old-client parity.
+     */
+    val worldLayoutProvider: ((worldId: String) -> String?)? = null,
     val paneLabel: (tabId: String, paneId: String) -> String = { _, paneId -> paneId },
     val paneIcon: (tabId: String, paneId: String) -> String? = { _, _ -> DefaultPaneGlyph },
     val paneActions: (tabId: String, paneId: String) -> List<PaneAction> = { _, _ -> emptyList() },

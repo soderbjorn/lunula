@@ -37,13 +37,33 @@ import org.w3c.dom.events.MouseEvent
  * @property onSelect invoked once when the user clicks the row. The
  *   helper closes the menu immediately afterwards and stops the click
  *   from bubbling to the host button's `onclick`.
+ * @property isSeparator when `true`, this entry renders as a thin,
+ *   non-interactive divider between groups instead of a clickable row;
+ *   [label] / [iconHtml] / [onSelect] are ignored. Use [hoverMenuSeparator] to
+ *   build one. Lets callers group items (e.g. "New tab" | panes | "New
+ *   workspace"). Declared before [onSelect] so the common trailing-lambda call
+ *   form `HoverMenuItem(id, label, icon) { … }` still binds the lambda to
+ *   [onSelect].
  */
 data class HoverMenuItem(
     val id: String,
     val label: String,
     val iconHtml: String,
+    val isSeparator: Boolean = false,
     val onSelect: () -> Unit,
 )
+
+/**
+ * A non-interactive divider row for a hover menu.
+ *
+ * Convenience over the [HoverMenuItem] constructor so callers can drop a
+ * separator between groups without spelling out empty label/icon/onSelect.
+ *
+ * @param id stable identifier (never shown); make it unique within the menu.
+ * @return a separator [HoverMenuItem].
+ */
+fun hoverMenuSeparator(id: String): HoverMenuItem =
+    HoverMenuItem(id = id, label = "", iconHtml = "", isSeparator = true, onSelect = {})
 
 private const val SHOW_DELAY_MS = 120
 private const val HIDE_DELAY_MS = 180
@@ -165,6 +185,14 @@ fun attachHoverMenu(
         box.setAttribute("role", "menu")
 
         for (item in items) {
+            if (item.isSeparator) {
+                val sep = document.createElement("div") as HTMLElement
+                sep.className = "dt-hover-menu-separator"
+                sep.setAttribute("role", "separator")
+                sep.setAttribute("data-id", item.id)
+                box.appendChild(sep)
+                continue
+            }
             val row = document.createElement("button") as HTMLElement
             row.setAttribute("type", "button")
             row.className = "dt-hover-menu-item"

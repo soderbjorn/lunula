@@ -145,6 +145,21 @@ class TabBarCallbacks(
      * pass `false`. Has no effect when [onClose] is `null`.
      */
     val confirmTabClose: Boolean = true,
+    /**
+     * The other worlds a tab can be moved into — every world except the one
+     * currently shown — as `(id, label)` pairs. Populated by the assembler
+     * from the [WorldSource] snapshot. When non-empty and [onMoveToWorld] is
+     * set, each tab's dot menu grows a "Move to world" submenu listing these.
+     * Empty (the default) omits the submenu.
+     */
+    val moveToWorlds: List<WorldSnapshotEntry> = emptyList(),
+    /**
+     * Fires when the user picks a destination world from a tab's dot-menu
+     * "Move to world" submenu — `(tabId, worldId)`. `null` (the default), or
+     * an empty [moveToWorlds], omits the submenu. Wired by the assembler to
+     * [WorldSource.onMoveTab].
+     */
+    val onMoveToWorld: ((tabId: String, worldId: String) -> Unit)? = null,
 )
 
 /**

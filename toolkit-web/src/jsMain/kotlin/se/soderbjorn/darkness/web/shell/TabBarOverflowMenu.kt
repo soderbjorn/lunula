@@ -34,6 +34,7 @@
 package se.soderbjorn.darkness.web.shell
 
 import kotlinx.browser.document
+import kotlinx.browser.window
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.events.Event
 
@@ -57,9 +58,10 @@ internal fun appendTabDotMenu(tabEl: HTMLElement, tab: TabSpec, spec: TabBarSpec
     val cb = spec.callbacks
     val canRename = tab.isRenamable && cb.onRename != null
     val canClose = cb.onClose != null
+    val canMoveWorld = cb.onMoveToWorld != null && cb.moveToWorlds.isNotEmpty()
     val canHide = cb.onSetHidden != null
     val canHideSidebar = cb.onSetHiddenFromSidebar != null
-    if (!canRename && !canClose && !canHide && !canHideSidebar) return
+    if (!canRename && !canClose && !canMoveWorld && !canHide && !canHideSidebar) return
 
     val menuWrap = document.createElement("div") as HTMLElement
     menuWrap.className = "dt-tab-menu"
@@ -97,9 +99,15 @@ internal fun appendTabDotMenu(tabEl: HTMLElement, tab: TabSpec, spec: TabBarSpec
         })
     }
 
-    // Divider between the act-on-this-tab group (Rename / Close) and the
-    // visibility group (Hide / Show in tab bar / side bar).
-    if ((canRename || canClose) && (canHide || canHideSidebar)) {
+    // "Move to world" opens a submenu listing every other world (issue: move a
+    // tab between worlds). Sits with the act-on-this-tab group.
+    if (canMoveWorld) {
+        appendMoveToWorldSubmenu(menuList, tab, cb, closeMenu)
+    }
+
+    // Divider between the act-on-this-tab group (Rename / Close / Move to world)
+    // and the visibility group (Hide / Show in tab bar / side bar).
+    if ((canRename || canClose || canMoveWorld) && (canHide || canHideSidebar)) {
         menuList.appendChild(menuSeparator())
     }
 
@@ -124,6 +132,90 @@ internal fun appendTabDotMenu(tabEl: HTMLElement, tab: TabSpec, spec: TabBarSpec
     menuWrap.appendChild(menuBtn)
     tabEl.appendChild(menuWrap)
     document.body?.appendChild(menuList)
+}
+
+/**
+ * Append the "Move to world" parent row plus its hover/click **flyout submenu**
+ * (one row per other world) to a tab's dot-menu [menuList]. The flyout is a
+ * nested `.dt-tabbar-menu-list` so it shares the parent list's show/hide and
+ * teardown lifecycle (the parent going `display:none` hides it; a rerender's
+ * stale-list sweep removes it). Picking a world fires
+ * [TabBarCallbacks.onMoveToWorld] and closes the whole menu; hovering the
+ * parent row opens the flyout, leaving both (after a short grace) closes it.
+ *
+ * Only called when [TabBarCallbacks.onMoveToWorld] is set and
+ * [TabBarCallbacks.moveToWorlds] is non-empty (see [appendTabDotMenu]).
+ *
+ * @param menuList  the tab's dot-menu dropdown to append the row + flyout to.
+ * @param tab       the tab being moved.
+ * @param cb        the tab-bar callbacks (supplies the worlds + move handler).
+ * @param closeMenu closes the whole dot menu after a world is picked.
+ */
+private fun appendMoveToWorldSubmenu(
+    menuList: HTMLElement,
+    tab: TabSpec,
+    cb: TabBarCallbacks,
+    closeMenu: () -> Unit,
+) {
+    val onMove = cb.onMoveToWorld ?: return
+
+    val row = document.createElement("div") as HTMLElement
+    row.className = "dt-tabbar-menu-item dt-tabbar-menu-submenu-parent"
+    val icon = document.createElement("span") as HTMLElement
+    icon.className = "dt-tabbar-menu-item-icon"
+    icon.innerHTML = ICON_MOVE_WORLD
+    val label = document.createElement("span") as HTMLElement
+    label.className = "dt-tabbar-menu-item-label"
+    label.textContent = "Move to workspace"
+    val caret = document.createElement("span") as HTMLElement
+    caret.className = "dt-tabbar-menu-submenu-caret"
+    caret.innerHTML = ICON_CARET_RIGHT
+    row.appendChild(icon)
+    row.appendChild(label)
+    row.appendChild(caret)
+
+    val flyout = document.createElement("div") as HTMLElement
+    flyout.className = "dt-tabbar-menu-list dt-tabbar-menu-submenu-list"
+    for (w in cb.moveToWorlds) {
+        flyout.appendChild(menuRow(w.label.ifBlank { "(untitled)" }, ICON_WORLD) {
+            closeMenu()
+            onMove(tab.id, w.id)
+        })
+    }
+
+    var hideTimer: Int? = null
+    fun cancelHide() {
+        hideTimer?.let { window.clearTimeout(it) }
+        hideTimer = null
+    }
+    fun open() {
+        cancelHide()
+        // Hang the flyout off the list's right edge, aligned to this row's top.
+        flyout.style.top = "${row.offsetTop}px"
+        flyout.classList.remove("dt-flip-left")
+        flyout.classList.add("dt-open")
+        // Flip to the parent's LEFT side if the right-hand flyout would spill
+        // off the viewport (a tab whose dot menu sits near the right edge).
+        val rect = flyout.getBoundingClientRect()
+        if (rect.right > window.innerWidth - 4.0) flyout.classList.add("dt-flip-left")
+    }
+    fun scheduleClose() {
+        cancelHide()
+        hideTimer = window.setTimeout({ flyout.classList.remove("dt-open") }, 220)
+    }
+    row.addEventListener("mouseenter", { _: Event -> open() })
+    row.addEventListener("mouseleave", { _: Event -> scheduleClose() })
+    flyout.addEventListener("mouseenter", { _: Event -> cancelHide() })
+    flyout.addEventListener("mouseleave", { _: Event -> scheduleClose() })
+    // Click toggles too, so the submenu is reachable without a hover (touch / a
+    // deliberate click). Stop propagation so the outside-dismiss doesn't fire.
+    row.addEventListener("click", { ev: Event ->
+        ev.stopPropagation()
+        if (flyout.classList.contains("dt-open")) flyout.classList.remove("dt-open") else open()
+    })
+
+    menuList.appendChild(row)
+    menuList.appendChild(flyout)
 }
 
 /**
@@ -226,8 +318,12 @@ internal fun appendTabBarOverflowMenu(host: HTMLElement, spec: TabBarSpec) {
  * @param menuList the body-mounted dropdown list (must carry the
  *   `.dt-tabbar-menu-list` class so the "close others" sweep finds it).
  * @return a `closeMenu` lambda the caller's rows invoke after acting.
+ *
+ * `internal` (not file-private) so the world switcher's per-world `⋮` dot menu
+ * ([se.soderbjorn.darkness.web.shell.appendWorldRowDotMenu]) reuses the exact
+ * same toggle/backdrop behaviour rather than reimplementing it.
  */
-private fun wireMenuToggle(
+internal fun wireMenuToggle(
     menuWrap: HTMLElement,
     menuBtn: HTMLElement,
     menuList: HTMLElement,
@@ -277,14 +373,14 @@ private fun wireMenuToggle(
  *  toolkit doesn't need an external icon dependency; sized 14×14 to
  *  match the row label baseline. Termtastic's TabBarMenu uses the same
  *  glyph family — staying consistent across the family. */
-private const val ICON_RENAME: String =
+internal const val ICON_RENAME: String =
     "<svg viewBox=\"0 0 16 16\" width=\"14\" height=\"14\" fill=\"none\" " +
         "stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" " +
         "stroke-linejoin=\"round\">" +
         "<path d=\"M2 12.5V14h1.5l8-8L10 4.5z\"/>" +
         "<path d=\"M11 4l1-1 1 1-1 1z\"/></svg>"
 
-private const val ICON_CLOSE_TAB: String =
+internal const val ICON_CLOSE_TAB: String =
     "<svg viewBox=\"0 0 16 16\" width=\"14\" height=\"14\" fill=\"none\" " +
         "stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\">" +
         "<line x1=\"4\" y1=\"4\" x2=\"12\" y2=\"12\"/>" +
@@ -310,13 +406,35 @@ private const val ICON_HIDDEN_TAB: String =
         "stroke-linejoin=\"round\">" +
         "<rect x=\"2.5\" y=\"4\" width=\"11\" height=\"8\" rx=\"1.5\"/></svg>"
 
+/** A globe (circle + meridian + parallels) — the "world" mark, matching the switcher. */
+private const val ICON_WORLD: String =
+    "<svg viewBox=\"0 0 16 16\" width=\"14\" height=\"14\" fill=\"none\" " +
+        "stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linecap=\"round\" " +
+        "stroke-linejoin=\"round\">" +
+        "<circle cx=\"8\" cy=\"8\" r=\"6\"/>" +
+        "<line x1=\"2\" y1=\"8\" x2=\"14\" y2=\"8\"/>" +
+        "<ellipse cx=\"8\" cy=\"8\" rx=\"2.6\" ry=\"6\"/></svg>"
+
+/** A globe with a small motion arrow — the "Move to world" parent-row mark. */
+private const val ICON_MOVE_WORLD: String = ICON_WORLD
+
+/** A right-pointing chevron flagging a row that opens a flyout submenu. */
+private const val ICON_CARET_RIGHT: String =
+    "<svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" " +
+        "stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" " +
+        "stroke-linejoin=\"round\">" +
+        "<polyline points=\"6 4 10 8 6 12\"/></svg>"
+
 /**
  * Build a clickable menu row with an optional leading icon. Stops event
  * propagation so outside-click dismissal doesn't fire on the same tick
  * as the row activation. Icon span is always emitted (with empty content
  * when [iconHtml] is null) so labels in the column line up vertically.
+ *
+ * `internal` so the world switcher's per-world `⋮` dot menu reuses the same
+ * row markup + wiring as the tab dot menu.
  */
-private fun menuRow(label: String, iconHtml: String? = null, onClick: () -> Unit): HTMLElement {
+internal fun menuRow(label: String, iconHtml: String? = null, onClick: () -> Unit): HTMLElement {
     val row = document.createElement("div") as HTMLElement
     row.className = "dt-tabbar-menu-item"
     val icon = document.createElement("span") as HTMLElement

@@ -230,10 +230,21 @@ class LayoutController(
      *   or `null` when no parent context exists.
      */
     fun recordCreate(newPaneId: PaneId, parentPaneId: PaneId?) {
-        // Drop any prior entries (defensive — shouldn't happen for a
-        // truly new id, but lets the host re-use ids without breakage).
-        _paneOrder.remove(newPaneId)
-        _paneOrder.add(newPaneId)
+        // Append at the tail only when the pane is not already tracked.
+        //
+        // A pane that is ALREADY in [paneOrder] is not, in fact, new — it was
+        // just seeded there by a [reset] (e.g. a world switch loading its saved
+        // per-world layout, or boot hydration from persistence). Re-appending it
+        // (remove-then-add) would drag it to the tail and destroy the very order
+        // that reset just restored — the host's diff loop calls recordCreate for
+        // *every* pane of a freshly-appeared tab, so on a world switch that
+        // rewrote the whole saved importance order to raw snapshot order and the
+        // sidebar rows visibly re-sorted (the world-switch flicker). Leaving a
+        // tracked pane untouched keeps its restored slot; the no-duplicate
+        // invariant is preserved either way (we only add when absent). A
+        // genuinely new pane (not in the order) still lands at the tail — least
+        // important by default — so it never disturbs the user's arrangement.
+        if (newPaneId !in _paneOrder) _paneOrder.add(newPaneId)
         if (parentPaneId != null && parentPaneId != newPaneId) {
             _parentByPane[newPaneId] = parentPaneId
         }

@@ -84,6 +84,19 @@ object PersistKeys {
     const val LAYOUT_STATE: String = "darkness.layoutState"
 
     /**
+     * Serialized [se.soderbjorn.darkness.store.WorldsState] — the "worlds"
+     * container one level above [se.soderbjorn.darkness.store.LayoutState].
+     * Each world owns its own tab/pane [LayoutState] and an optional
+     * per-world theme selection. Used only in local mode (demo / the
+     * toolkit's own showcase); source-mode apps (e.g. Lunamux) receive
+     * the world model from their server and don't persist it here.
+     *
+     * A missing key means "no worlds persisted yet" — local-mode callers
+     * migrate the single [LAYOUT_STATE] blob into one default world.
+     */
+    const val WORLDS: String = "darkness.worlds"
+
+    /**
      * Legacy serialized theme-snapshot key. No longer written by the toolkit;
      * retained only so the server can *synthesize* an approximate legacy blob
      * under this key for pre-revamp mobile apps. New code uses [THEME_V2_CUSTOM]

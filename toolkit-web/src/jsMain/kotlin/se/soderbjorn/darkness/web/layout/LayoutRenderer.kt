@@ -831,6 +831,7 @@ class LayoutRenderer(
             // No anchor yet — enter at the top-left-most pane.
             val entry = centers.minByOrNull { it.cx + it.cy } ?: return
             if (entry.id != focusedLeafId) focusPane(entry.id)
+            moveDomFocusIntoPane(entry.id)
             return
         }
 
@@ -859,6 +860,68 @@ class LayoutRenderer(
 
         val target = best ?: return
         focusPane(target.id)
+        moveDomFocusIntoPane(target.id)
+    }
+
+    /**
+     * Move real keyboard/DOM focus into a pane's content after a KEYBOARD
+     * focus move (spatial Ctrl+Opt+Arrow navigation).
+     *
+     * [focusPane] only flips the focus-ring class and fires
+     * [PaneCallbacks.onPaneFocused]; it deliberately does NOT touch DOM
+     * focus (it also runs during mousedown — where the browser already
+     * moved focus natively — and during host reconciliation, where stealing
+     * focus would be wrong). A mouse click therefore moves DOM focus for
+     * free: the browser focuses whatever was pressed, which is how a host
+     * that tracks focus with a `focusin` listener on its pane content
+     * (e.g. termtastic's xterm `<textarea>`) learns about the click and
+     * starts routing keystrokes there. Keyboard navigation has no such
+     * native focus move, so without this the ring jumps to the new pane
+     * while the terminal cursor — and the host's notion of the focused
+     * pane — stay behind on the old one.
+     *
+     * Focusing the first genuinely focusable descendant of the new pane's
+     * content slot reproduces the click's effect: the terminal (or other
+     * focusable content) receives keys, and the host's `focusin` handler
+     * fires exactly as it would for a click. Panes whose content has no
+     * focusable element are left as-is (only the ring moves) — the previous
+     * behaviour, with no regression.
+     *
+     * @param paneId the pane the keyboard navigation just moved focus to.
+     */
+    private fun moveDomFocusIntoPane(paneId: PaneId) {
+        val paneEl = paneArea.querySelector("[data-pane-id=\"$paneId\"]") as? HTMLElement ?: return
+        val content = paneEl.querySelector(".${LayoutClassNames.PANE_CONTENT}") as? HTMLElement ?: return
+        val focusable = content.querySelector(
+            "textarea, input, select, [contenteditable=\"true\"], [tabindex]:not([tabindex=\"-1\"])"
+        ) as? HTMLElement ?: return
+        focusable.focus()
+    }
+
+    /**
+     * Move real DOM focus into the currently ring-focused pane's content.
+     *
+     * Public entry point for host gestures that rebuild the pane DOM WITHOUT
+     * a native focus move and want the active terminal to keep receiving keys
+     * afterwards — notably applying a layout preset from the layout switcher.
+     * That gesture re-tiles geometry and re-renders (detaching the focused
+     * pane's `<textarea>` from the document, which the browser treats as a
+     * blur), but the switcher click itself put DOM focus on the dropdown, not
+     * the terminal — so nothing restores it. Calling this after the re-render
+     * hands focus back, exactly as a click would.
+     *
+     * Deliberately NOT invoked from the generic per-render reconciliation
+     * (which flips the focus ring on every re-render): stealing DOM focus on
+     * every render would yank the caret out of, say, a settings field the
+     * moment an unrelated background render fired. This is opt-in per gesture.
+     *
+     * No-op when no pane is ring-focused or its content has no focusable
+     * element.
+     *
+     * @see moveDomFocusIntoPane
+     */
+    fun focusActivePaneContent() {
+        focusedLeafId?.let { moveDomFocusIntoPane(it) }
     }
 
     /**

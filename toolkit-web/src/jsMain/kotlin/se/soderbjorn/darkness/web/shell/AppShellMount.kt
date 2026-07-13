@@ -165,6 +165,13 @@ internal data class PersistedPaneGeometry(
 private const val RECENT_LAYOUT_WRITES = 16
 
 /**
+ * Test seam invoked at the end of every [ShellState.rerender]. Lets a test
+ * observe each individual render pass of a multi-pass update (e.g. a world
+ * switch) and detect transient chrome churn. Never assigned in production.
+ */
+internal var onAppShellRenderedForTest: (() -> Unit)? = null
+
+/**
  * Encodes [layout] as a JSON string via `JSON.stringify` so toolkit-web
  * doesn't take a hard dep on the kotlinx.serialization plugin.
  */
@@ -507,6 +514,13 @@ fun mountAppShell(
             val layout = layoutRaw?.let { decodeShellLayoutJson(it) } ?: seedDefaultLayout()
             state.applyLocalLayout(layout)
         }
+        // Worlds sit above tabs and are optional: only wire the switcher
+        // when the app supplies a world source. Subscribed after the tab
+        // source so the first world push renders against a populated tab
+        // model.
+        if (spec.worldSource != null) {
+            state.bindWorldSource(spec.worldSource)
+        }
     }
 
     return object : AppShellHandle {
@@ -631,6 +645,13 @@ private class ShellState(
     private var external: TabListSnapshot? = null
 
     /**
+     * Latest world list pushed by [AppShellSpec.worldSource], or `null`
+     * when no world source is wired. Drives the topbar globe switcher and
+     * the "New world" dropdown entry; a push replaces it and re-renders.
+     */
+    private var worldSnapshot: WorldListSnapshot? = null
+
+    /**
      * Source-mode only: the tab the user last optimistically activated
      * (via [TabBarCallbacks.onSelect]) that the app hasn't yet confirmed by
      * pushing a matching snapshot. While set, incoming snapshots keep this
@@ -723,6 +744,48 @@ private class ShellState(
      * snapshot only carries pane *identity*.
      */
     private var geometryState: PersistedLayoutState = PersistedLayoutState()
+
+    /**
+     * The id of the world whose layout [geometryState] currently holds, or
+     * `null` in single-world mode (no [AppShellSpec.worldLayoutProvider]).
+     *
+     * Pane geometry is namespaced per world: [geometryState] is only ever
+     * the *active* world's slice, persisted under [layoutKeyForWorld]. When
+     * a tab snapshot arrives carrying a different [TabListSnapshot.worldId]
+     * (a world switch), [syncControllersWithSnapshot] flushes the outgoing
+     * world's layout to its key and loads the incoming world's via
+     * [AppShellSpec.worldLayoutProvider] — so an inactive world's pane
+     * positions survive untouched instead of being pruned as "closed tabs".
+     */
+    private var activeWorldId: String? = null
+
+    /**
+     * In-memory, per-world layout cache (worldId → that world's
+     * [PersistedLayoutState]) for every world visited this session. Captured
+     * on switch-*away* (with the outgoing world's freshest, controller-merged
+     * state) and consulted first on switch-*back*, ahead of the async
+     * [AppShellSpec.worldLayoutProvider] server read — so rapid A→B→A
+     * switching can never lose an edit that hasn't round-tripped through the
+     * server yet. A world not present here (never visited this session) falls
+     * back to the provider (the server's persisted copy).
+     */
+    private val worldLayouts: MutableMap<String, PersistedLayoutState> = HashMap()
+
+    /**
+     * Persistence key holding [worldId]'s pane layout. The **default (first)**
+     * world keeps the flat [PersistKeys.LAYOUT_STATE] key — so pre-world
+     * clients and every existing saved layout keep working with no
+     * migration — while other worlds live under a per-world suffix that old
+     * clients simply ignore. The host's persister adapter is what decides
+     * which id is "default" (it aliases that world's suffixed key back onto
+     * LAYOUT_STATE); here we always suffix and let the adapter route.
+     */
+    private fun layoutKeyForWorld(worldId: String): String =
+        "${PersistKeys.LAYOUT_STATE}.world.$worldId"
+
+    /** The key [persistLayoutState] writes for the current world (flat when single-world). */
+    private fun activeLayoutKey(): String =
+        activeWorldId?.let { layoutKeyForWorld(it) } ?: PersistKeys.LAYOUT_STATE
 
     /**
      * `true` while [applyExternalLayoutState] is adopting a layout-state blob
@@ -1242,6 +1305,29 @@ private class ShellState(
         rerender()
     }
 
+    /**
+     * Subscribes to the app's world push channel. Each push replaces
+     * [worldSnapshot] and re-renders so the globe switcher reflects the
+     * new world list / active world. Called from mount when
+     * [AppShellSpec.worldSource] is non-null.
+     *
+     * @param source the host's world callbacks + push channel.
+     */
+    fun bindWorldSource(source: WorldSource) {
+        source.subscribe { snap ->
+            val prev = worldSnapshot
+            worldSnapshot = snap
+            // Skip a full rerender when nothing the switcher shows changed.
+            if (prev != null &&
+                prev.activeWorldId == snap.activeWorldId &&
+                prev.worlds == snap.worlds
+            ) {
+                return@subscribe
+            }
+            rerender()
+        }
+    }
+
     /** Source-mode entry point: subscribes to the app's push channel. */
     fun bindTabSource(source: TabSource) {
         this.local = null
@@ -1311,6 +1397,20 @@ private class ShellState(
             changedTabs.forEach { tabId ->
                 if (presetIsAuto(tabId)) maybeReapplyPreset(tabId)
             }
+            // Adding a pane to / removing one from the ACTIVE tab re-picks
+            // which pane is active (the host re-points focus server-side; the
+            // rerender above moved the focus RING to it). But that rerender
+            // also detached the previously-focused terminal's <textarea>, and
+            // — unlike a click or keyboard nav — no gesture moved real DOM
+            // focus, so the new active pane shows its ring yet ignores
+            // keystrokes. Hand DOM focus to its content, the same way
+            // [applyLayoutPreset] and spatial nav do. Gated on the ACTIVE
+            // tab's pane membership actually changing (see [changedTabs] —
+            // set-of-pane-ids diff), so it never fires on focus-only pushes,
+            // tab switches, or OSC-title ticks, and never steals focus for a
+            // pane added to a background tab. Idempotent with any host-side
+            // refocus (both target the same server-active pane).
+            viewActiveTabId()?.let { if (it in changedTabs) renderer?.focusActivePaneContent() }
         }
     }
 
@@ -1712,6 +1812,13 @@ private class ShellState(
                             // button would appear to do nothing.
                             rerender()
                             spec.onGeometryChanged?.invoke(tabId)
+                            // The rerender detached the focused pane's
+                            // <textarea>, and this toolkit-local geometry
+                            // toggle produces no host focus round-trip when the
+                            // pane was already active — so hand DOM focus back
+                            // to the active pane's content. See
+                            // [LayoutRenderer.focusActivePaneContent].
+                            renderer?.focusActivePaneContent()
                         }
                     },
                     // Auto-unmaximize when focus moves to a different pane.
@@ -1767,6 +1874,13 @@ private class ShellState(
                                 it.copy(isMinimized = true, isMaximized = false)
                             }
                             reflowAfterMinimizeChange(tabId)
+                            // Docking the focused pane hands active status to a
+                            // visible sibling ([activePaneForActiveTab] excludes
+                            // minimized panes); the reflow above moved the ring
+                            // to it but not DOM focus. Focus its content so
+                            // keystrokes follow. See
+                            // [LayoutRenderer.focusActivePaneContent].
+                            renderer?.focusActivePaneContent()
                         }
                     },
                     // Restore from the dock: clear `isMinimized`; the pane
@@ -1788,6 +1902,12 @@ private class ShellState(
                             // it. Same sweep as the sidebar-row restore.
                             clearMaximizedSiblings(tabId, paneId)
                             reflowAfterMinimizeChange(tabId)
+                            // Land the user on the pane they just un-minimized:
+                            // bringPaneToFront already made it active, and the
+                            // reflow re-rendered it into the layout — now give
+                            // its content real DOM focus. See
+                            // [LayoutRenderer.focusActivePaneContent].
+                            renderer?.focusActivePaneContent()
                         }
                     },
                     onFloatingFocused = { paneId ->
@@ -1882,6 +2002,11 @@ private class ShellState(
         // with fresh DOM that has no inline overrides. Fires last so
         // the host's paint wins over anything the toolkit just set.
         spec.onAfterRefresh?.invoke()
+        // Test seam: fires after every completed render pass so tests can
+        // snapshot the just-painted chrome (e.g. the sidebar pane-row order)
+        // on each pass and detect transient churn across a multi-pass update.
+        // No-op in production (never assigned outside tests).
+        onAppShellRenderedForTest?.invoke()
     }
 
     /**
@@ -2039,6 +2164,16 @@ private class ShellState(
                 // inline × button removed, the kebab "Close" row is the
                 // only entry point so a single confirmation is enough.
                 confirmTabClose = true,
+                // "Move to world" submenu: every world except the active one,
+                // wired to the host's WorldSource. Empty (no submenu) when the
+                // host doesn't support world moves or there's only one world.
+                moveToWorlds = if (spec.worldSource?.onMoveTab != null) {
+                    worldSnapshot?.let { snap -> snap.worlds.filter { it.id != snap.activeWorldId } }
+                        ?: emptyList()
+                } else {
+                    emptyList()
+                },
+                onMoveToWorld = spec.worldSource?.onMoveTab,
             )
         } else {
             TabBarCallbacks(
@@ -2148,6 +2283,15 @@ private class ShellState(
                 onToggle = { setSidebarOpen(!leftSidebarController.isOpen) },
             )
         )
+        // World switcher globe — only when the app wires a world source and
+        // has pushed at least one world. Sits right of the sidebar toggle
+        // and left of the tab strip (the tab strip is the TopBarSpec.tabBar,
+        // rendered after this leading cluster).
+        spec.worldSource?.let { worldSource ->
+            worldSnapshot?.takeIf { it.worlds.isNotEmpty() }?.let { worlds ->
+                leading.appendChild(buildWorldSwitcher(worlds, worldSource))
+            }
+        }
 
         // Trailing slot order:
         //   spec.extraTopbarBeforeStandard …  ‖  NewPane · Layout · ThemeToggle · ThemeMgr  ‖  spec.extraTopbarTrailing …
@@ -2203,7 +2347,9 @@ private class ShellState(
             tooltip = "New",
             iconHtml = ICON_NEW_TAB,
             items = {
-                // "New tab" first, then the active tab's pane flavours.
+                // "New tab" first, then the active tab's pane flavours,
+                // then a "New world" entry when a world source with an
+                // onAdd callback is wired (issue: Worlds).
                 val newTabRow = callbacks.onAdd?.let { onAdd ->
                     listOf(HoverMenuItem("new-tab", "New tab", ICON_NEW_TAB) { onAdd() })
                 } ?: emptyList()
@@ -2212,10 +2358,35 @@ private class ShellState(
                     emptyList()
                 } else {
                     paneAddItemsProvider(activeTabId).map { item ->
-                        HoverMenuItem(item.id, item.label, item.iconHtml, item.onSelect)
+                        HoverMenuItem(item.id, item.label, item.iconHtml, onSelect = item.onSelect)
                     }
                 }
-                newTabRow + paneRows
+                val worldAdd = spec.worldSource?.onAdd
+                val newWorldRow = if (worldAdd != null) {
+                    listOf(
+                        HoverMenuItem("new-world", "New workspace", ICON_GLOBE) {
+                            promptNewWorldName(worldAdd)
+                        },
+                    )
+                } else {
+                    emptyList()
+                }
+                // Group the menu with dividers: "New tab" | pane creators |
+                // "New workspace". A single separator sits under "New tab" and
+                // above "New workspace"; when there are pane rows between them,
+                // each boundary gets its own separator. Empty groups add none,
+                // so we never render a leading/trailing/doubled divider.
+                buildList {
+                    addAll(newTabRow)
+                    if (newTabRow.isNotEmpty() && (paneRows.isNotEmpty() || newWorldRow.isNotEmpty())) {
+                        add(hoverMenuSeparator("sep-after-new-tab"))
+                    }
+                    addAll(paneRows)
+                    if (newWorldRow.isNotEmpty() && paneRows.isNotEmpty()) {
+                        add(hoverMenuSeparator("sep-before-new-world"))
+                    }
+                    addAll(newWorldRow)
+                }
             },
             onDefaultClick = { addPaneToActiveTab() },
         )
@@ -2575,6 +2746,13 @@ private class ShellState(
         val tabId = viewActiveTabId() ?: return
         controllerFor(tabId).setPreset(preset)
         maybeReapplyPresetForActiveTab()
+        // Re-tiling above re-rendered the panes, detaching (blurring) the
+        // active pane's terminal, and the switcher click had moved DOM focus
+        // onto the dropdown — so without this the active pane keeps its focus
+        // ring but no longer accepts keystrokes. Hand DOM focus back to it,
+        // the same way a click would. `maybeReapplyPreset` re-renders
+        // synchronously, so the freshly-mounted content is in the document.
+        renderer?.focusActivePaneContent()
     }
 
     /**
@@ -3080,7 +3258,11 @@ private class ShellState(
         recentLayoutWrites.addLast(merged)
         while (recentLayoutWrites.size > RECENT_LAYOUT_WRITES) recentLayoutWrites.removeFirst()
         val json = encodeLayoutStateJson(merged)
-        scope.launch { spec.persister.write(PersistKeys.LAYOUT_STATE, json) }
+        // Per-world key: the active world's layout is written to its own key
+        // (the default world's routes back onto flat LAYOUT_STATE via the
+        // host adapter). In single-world mode this is exactly LAYOUT_STATE.
+        val key = activeLayoutKey()
+        scope.launch { spec.persister.write(key, json) }
     }
 
     /**
@@ -3277,6 +3459,39 @@ private class ShellState(
      * @see reconcilePersistedTabState
      */
     private fun syncControllersWithSnapshot(snapshot: TabListSnapshot): Set<String> {
+        // Per-world layout swap — the fix for the "windows jump after a world
+        // round-trip" bug. Before diffing tabs, if this snapshot belongs to a
+        // different world than the one [geometryState] currently holds, flush
+        // the outgoing world's layout to its own key and load the incoming
+        // world's. This keeps [geometryState] scoped to the ACTIVE world, so
+        // the prune below can only ever drop the active world's own closed
+        // tabs — never another world's panes (which now live in a separate
+        // key, not in this in-memory slice). Only engaged when the host is
+        // world-aware ([worldLayoutProvider] set); single-world hosts keep the
+        // flat model untouched.
+        val incomingWorld = snapshot.worldId
+        val provider = spec.worldLayoutProvider
+        if (provider != null && incomingWorld != null && incomingWorld != activeWorldId) {
+            val bootTransition = activeWorldId == null
+            // Flush the world we're leaving: persist to its key (async) AND
+            // capture its freshest, controller-merged state in the in-memory
+            // cache so switching back is race-free. Skipped at boot.
+            if (!bootTransition) {
+                persistLayoutState()
+                activeWorldId?.let { worldLayouts[it] = geometryState }
+            }
+            activeWorldId = incomingWorld
+            // Prefer our own in-memory copy (freshest for a world we've edited
+            // this session); fall back to the server's persisted blob on first
+            // visit; else empty (a new world Auto-tiles). At boot with no
+            // stored layout, keep what LAYOUT_STATE already hydrated.
+            val loaded = worldLayouts[incomingWorld]
+                ?: provider(incomingWorld)?.let { decodeLayoutStateJson(it) }
+            when {
+                loaded != null -> applyPersistedLayoutState(loaded)
+                !bootTransition -> applyPersistedLayoutState(PersistedLayoutState())
+            }
+        }
         val previousByTab = lastSnapshot.tabs.associateBy { it.id }
         val knownTabs = snapshot.tabs.map { it.id }.toSet()
         // Drop state for tabs that are gone.
