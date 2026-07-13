@@ -2962,11 +2962,13 @@ private class ShellState(
                 mutateLocal { it.copy(activeTabId = tabId) }
             }
             // Activate the clicked pane (drives the row's dt-active
-            // highlight via [activePaneForActiveTab]); when it was just
-            // un-minimized, also raise it to the front so a sidebar
-            // restore brings the pane forward exactly like the dock-chip
-            // restore does.
-            bringPaneToFront(tabId, paneId, raise = wasMinimized)
+            // highlight via [activePaneForActiveTab]) and raise it to the
+            // front so clicking a sidebar row brings its pane forward —
+            // exactly like the dock-chip restore, the double-click focus,
+            // and the maximize toggle already do. Applies whether or not
+            // the pane was minimized: a plain row click on an occluded
+            // floating pane should surface it too.
+            bringPaneToFront(tabId, paneId, raise = true)
             // Surface the pane: a maximized sibling is full-bleed and would
             // keep covering the pane the user just picked (the post-render
             // focus reconciliation deliberately passes autoUnmaximize=false,
@@ -2987,6 +2989,21 @@ private class ShellState(
                 // does: rerender + geometry-changed ping).
                 rerender()
                 spec.onGeometryChanged?.invoke(tabId)
+            } else {
+                // Plain row click on an already-visible pane: neither a
+                // minimize flip nor a maximize clear rebuilt the DOM, so the
+                // zIndex bump [bringPaneToFront] just wrote to geometry state
+                // isn't reflected on screen yet. Mirror [onFloatingFocused]:
+                // push the new z straight onto the live element's `--dt-fp-z`
+                // CSS var for an instant, transition-free restack instead of a
+                // full rerender (which would rebuild every pane element and is
+                // wasteful for a pure z-order change). The host snapshot round-
+                // trip that `onPaneSelect` kicked off would eventually restack
+                // it too, but only after a network hop — this makes the raise
+                // feel immediate.
+                val z = geometryFor(tabId, paneId).zIndex
+                (main?.querySelector("[data-pane-id=\"$paneId\"]") as? HTMLElement)
+                    ?.style?.setProperty("--dt-fp-z", "$z")
             }
         })
         return row
