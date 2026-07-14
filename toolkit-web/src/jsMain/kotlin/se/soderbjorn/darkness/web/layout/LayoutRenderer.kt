@@ -69,13 +69,15 @@ import se.soderbjorn.darkness.web.confirmClosePane
  * @property onFloatingResized fired while the user drags a pane's
  *   bottom-right corner. Receives the pane id and the new size as fractions
  *   of the renderer container. `null` to disable resize.
- * @property onFloatingFocused fired on `dblclick` anywhere inside a pane —
- *   the explicit "raise" gesture. Hosts should bump the pane's
- *   [FloatingPaneSpec.zIndex] to `max(existing) + 1` so the double-clicked
- *   pane comes to the front. A plain `mousedown` only marks the pane
- *   focused (via [onPaneFocused]) without raising — termtastic's behaviour:
- *   the user has to double-click a background pane to bring it to the top
- *   of the stack. Default no-op.
+ * @property onFloatingFocused fired on a single primary-button `click`
+ *   (and, redundantly, `dblclick`) anywhere inside a pane — the "raise"
+ *   gesture. Hosts should bump the pane's [FloatingPaneSpec.zIndex] to
+ *   `max(existing) + 1` so the clicked pane comes to the front. Raise is
+ *   deferred to `click` rather than `mousedown` so a drag/resize gesture
+ *   (which suppresses the trailing `click`) never triggers it mid-motion;
+ *   `mousedown` still marks the pane focused (via [onPaneFocused])
+ *   immediately. Any stationary click brings a background pane forward —
+ *   no double-click and no titlebar targeting required. Default no-op.
  * @property onFloatingClosed fired when the user clicks the close action
  *   in a pane's header. Hosts remove the matching entry from
  *   [PaneLayout.floatingPanes]. `null` hides the close button.
@@ -1168,13 +1170,17 @@ class LayoutRenderer(
         // Click-to-focus + click-to-raise on an already-active pane.
         //
         // Two-phase wiring:
-        //  1. Capture-phase MOUSEDOWN: record whether the pane was already
-        //     focused, then apply focus. Focus is a pure class flip — no
-        //     rerender, no state mutation — so it's safe to run during the
-        //     opening of any gesture (header drag, corner resize, etc.).
-        //  2. Capture-phase CLICK: if the press started on the focused pane
-        //     AND the user did not drag (browsers suppress `click` after a
-        //     drag), fire [PaneCallbacks.onFloatingFocused] to raise.
+        //  1. Capture-phase MOUSEDOWN: apply focus. Focus is a pure class
+        //     flip — no rerender, no state mutation — so it's safe to run
+        //     during the opening of any gesture (header drag, corner
+        //     resize, etc.).
+        //  2. Capture-phase CLICK: if the user did not drag (browsers
+        //     suppress `click` after a drag), fire
+        //     [PaneCallbacks.onFloatingFocused] to raise the pane to the
+        //     front. A single primary-button click ANYWHERE in the pane —
+        //     header, content, or resize handle — raises it, whether or
+        //     not it was already focused, so the user never has to click
+        //     twice (or hunt for the titlebar) to bring a pane forward.
         //
         // Why raise on click, not mousedown: firing raise during mousedown
         // forced a host-side rerender that rebuilt every pane element
@@ -1188,8 +1194,9 @@ class LayoutRenderer(
         // pane B to a corner" and similar geometry corruption.
         //
         // Deferring raise to `click` keeps drags, resize handles, and
-        // sidebar resize from ever interleaving with a rerender.
-        var wasFocusedAtMousedown = false
+        // sidebar resize from ever interleaving with a rerender: a drag
+        // suppresses the trailing `click`, so only a stationary press
+        // (never a drag/resize gesture) reaches the raise handler.
         pane.addEventListener("mousedown", { ev ->
             val mouseEv = ev as MouseEvent
             if (mouseEv.button.toInt() != 0) return@addEventListener
@@ -1203,13 +1210,12 @@ class LayoutRenderer(
             // again. Result: clicking a pane title makes the pane active
             // immediately, matching the user's mental model that the
             // titlebar is the most obvious "pick this pane" affordance.
-            wasFocusedAtMousedown = focusedLeafId == spec.id
             focusPane(spec.id)
         }, true)
         pane.addEventListener("click", { ev ->
             val mouseEv = ev as MouseEvent
             if (mouseEv.button.toInt() != 0) return@addEventListener
-            if (wasFocusedAtMousedown) callbacks.onFloatingFocused?.invoke(spec.id)
+            callbacks.onFloatingFocused?.invoke(spec.id)
         }, true)
         // Keep the legacy double-click as a redundant raise gesture so
         // muscle memory from prior versions still works.
