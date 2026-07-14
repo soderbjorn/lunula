@@ -7,6 +7,8 @@
  * change. */
 package se.soderbjorn.darkness.core
 
+import kotlin.coroutines.cancellation.CancellationException
+
 /**
  * Backend-agnostic key→string store the toolkit uses for persistence.
  *
@@ -41,6 +43,14 @@ interface Persister {
      *   their own state).
      * @return the value previously written, or `null` if absent.
      */
+    // Apps consuming the toolkit from Swift call this across the
+    // Kotlin/Native ObjC bridge, which only converts *declared* exception
+    // types to NSError — an undeclared one aborts the host process rather
+    // than surfacing to the caller's catch. Suspend functions get
+    // CancellationException implicitly, so Exception must be named here or a
+    // backend's I/O failure is fatal. Implementations do throw: they are
+    // app-supplied and back onto HTTP, IPC, and file I/O.
+    @Throws(CancellationException::class, Exception::class)
     suspend fun read(key: String): String?
 
     /**
@@ -51,6 +61,7 @@ interface Persister {
      * @param key opaque storage key.
      * @param value full serialized value (typically a JSON string).
      */
+    @Throws(CancellationException::class, Exception::class)
     suspend fun write(key: String, value: String)
 }
 
