@@ -34,11 +34,16 @@ import org.w3c.dom.HTMLInputElement
 import org.w3c.dom.events.Event
 
 /**
- * Human-readable labels for the 20 token ids, keyed by [Theme.TOKEN_IDS].
+ * Human-readable labels for the 28 token ids, keyed by [Theme.TOKEN_IDS].
  * Unknown ids fall back to the raw id.
+ *
+ * The 8 chrome/canvas ids are optional on a [Theme]; the editor shows their
+ * effective value (via [Theme.token]) and pins an explicit one on edit, so
+ * they need no labelling beyond the "Chrome:" prefix that groups them.
  */
 private val TOKEN_LABELS: Map<String, String> = mapOf(
     "bg" to "Background",
+    "canvas" to "Pane canvas",
     "surface" to "Surface",
     "surfaceAlt" to "Surface (sunken)",
     "border" to "Border",
@@ -50,6 +55,13 @@ private val TOKEN_LABELS: Map<String, String> = mapOf(
     "danger" to "Danger",
     "add" to "Add",
     "addText" to "Add text",
+    "chromeBg" to "Chrome: background",
+    "chromeText" to "Chrome: text",
+    "chromeTextDim" to "Chrome: text (dim)",
+    "chromeTextBright" to "Chrome: text (bright)",
+    "chromeBorder" to "Chrome: border",
+    "chromeAccent" to "Chrome: accent",
+    "chromeTrack" to "Chrome: track",
     "synKeyword" to "Syntax: keyword",
     "synString" to "Syntax: string",
     "synNumber" to "Syntax: number",

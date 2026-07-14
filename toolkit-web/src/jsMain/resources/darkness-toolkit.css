@@ -92,7 +92,7 @@ html, body {
     /* Same tone as topbar/bottombar so the 4px frame around the main
        pane reads as one continuous chrome band wrapping the topbar,
        sides, and bottombar — rather than a third "recessed body" tone. */
-    background: var(--t-bg, #1e1e1e);
+    background: var(--t-canvas, var(--t-bg, #1e1e1e));
     padding: var(--dt-frame-pad, 8px);
     gap: var(--dt-frame-pad, 8px);
 }
@@ -121,8 +121,8 @@ html, body {
     /* Match the topbar's chrome surface exactly — same fallback chain as
        .dt-topbar above so the bottom row reads as the same chrome
        material as the tab strip, not a separate footer. */
-    background: var(--t-bg, var(--t-surface-alt, #1e1e1e));
-    color: var(--t-text-bright, var(--t-text-dim, #b8b8b8));
+    background: var(--t-chrome-bg, var(--t-chrome-track, #1e1e1e));
+    color: var(--t-chrome-text-bright, var(--t-chrome-text-dim, #b8b8b8));
     /* No top border — chrome surfaces themselves provide enough
        delineation; the hairline reads as a "sizing line" against the
        flat chrome and adds visual noise. */
@@ -171,12 +171,14 @@ html, body {
        [TopBarSpec.maxHeightPx] allows. */
     padding: var(--dt-topbar-pad-y, 8px) var(--dt-topbar-pad-x, 20px);
     min-height: var(--dt-topbar-h, 48px);
-    /* Use `--t-bg` (the darkest surface in the palette) so the
-       chrome reads as a deep frame around the lighter pane chrome below.
-       Falls back to `--t-surface-alt` for themes that haven't set the
-       surface scale, then to a neutral dark. */
-    background: var(--t-bg, var(--t-surface-alt, #161616));
-    color: var(--t-text-bright, #e6e6e6);
+    /* Use `--t-chrome-bg` so the chrome reads as a deep frame around the
+       lighter pane chrome below. A theme that doesn't split its chrome
+       resolves this to `--t-bg` (the darkest surface in the palette), which
+       is exactly what this rule used to name directly; a split theme paints
+       its own chrome colour here instead. Falls back to `--t-chrome-track`
+       for themes that haven't set the surface scale, then a neutral dark. */
+    background: var(--t-chrome-bg, var(--t-chrome-track, #161616));
+    color: var(--t-chrome-text-bright, #e6e6e6);
     /* No bottom border + no drop shadow — chrome surfaces themselves
        delineate the topbar from the body adequately, and the hairline
        reads as a "sizing line" against the flat chrome below. */
@@ -279,17 +281,17 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 .dt-topbar-tab {
     padding: 6px 12px;
     background: transparent;
-    color: var(--t-text, #e6e6e6);
+    color: var(--t-chrome-text, #e6e6e6);
     border: 0;
     border-radius: 4px;
     cursor: pointer;
     font-size: 13px;
 }
 .dt-topbar-tab.dt-selected {
-    background: var(--t-surface, rgba(255, 255, 255, 0.06));
+    background: var(--t-chrome-track, rgba(255, 255, 255, 0.06));
     /* Active tab title lifts to the brightest text token (white on Termtastic
        Dark), matching the Theme Studio reference. */
-    color: var(--t-text-bright, var(--t-text, #e6e6e6));
+    color: var(--t-chrome-text-bright, var(--t-chrome-text, #e6e6e6));
 }
 .dt-topbar-trailing {
     display: flex;
@@ -312,7 +314,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     appearance: none;
     background: transparent;
     border: 0;
-    color: var(--t-text-dim, #b8b8b8);
+    color: var(--t-chrome-text-dim, #b8b8b8);
     cursor: pointer;
     /* Centred 30×30 hit area so every icon (16-unit OR 24-unit viewbox)
        sits at the same baseline as the tab strip. Matches termtastic's
@@ -336,8 +338,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     display: block;
 }
 .dt-topbar-icon-button:hover {
-    background: var(--t-surface-alt, rgba(255, 255, 255, 0.08));
-    color: var(--t-text, #e6e6e6);
+    background: var(--t-chrome-track, rgba(255, 255, 255, 0.08));
+    color: var(--t-chrome-text, #e6e6e6);
 }
 /* Active state — corresponding pane is currently open. Earlier attempts
    used `color: --t-accent` (sometimes plus `bg: accent-primarySoft`),
@@ -349,13 +351,13 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    construction), so the icon stroke always reads. The active state now
    visually says "selected pill" regardless of theme. */
 .dt-topbar-icon-button.dt-active {
-    color: var(--t-bg, var(--t-bg, #1e1e1e));
-    background: var(--t-accent, var(--t-text, #e6e6e6));
+    color: var(--t-chrome-bg, var(--t-chrome-bg, #1e1e1e));
+    background: var(--t-chrome-accent, var(--t-chrome-text, #e6e6e6));
     box-shadow: none;
 }
 .dt-topbar-icon-button.dt-active:hover {
-    color: var(--t-bg, var(--t-bg, #1e1e1e));
-    background: var(--t-accent, var(--t-text, #e6e6e6));
+    color: var(--t-chrome-bg, var(--t-chrome-bg, #1e1e1e));
+    background: var(--t-chrome-accent, var(--t-chrome-text, #e6e6e6));
     filter: brightness(1.08);
 }
 
@@ -414,8 +416,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
        border + dim text), blending into the bar like the Theme Studio
        reference; the active tab gets the accent-soft tint below. */
     background: transparent;
-    color: var(--t-text-dim, #b8b8b8);
-    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.10));
+    color: var(--t-chrome-text-dim, #b8b8b8);
+    border: 1px solid var(--t-chrome-border, rgba(255, 255, 255, 0.10));
     border-radius: var(--dt-tab-radius, 6px);
     cursor: pointer;
     font-family: inherit;
@@ -432,8 +434,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 .dt-tab:hover {
-    color: var(--t-text, #e6e6e6);
-    background: var(--t-accent-soft, rgba(255, 255, 255, 0.10));
+    color: var(--t-chrome-text, #e6e6e6);
+    background: var(--t-chrome-accent-soft, rgba(255, 255, 255, 0.10));
 }
 /* The active tab is a fully-closed rounded pill outlined in the accent
    colour on all four sides (termtastic parity). Unlike inactive tabs
@@ -456,12 +458,12 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     /* Active tab: accent-soft tint + accent ring, brightest text — matching
        the Theme Studio reference (where the active "Orbit" tab is an
        accent-soft fill, not a neutral surface). */
-    background: var(--t-accent-soft, var(--t-surface-alt, #161616));
-    color: var(--t-text-bright, var(--t-text, #e6e6e6));
-    border: 1px solid var(--t-accent, var(--t-accent, #ff8a3d));
+    background: var(--t-chrome-accent-soft, var(--t-chrome-track, #161616));
+    color: var(--t-chrome-text-bright, var(--t-chrome-text, #e6e6e6));
+    border: 1px solid var(--t-chrome-accent, var(--t-chrome-accent, #ff8a3d));
     border-radius: var(--dt-tab-radius, 6px);
     margin-bottom: 0;
-    box-shadow: inset 0 0 0 1px var(--t-accent, var(--t-accent, #ff8a3d));
+    box-shadow: inset 0 0 0 1px var(--t-chrome-accent, var(--t-chrome-accent, #ff8a3d));
     font-weight: 700;
     z-index: 1;
 }
@@ -504,7 +506,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     appearance: none;
     background: transparent;
     border: none;
-    color: var(--t-text-dim, #b8b8b8);
+    color: var(--t-chrome-text-dim, #b8b8b8);
     font: inherit;
     font-size: 18px;
     line-height: 1;
@@ -516,8 +518,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 }
 .dt-tabbar-menu-button:hover,
 .dt-tabbar-menu.dt-open .dt-tabbar-menu-button {
-    color: var(--t-text, #e6e6e6);
-    background: var(--t-surface-alt, rgba(255, 255, 255, 0.10));
+    color: var(--t-chrome-text, #e6e6e6);
+    background: var(--t-chrome-track, rgba(255, 255, 255, 0.10));
 }
 .dt-tabbar-menu-list {
     display: none;
@@ -683,7 +685,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     appearance: none;
     background: transparent;
     border: none;
-    color: var(--t-text-dim, #b8b8b8);
+    color: var(--t-chrome-text-dim, #b8b8b8);
     font: inherit;
     font-size: 15px;
     line-height: 1;
@@ -707,8 +709,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 }
 .dt-tab-menu-button:hover,
 .dt-tab-menu.dt-open .dt-tab-menu-button {
-    color: var(--t-text, #e6e6e6);
-    background: var(--t-accent-soft, rgba(255, 255, 255, 0.12));
+    color: var(--t-chrome-text, #e6e6e6);
+    background: var(--t-chrome-accent-soft, rgba(255, 255, 255, 0.12));
 }
 
 /* ── Layout-preset preview-tile dropdown ─────────────────────
@@ -813,7 +815,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     top: 4px;
     bottom: 4px;
     width: 2px;
-    background: var(--t-accent, currentColor);
+    background: var(--t-chrome-accent, currentColor);
     border-radius: 1px;
     pointer-events: none;
 }
@@ -829,9 +831,9 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
        the "Tab bar size" / "Sidebar size" pickers) so the rename input
        matches the tab text it's replacing. */
     font: inherit;
-    color: var(--t-text, #e6e6e6);
-    background: var(--t-surface, rgba(255, 255, 255, 0.04));
-    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.18));
+    color: var(--t-chrome-text, #e6e6e6);
+    background: var(--t-chrome-track, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--t-chrome-border, rgba(255, 255, 255, 0.18));
     border-radius: 3px;
     padding: 1px 5px;
     outline: none;
@@ -847,7 +849,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     appearance: none;
     background: transparent;
     border: 0;
-    color: var(--t-text-dim, #b3b3b3);
+    color: var(--t-chrome-text-dim, #b3b3b3);
     font: inherit;
     font-size: 14px;
     line-height: 1;
@@ -857,14 +859,14 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: background-color 120ms ease-in-out, color 120ms ease-in-out;
 }
 .dt-tab-close:hover {
-    background: var(--t-border, rgba(255, 255, 255, 0.16));
-    color: var(--t-text, #e6e6e6);
+    background: var(--t-chrome-border, rgba(255, 255, 255, 0.16));
+    color: var(--t-chrome-text, #e6e6e6);
 }
 .dt-tab-add {
     appearance: none;
     background: transparent;
     border: 0;
-    color: var(--t-text-dim, #b3b3b3);
+    color: var(--t-chrome-text-dim, #b3b3b3);
     font: inherit;
     font-size: 16px;
     line-height: 1;
@@ -874,8 +876,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     flex-shrink: 0;
 }
 .dt-tab-add:hover {
-    background: var(--t-surface, rgba(255, 255, 255, 0.06));
-    color: var(--t-text, #e6e6e6);
+    background: var(--t-chrome-track, rgba(255, 255, 255, 0.06));
+    color: var(--t-chrome-text, #e6e6e6);
 }
 
 /* ── Sidebar shells ───────────────────────────────────────── */
@@ -904,11 +906,13 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
        row-flex, so allowing vertical shrink does not affect width. */
     flex-grow: 1;
     min-height: 0;
-    /* The sidebar is part of the app canvas (like the topbar), so it uses the
-       base `--t-bg` token and reads as one contiguous chrome with the topbar
-       above it. Panes sit one level up on `--t-surface`. */
-    background: var(--t-bg, var(--t-surface, #161616));
-    color: var(--t-text, #d6d6d6);
+    /* The sidebar is part of the app chrome (like the topbar), so it uses
+       `--t-chrome-bg` and reads as one contiguous chrome with the topbar
+       above it. Panes sit one level up on `--t-surface`, and the area behind
+       them is `--t-canvas`. For a theme that doesn't split its chrome this
+       resolves to `--t-bg`, the token this rule used to name directly. */
+    background: var(--t-chrome-bg, var(--t-chrome-track, #161616));
+    color: var(--t-chrome-text, #d6d6d6);
     font-family: var(--dt-font-sidebar, -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", sans-serif);
     /* Default sidebar-row size: 12px. Children (`.dt-sidebar-row`)
        inherit this so the Settings panel "Sidebar size" picker takes
@@ -938,7 +942,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 .dt-sidebar-header {
     padding: 8px 12px;
     font-size: 12px;
-    color: var(--t-text-dim, #888);
+    color: var(--t-chrome-text-dim, #888);
     text-transform: uppercase;
     letter-spacing: 0.04em;
 }
@@ -1019,7 +1023,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
        that the strip is grabbable. At rest the handle stays
        invisible — only when the cursor is actually over it does the
        affordance appear. */
-    background: var(--t-border, #444);
+    background: var(--t-chrome-border, #444);
 }
 /* Drag-to-restore affordance: when SidebarController has collapsed the
    sidebar to 0 width (placeholder state), keep the handle's hairline
@@ -1095,12 +1099,12 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     /* Always-on hairline when the sidebar is collapsed. Without it the
        sidebar is 0px wide and the user has no visible cue that
        drag-to-restore is available. */
-    background: var(--t-border, #444);
+    background: var(--t-chrome-border, #444);
 }
 .dt-sidebar-resize-handle.dt-dragging::after {
     /* While actually dragging, paint the accent so the user has clear
        visual feedback that the gesture is engaged. */
-    background: var(--t-accent, #ff8a3d);
+    background: var(--t-chrome-accent, #ff8a3d);
     width: 2px;
 }
 .dt-sidebar-resize-handle-right.dt-dragging::after {
@@ -1175,7 +1179,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 .dt-sidebar-section {
     display: flex;
     flex-direction: column;
-    border-bottom: 1px solid var(--t-border, transparent);
+    border-bottom: 1px solid var(--t-chrome-border, transparent);
 }
 .dt-sidebar-section:last-child {
     border-bottom: none;
@@ -1186,7 +1190,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     gap: 6px;
     padding: 8px 10px 4px;
     background: transparent;
-    color: var(--t-text-dim, var(--t-text-dim, #7a7a7a));
+    color: var(--t-chrome-text-dim, var(--t-chrome-text-dim, #7a7a7a));
     border: 0;
     text-align: left;
     cursor: pointer;
@@ -1201,7 +1205,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     cursor: default;
 }
 .dt-sidebar-section-header:hover:not([disabled]) {
-    color: var(--t-text, #d6d6d6);
+    color: var(--t-chrome-text, #d6d6d6);
 }
 /* Active-tab indicator: when the host marks a section with the
    `.active-tab` class, the section header keeps its normal text colour.
@@ -1209,7 +1213,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    ring (`.dt-sidebar-row.dt-active`); doubling up by tinting the tab
    name itself reads as two competing "selected" cues for one entry. */
 .dt-sidebar-section.active-tab > .dt-sidebar-section-header {
-    color: var(--t-text, #d6d6d6);
+    color: var(--t-chrome-text, #d6d6d6);
     background: transparent;
     border-radius: 6px;
 }
@@ -1256,7 +1260,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     border: 0;
     text-align: left;
     font-family: inherit;
-    color: var(--t-text, #d6d6d6);
+    color: var(--t-chrome-text, #d6d6d6);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -1272,8 +1276,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: background 0.12s, color 0.12s;
 }
 .dt-sidebar-row:hover {
-    background: var(--t-surface-alt, rgba(255, 255, 255, 0.06));
-    color: var(--t-text, #fff);
+    background: var(--t-chrome-track, rgba(255, 255, 255, 0.06));
+    color: var(--t-chrome-text, #fff);
 }
 .dt-sidebar-row.dt-active {
     /* Active row carries the same selection treatment as the active tab
@@ -1282,11 +1286,11 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
        background — matching the Theme Studio reference, where the active
        sidebar item reads as a solid accent-soft pill rather than an empty
        outline — makes the selection rectangle read at a glance. */
-    color: var(--t-text-bright, var(--t-text, #d6d6d6));
-    background: var(--t-accent-soft, var(--t-surface-alt, #161616));
+    color: var(--t-chrome-text-bright, var(--t-chrome-text, #d6d6d6));
+    background: var(--t-chrome-accent-soft, var(--t-chrome-track, #161616));
     font-weight: 600;
     border-radius: 8px;
-    box-shadow: inset 0 0 0 1px var(--t-accent, var(--t-accent, #ff8a3d));
+    box-shadow: inset 0 0 0 1px var(--t-chrome-accent, var(--t-chrome-accent, #ff8a3d));
     /* Inset the selection pill (fill + ring) further from the left edge than
        an inactive row — matching the Theme Studio reference, where the active
        item's fill starts in from the sidebar edge. The +8px of left margin is
@@ -1315,7 +1319,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     justify-content: center;
     width: 14px;
     height: 14px;
-    color: var(--t-text-dim, #888);
+    color: var(--t-chrome-text-dim, #888);
     flex-shrink: 0;
 }
 .dt-sidebar-row.dt-active .dt-sidebar-row-icon {
@@ -1353,7 +1357,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
        legible at a glance instead of shrinking into the row's dim band. */
     font-size: 15px;
     line-height: 1;
-    color: var(--t-text-dim, #888);
+    color: var(--t-chrome-text-dim, #888);
     opacity: 0.85;
     user-select: none;
     -webkit-user-select: none;
@@ -1384,7 +1388,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
        hover doesn't push the icon/label sideways — the grip slots
        into existing whitespace rather than reflowing the row. */
     margin-left: -8px;
-    color: var(--t-text-dim, #888);
+    color: var(--t-chrome-text-dim, #888);
     flex-shrink: 0;
     cursor: grab;
     opacity: 0;
@@ -1406,7 +1410,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     left: 4px;
     right: 4px;
     height: 2px;
-    background: var(--t-accent, var(--t-accent, #ff8a3d));
+    background: var(--t-chrome-accent, var(--t-chrome-accent, #ff8a3d));
     pointer-events: none;
     border-radius: 1px;
 }
@@ -1430,7 +1434,14 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     min-width: 0;
     min-height: 0;
     box-sizing: border-box;
-    background: var(--t-bg, #1e1e1e);
+    /* The canvas zone. This element sits directly on `.dt-app-frame-main` and
+       covers all of it except the frame padding, so it — not the frame — is
+       what the eye reads as the area behind and between the panes. Painting
+       `--t-bg` here would hide the canvas everywhere it matters, leaving a
+       bg-coloured ring around every pane on any theme whose canvas differs
+       from its bg. Falls back to `--t-bg`, which is what this rule was before
+       the canvas token existed. */
+    background: var(--t-canvas, var(--t-bg, #1e1e1e));
     position: relative;
 }
 
@@ -1454,7 +1465,10 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     align-items: center;
     gap: 6px;
     padding: 6px 8px;
-    background: var(--t-bg, #1e1e1e);
+    /* Canvas zone: the dock is part of the pane area, so it stays on the same
+       material as the space around the panes rather than reading as a second
+       bar. Falls back to `--t-bg` as before. */
+    background: var(--t-canvas, var(--t-bg, #1e1e1e));
     border-top: 1px solid var(--t-border, rgba(255, 255, 255, 0.08));
 }
 

@@ -8,8 +8,9 @@
  * the theme on document.body" function.
  *
  * Property names follow the flat `--t-<token>` convention (e.g. `--t-bg`,
- * `--t-text`, `--t-accent`) — exactly the 23 semantic tokens of the
- * post-revamp theme system. The toolkit stylesheet reads these names
+ * `--t-text`, `--t-accent`) — exactly the 32 semantic tokens of the
+ * post-revamp theme system, including the 9 chrome/canvas ones
+ * (`--t-chrome-bg`, `--t-canvas`, …). The toolkit stylesheet reads these names
  * directly, so themes round-trip without any stylesheet rewrites.
  *
  * @see ResolvedTheme
@@ -48,11 +49,16 @@ fun isDarkActive(appearance: Appearance): Boolean = when (appearance) {
 
 /**
  * Converts a [ResolvedTheme] to a map of CSS custom property names to CSS
- * colour values — exactly the 23 flat `--t-<token>` names the toolkit
+ * colour values — exactly the 32 flat `--t-<token>` names the toolkit
  * stylesheet reads.
  *
- * Every value is produced via [argbToCss]; since [ResolvedTheme] tokens are
- * always opaque the output is `#rrggbb`.
+ * Every value is produced via [argbToCss].
+ *
+ * The 9 chrome/canvas vars are always emitted: [ResolvedTheme] has already
+ * applied each optional token's fallback, so a theme that doesn't split its
+ * chrome from its content emits chrome vars equal to its base tokens. The
+ * stylesheet can therefore read `--t-chrome-bg` unconditionally instead of
+ * restating the fallback in a `var()` chain.
  *
  * @return map of CSS property name to CSS colour string
  * @see argbToCss
@@ -60,6 +66,15 @@ fun isDarkActive(appearance: Appearance): Boolean = when (appearance) {
  */
 fun ResolvedTheme.toCssVarMap(): Map<String, String> = buildMap {
     put("--t-bg", argbToCss(bg))
+    put("--t-canvas", argbToCss(canvas))
+    put("--t-chrome-bg", argbToCss(chromeBg))
+    put("--t-chrome-text", argbToCss(chromeText))
+    put("--t-chrome-text-dim", argbToCss(chromeTextDim))
+    put("--t-chrome-text-bright", argbToCss(chromeTextBright))
+    put("--t-chrome-border", argbToCss(chromeBorder))
+    put("--t-chrome-accent", argbToCss(chromeAccent))
+    put("--t-chrome-accent-soft", argbToCss(chromeAccentSoft))
+    put("--t-chrome-track", argbToCss(chromeTrack))
     put("--t-surface", argbToCss(surface))
     put("--t-surface-alt", argbToCss(surfaceAlt))
     put("--t-border", argbToCss(border))
