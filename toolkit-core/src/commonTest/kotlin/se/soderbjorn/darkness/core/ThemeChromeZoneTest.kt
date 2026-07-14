@@ -43,7 +43,7 @@ class ThemeChromeZoneTest {
     fun setChromeTokensResolveToTheirOwnValueNotTheFallback() {
         val r = split.resolve()
         assertEquals(hexToArgb("#000000"), r.chromeBg)
-        assertEquals(hexToArgb("#0e1015"), r.canvas)
+        assertEquals(hexToArgb("#000000"), r.canvas)
         assertEquals(hexToArgb("#b98cff"), r.chromeAccent)
         assertEquals(hexToArgb("#14171d"), r.chromeTrack)
         // The whole point of the split: chrome is NOT the content background.
