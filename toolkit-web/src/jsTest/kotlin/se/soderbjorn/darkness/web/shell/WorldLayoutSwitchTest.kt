@@ -77,6 +77,18 @@ private fun world2Snapshot() = TabListSnapshot(
     worldId = "w2",
 )
 
+/**
+ * World 1 on the **Auto** preset with `p1` maximized. Auto means the
+ * world switch re-tiles t1 (every pane of an incoming world counts as
+ * "changed" against the outgoing world's snapshot), so this is the shape
+ * that regressed in lunamux#127.
+ */
+private const val W1_AUTO_MAXIMIZED_LAYOUT =
+    """{"presetByTab":{"t1":"auto"},"paneOrderByTab":{"t1":["p1","p2"]},""" +
+        """"geometryByTab":{"t1":{""" +
+        """"p1":{"xPct":0,"yPct":0,"widthPct":0.5,"heightPct":1,"zIndex":2,"isMaximized":true,"isMinimized":false},""" +
+        """"p2":{"xPct":0.5,"yPct":0,"widthPct":0.5,"heightPct":1,"zIndex":1,"isMaximized":false,"isMinimized":false}}}}"""
+
 /** A distinctive custom layout for world 1 — Custom preset so it never re-tiles. */
 private const val W1_CUSTOM_LAYOUT =
     """{"presetByTab":{"t1":"custom"},"paneOrderByTab":{"t1":["p1","p2"]},""" +
@@ -172,6 +184,78 @@ class WorldLayoutSwitchTest {
             assertTrue(
                 w2Blob.contains("\"p3\""),
                 "world 2's key must carry its own pane p3 (got: $w2Blob)",
+            )
+        } finally {
+            root.remove()
+        }
+    }
+
+    /**
+     * A maximized pane must survive a world switch even on the **Auto**
+     * preset — `isMaximized` is parallel state, orthogonal to the layout
+     * preset, so the Auto re-tile that runs for the incoming world may
+     * update the pane's restore box but must not clear the flag.
+     *
+     * Regression: [maybeReapplyPreset]'s write-back hard-coded
+     * `isMaximized = false`, so every world switch silently un-maximized
+     * every Auto tab in the world being switched TO — and persisted the
+     * loss, so switching back didn't recover it (lunamux#127).
+     */
+    @Test
+    fun switchingIntoAWorldKeepsItsMaximizedPaneUnderAutoPreset() = GlobalScope.promise {
+        var push: ((TabListSnapshot) -> Unit)? = null
+        val source = TabSource(
+            subscribe = { p -> push = p },
+            onSelect = { },
+            onPaneSelect = { _, _ -> },
+        )
+        val persister = WorldMemPersister()
+        fun worldKey(worldId: String) = "${PersistKeys.LAYOUT_STATE}.world.$worldId"
+
+        val root = document.createElement("div") as HTMLElement
+        document.body!!.appendChild(root)
+        try {
+            val handle = mountAppShell(
+                AppShellSpec(
+                    rootContainer = root,
+                    title = "world-maximize-test",
+                    persister = persister,
+                    paneContent = { document.createElement("div") as HTMLElement },
+                    tabSource = source,
+                    worldLayoutProvider = { worldId -> persister.store[worldKey(worldId)] },
+                ),
+            )
+            waitForWorld("tab source subscribe") { push != null }
+
+            // --- World 1: Auto preset, p1 maximized. ---
+            push!!(world1Snapshot())
+            waitForWorld("world 1 panes rendered") { root.paneById("p1") != null && root.paneById("p2") != null }
+            handle.applyExternalLayoutState(W1_AUTO_MAXIMIZED_LAYOUT)
+            waitForWorld("p1 maximized in world 1") {
+                root.paneById("p1")?.classList?.contains("dt-maximized") == true
+            }
+
+            // --- Away to world 2, then back. Switching back re-tiles t1
+            // (Auto + every pane "changed" vs. w2's snapshot) — the re-tile
+            // that used to eat the flag.
+            push!!(world2Snapshot())
+            waitForWorld("world 2 pane rendered") { root.paneById("p3") != null }
+            waitForWorld("world 1 panes unmounted") { root.paneById("p1") == null }
+
+            push!!(world1Snapshot())
+            waitForWorld("world 1 panes re-rendered") { root.paneById("p1") != null && root.paneById("p2") != null }
+
+            // Give the re-tile + any async persist a chance to land, so this
+            // asserts the settled state rather than racing ahead of the bug.
+            delay(100)
+            assertTrue(
+                root.paneById("p1")?.classList?.contains("dt-maximized") == true,
+                "p1 must still be maximized after a world round-trip on the Auto preset",
+            )
+            assertTrue(
+                handle.currentLayoutStateJson().contains("\"isMaximized\":true"),
+                "the maximized flag must survive in layout state, not just the DOM " +
+                    "(got: ${handle.currentLayoutStateJson()})",
             )
         } finally {
             root.remove()

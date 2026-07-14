@@ -2667,12 +2667,13 @@ private class ShellState(
      * the dock-chip restore ([LayoutCallbacks.onFloatingRestored]). Both
      * make a pane active from *outside* the pane area, so a full-bleed
      * maximized sibling would otherwise keep covering the pane the user
-     * just picked: under a non-Custom preset the restore re-tile clears
-     * `isMaximized` as a side effect, but under [LayoutPreset.Custom]
-     * nothing re-tiles and the surfaced pane stays buried. Mirrors the
-     * semantics of [LayoutCallbacks.onFloatingMaximizeCleared] ("focus
-     * moved to a different pane → un-maximize") for these out-of-pane
-     * gestures.
+     * just picked. This is the ONLY thing that un-maximizes on those
+     * gestures, under every preset: [maybeReapplyPreset] deliberately
+     * leaves `isMaximized` alone (it is parallel state, orthogonal to the
+     * layout preset), so a re-tile must never be relied on to clear it.
+     * Mirrors the semantics of [LayoutCallbacks.onFloatingMaximizeCleared]
+     * ("focus moved to a different pane → un-maximize") for these
+     * out-of-pane gestures.
      *
      * Callers own the follow-up render: this only mutates geometry (via
      * [updateGeometry], which persists) so it can run before a single
@@ -3677,6 +3678,12 @@ private class ShellState(
      * through `controller.applyPresetToPanes`, and writes the laid-out
      * geometry back. Mode-agnostic.
      *
+     * Writes **geometry only** — a maximized pane stays maximized through
+     * a re-tile, and simply has its restore box updated underneath. A tab
+     * on [LayoutPreset.Auto] can therefore still hold a maximized pane.
+     * Callers wanting to un-maximize must do it explicitly; see
+     * [clearMaximizedSiblings].
+     *
      * Works for background tabs too: geometry lives in [geometryState]
      * (per tab, persistent), so re-tiling a tab that is not currently
      * displayed simply updates the geometry the next activation renders.
@@ -3710,11 +3717,19 @@ private class ShellState(
         }
         val laidOut = ctl.applyPresetToPanes(asSpecs)
         laidOut.forEach { laid ->
+            // Geometry fields only: `isMaximized` is parallel state, not a
+            // layout field. A maximized pane renders full-bleed regardless
+            // of its box, so the tile computed here is its *restore*
+            // geometry — writing it while the flag stands is correct and
+            // invisible until the user restores. Clearing the flag here
+            // would un-maximize on every membership change, including the
+            // world switch that re-tiles the incoming world's tabs
+            // (lunamux#127). Gestures that must un-maximize say so
+            // explicitly — see [clearMaximizedSiblings].
             updateGeometry(tabId, laid.id) { existing ->
                 existing.copy(
                     xPct = laid.xPct, yPct = laid.yPct,
                     widthPct = laid.widthPct, heightPct = laid.heightPct,
-                    isMaximized = false,
                 )
             }
         }
