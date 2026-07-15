@@ -1443,11 +1443,9 @@ private class ShellState(
                 (row.querySelector(".dt-sidebar-row-label") as? HTMLElement)?.let { labelEl ->
                     if (labelEl.textContent != label) labelEl.textContent = label
                 }
-                // The row tooltip mirrors the label only in start-clip (index)
-                // mode, where the label is right-clipped; keep it in sync too.
-                if (row.hasAttribute("title") && row.getAttribute("title") != label) {
-                    row.setAttribute("title", label)
-                }
+                // No tooltip sync needed: `wireSidebarRowClipTooltip` re-reads
+                // the label text (and re-measures the clip) on each hover, so
+                // rewriting the text node above is enough to keep it honest.
             }
         }
         val mainEl = main ?: return
@@ -2929,11 +2927,11 @@ private class ShellState(
             if (indexGlyph != null) " dt-sidebar-row-label-rtl" else ""
         label.textContent = spec.paneLabel(tabId, paneId)
         row.appendChild(label)
+        // Sidebar width is user-controlled, so any label can end up clipped —
+        // from the tail normally, from the head in start-clip (index) mode.
+        // The tooltip carries the full label whenever that happens.
+        wireSidebarRowClipTooltip(row, label)
         if (indexGlyph != null) {
-            // Tooltip on the row carries the full label so users can still
-            // see what got start-clipped — same idea as the
-            // `dt-sidebar-row-label-rtl` branch in `SidebarRow`.
-            row.setAttribute("title", spec.paneLabel(tabId, paneId))
             val badge = document.createElement("span") as HTMLElement
             badge.className = "dt-sidebar-row-index"
             badge.textContent = indexGlyph

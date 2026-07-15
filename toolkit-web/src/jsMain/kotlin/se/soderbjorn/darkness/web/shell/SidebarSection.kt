@@ -112,6 +112,10 @@ fun renderSidebarSection(spec: SidebarSectionSpec): HTMLElement {
  *
  * The returned element has `.dt-sidebar-row` plus `.dt-active` if [isActive].
  *
+ * Whenever the row is too narrow for [label], hovering it reveals the full text
+ * in a tooltip; rows wide enough to show their label get no tooltip. See
+ * [wireSidebarRowClipTooltip].
+ *
  * @param label       row text — overflow tail-truncates with ellipsis.
  * @param iconHtml    optional inline SVG / icon HTML rendered before the
  *   label. Keep glyphs ≤ 14×14 to align with the toolkit's other icon slots.
@@ -124,8 +128,7 @@ fun renderSidebarSection(spec: SidebarSectionSpec): HTMLElement {
  * @param labelRtl    when `true`, the label overflows from the LEFT instead
  *   of the right (CSS `direction: rtl; text-align: left`) so long
  *   path-style labels (notegrow's zoom path, file-tree paths) keep the
- *   rightmost segment visible. The full label is exposed via the row's
- *   `title` tooltip. Mirrors `PaneHeaderSpec.titleAlignRight`.
+ *   rightmost segment visible. Mirrors `PaneHeaderSpec.titleAlignRight`.
  * @param index       optional 1-based pane slot. When non-null and within
  *   the renderable range (`1..35`), the toolkit appends an encircled glyph
  *   (`①..⑨`, `Ⓐ..Ⓩ`) at the trailing edge of the row and forces the label
@@ -171,9 +174,9 @@ fun SidebarRow(
         if (labelRtl || forceStartClip) " dt-sidebar-row-label-rtl" else ""
     labelEl.textContent = label
     row.appendChild(labelEl)
-    // Tooltip carries the full label for the RTL-clipped variant so users
-    // can still see what's been clipped from the left side.
-    if (labelRtl || forceStartClip) row.setAttribute("title", label)
+    // Tooltip carries the full label whenever the row is too narrow to show
+    // it — whichever end it clips from.
+    wireSidebarRowClipTooltip(row, labelEl)
 
     if (indexGlyph != null) {
         val badge = document.createElement("span") as HTMLElement
