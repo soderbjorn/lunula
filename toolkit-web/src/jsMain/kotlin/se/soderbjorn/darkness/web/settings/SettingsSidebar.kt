@@ -416,15 +416,6 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
         },
     ))
 
-    // ── Desktop notifications ───────────────────────────────────────
-    body.appendChild(buildToggleSection(
-        title = "Desktop notifications",
-        currentValue = { spec.host.desktopNotifications },
-        onPick = { v ->
-            spec.host.setDesktopNotifications(v)
-        },
-    ))
-
     target.appendChild(panel)
 }
 

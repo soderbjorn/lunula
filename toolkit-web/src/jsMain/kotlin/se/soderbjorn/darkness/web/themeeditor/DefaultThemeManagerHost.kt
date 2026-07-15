@@ -65,8 +65,6 @@ class DefaultThemeManagerState(
     var tabbarFontFamily: String? = null,
     /** Tab strip font size override (px; falls back to sidebar). */
     var tabbarFontSizePx: Int? = null,
-    /** Desktop-notifications opt-in. */
-    var desktopNotifications: Boolean = false,
     /** Per-app custom-titlebar opt-in (Electron `hiddenInset` etc.). */
     var useCustomTitleBar: Boolean = false,
 )
@@ -102,7 +100,6 @@ open class DefaultThemeManagerHost(
     override val sidebarFontSizePx: Int? get() = state.sidebarFontSizePx
     override val tabbarFontFamily: String? get() = state.tabbarFontFamily
     override val tabbarFontSizePx: Int? get() = state.tabbarFontSizePx
-    override val desktopNotifications: Boolean get() = state.desktopNotifications
     override val useCustomTitleBar: Boolean get() = state.useCustomTitleBar
 
     override fun setDarkThemeName(name: String) { state.darkThemeName = name; onChange() }
@@ -136,7 +133,6 @@ open class DefaultThemeManagerHost(
     override fun setSidebarFontSizePx(value: Int?) { state.sidebarFontSizePx = value; onChange() }
     override fun setTabbarFontFamily(value: String?) { state.tabbarFontFamily = value; onChange() }
     override fun setTabbarFontSizePx(value: Int?) { state.tabbarFontSizePx = value; onChange() }
-    override fun setDesktopNotifications(value: Boolean) { state.desktopNotifications = value; onChange() }
     override fun setUseCustomTitleBar(value: Boolean) { state.useCustomTitleBar = value; onChange() }
 }
 

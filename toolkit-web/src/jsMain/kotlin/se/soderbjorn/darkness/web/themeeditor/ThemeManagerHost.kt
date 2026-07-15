@@ -8,9 +8,8 @@
  *
  * Under the post-revamp theme system the host's surface is small: the two
  * slot selections, the appearance preference, and the user's custom themes —
- * plus the per-app font / notification / titlebar preferences that the
- * Settings sidebar mutates. Colour-schemes, favorites, and per-pane sections
- * are gone.
+ * plus the per-app font / titlebar preferences that the Settings sidebar
+ * mutates. Colour-schemes, favorites, and per-pane sections are gone.
  *
  * The manager calls into the host on every read and on every action; it does
  * not cache. After a write action the host should update its own state and
@@ -127,9 +126,6 @@ interface ThemeManagerHost {
      *  the sidebar size. */
     val paneHeaderFontSizePx: Int? get() = null
 
-    /** Whether the host has opted in to OS desktop notifications. */
-    val desktopNotifications: Boolean get() = false
-
     /** When `true`, the host renders an in-window titlebar drag region
      *  (Electron's `titleBarStyle: hiddenInset` pattern) instead of the
      *  OS-native chrome. Default `false`. */
@@ -164,9 +160,6 @@ interface ThemeManagerHost {
 
     /** Persist a new pane-title-font-size preference. `null` clears it. */
     fun setPaneHeaderFontSizePx(value: Int?) {}
-
-    /** Persist the desktop-notifications toggle. */
-    fun setDesktopNotifications(value: Boolean) {}
 
     /** Persist the custom-titlebar toggle. */
     fun setUseCustomTitleBar(value: Boolean) {}
