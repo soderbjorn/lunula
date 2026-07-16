@@ -1896,6 +1896,42 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     position: relative;
     z-index: 5;
 }
+/* Trailing context label (PaneHeaderSpec.trailingLabel) — the owning tab
+   name, a branch, a host. Dimmed and normal-weight so it reads as context
+   rather than a second title, and capped at 38% of the row so a long tab
+   name can never crowd out the pane's own title. `margin-left: auto` pushes
+   it past the title to the trailing edge, where it sits just before the
+   actions strip. */
+.dt-pane-trailing-label {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 38%;
+    margin-left: auto;
+    /* Track the pane-title font category (Appearance ▸ "Window title
+       font/size") so the label scales with the title it sits beside,
+       rather than pinning to a size the user has scaled away from. */
+    font-family: var(--dt-font-pane-header, inherit);
+    font-size: var(--dt-font-pane-header-size, var(--dt-pane-title-size, 11px));
+    font-weight: 400;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--t-text-dim, #7d90ad);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: inherit;
+}
+/* With a trailing label present, the label owns the row's free space and the
+   actions strip must NOT also claim an auto margin. Flexbox distributes free
+   space EQUALLY between multiple `margin-left: auto` items, so leaving the
+   strip's own auto margin in place splits the gap and strands the label
+   mid-row instead of seating it against the actions. Zeroing it here lets the
+   label's auto margin take the whole gap, putting the pair flush right. */
+.dt-pane-header:has(.dt-pane-trailing-label) .dt-pane-actions {
+    margin-left: 0;
+}
 .dt-pane-action {
     appearance: none;
     background: transparent;

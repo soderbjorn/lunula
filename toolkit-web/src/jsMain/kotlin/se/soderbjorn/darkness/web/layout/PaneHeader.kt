@@ -83,6 +83,12 @@ object PaneHeaderClassNames {
     const val BREADCRUMB_SEGMENT_LEAF = "dt-pane-breadcrumb-segment-leaf"
     /** Inert separator between breadcrumb segments. */
     const val BREADCRUMB_SEPARATOR = "dt-pane-breadcrumb-separator"
+    /**
+     * Secondary label pinned to the trailing edge, just before [ACTIONS].
+     * Present iff the spec carried a non-blank
+     * [PaneHeaderSpec.trailingLabel].
+     */
+    const val TRAILING_LABEL = "dt-pane-trailing-label"
     const val ACTIONS = "dt-pane-actions"
     const val ACTION = "dt-pane-action"
     const val ACTION_ACTIVE = "dt-active"
@@ -235,6 +241,22 @@ data class PaneHeaderSpec(
      * number stable for the pane's lifetime.
      */
     val paneIndex: Int? = null,
+    /**
+     * Optional secondary label pinned to the header's trailing edge, just
+     * before the [actions] strip. Rendered dimmed and at normal weight so
+     * it reads as context *about* the pane rather than part of its title —
+     * the pane's owning tab name, a branch, a host, a connection label.
+     *
+     * Distinct from [titleSegments]: a breadcrumb describes the path *to*
+     * this pane's content and shares the title's emphasis; a trailing label
+     * is unrelated context that must not compete with the title for the
+     * left edge. Blank / null renders no element at all.
+     *
+     * Lunamux's 3D world uses this for the pane's tab name, which its 2D
+     * headers omit (in 2D the tab bar already shows it, but a pane floating
+     * in the 3D ring has no such surrounding context).
+     */
+    val trailingLabel: String? = null,
 )
 
 /**
@@ -385,6 +407,25 @@ fun renderPaneHeader(paneId: PaneId, spec: PaneHeaderSpec): HTMLElement {
             renameTarget.setAttribute("data-dt-tooltip", "Hover, then click to rename")
             wireInlineRename(renameTarget, paneId, renameSeed, onRename, spec.allowEmptyRename)
         }
+    }
+
+    // Trailing context label sits between the title and the actions strip.
+    // Its `margin-left: auto` (see the stylesheet) absorbs the row's free space
+    // so it lands flush against the actions rather than beside the title. The
+    // stylesheet also zeroes the actions strip's own auto margin whenever this
+    // label is present — two auto margins would split the free space between
+    // them and strand the label mid-row.
+    spec.trailingLabel?.takeIf { it.isNotBlank() }?.let { labelText ->
+        val label = document.createElement("span") as HTMLElement
+        label.className = PaneHeaderClassNames.TRAILING_LABEL
+        // <bdi> for the same reason as the title: isolate the run's own
+        // direction so a non-latin tab name doesn't reorder against the
+        // header's base direction.
+        val bdi = document.createElement("bdi") as HTMLElement
+        bdi.textContent = labelText
+        label.appendChild(bdi)
+        label.setAttribute("title", labelText)
+        header.appendChild(label)
     }
 
     if (spec.actions.isNotEmpty()) {
