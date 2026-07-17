@@ -2360,6 +2360,23 @@ private class ShellState(
         // (Per-tab actions live in each tab's own dot menu now — see
         // TabBar.kt / TabBarOverflowMenu.kt.)
         val paneAddItemsProvider = spec.tabSource?.paneAddMenuItems
+        // Whether the "+" button can currently DO anything: a default click
+        // action, a "New tab"/"New workspace" row, or at least one host-
+        // supplied menu item for the active tab. When none of these hold,
+        // the button is omitted entirely rather than rendered dead — a "+"
+        // whose hover menu is empty and whose click is a no-op reads as
+        // broken, not as disabled. Evaluated on every topbar rebuild, so a
+        // host whose item list is permission-gated (lunicle: New issue /
+        // New project appear on sign-in) gets the button back on the
+        // rerender that follows the permission change. The provider is a
+        // cheap pure read by its own contract ("evaluated every time the
+        // menu opens"), so probing it here adds nothing measurable.
+        val newButtonHasAnyAction = callbacks.onAdd != null ||
+            spec.tabSource?.onPaneAdd != null ||
+            spec.worldSource?.onAdd != null ||
+            (paneAddItemsProvider != null &&
+                (external?.activeTabId ?: viewActiveTabId())
+                    ?.let { paneAddItemsProvider(it).isNotEmpty() } == true)
         val newPaneButton = buildNewWindowSplitButton(
             tooltip = "New",
             iconHtml = ICON_NEW_TAB,
@@ -2407,7 +2424,7 @@ private class ShellState(
             },
             onDefaultClick = { addPaneToActiveTab() },
         )
-        trailing.appendChild(newPaneButton)
+        if (newButtonHasAnyAction) trailing.appendChild(newPaneButton)
         trailing.appendChild(layoutDropdown.triggerButton)
         // Three-state cycle: Auto → Dark → Light → Auto. Helper paints
         // the per-state SVG (sun / moon / half-disc) so the icon

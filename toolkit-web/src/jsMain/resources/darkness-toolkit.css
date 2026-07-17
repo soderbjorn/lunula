@@ -2360,14 +2360,26 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 }
 .dt-modal {
     /* Mirrors termtastic's `.pane-modal.confirm-modal`: compact width band,
-       ~18px/20px padding, raised surface, default border. The chrome font
-       stack is set explicitly because the modal is appended to <body>,
-       outside the .dt-app-frame whose `font-family` would otherwise cascade. */
+       ~18px/20px padding, raised surface. The chrome font stack is set
+       explicitly because the modal is appended to <body>, outside the
+       .dt-app-frame whose `font-family` would otherwise cascade. */
     background: var(--t-surface, #1e1e1e);
     color: var(--t-text, #e6e6e6);
-    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
-    border-radius: 8px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    /* The signature dialog frame, same treatment as `.pane-modal`: a bold
+       2px accent border plus a deep drop shadow and a soft accent-glow halo,
+       so every toolkit dialog — confirm, choice, pane modal — reads as one
+       family of clearly separated floating surfaces. This family had kept
+       the original faint 1px `--t-border` while `.pane-modal` was upgraded,
+       which left the two dialog kinds visibly mismatched in the same app.
+       Deliberately `--t-accent`/`--t-glow` directly, with NO generic
+       `var(--border, …)` compatibility hook: that hook is how `.pane-modal`
+       silently loses its accent in any host whose stylesheet defines a
+       `--border` custom property of its own. */
+    border: 2px solid var(--t-accent, rgba(255, 255, 255, 0.4));
+    border-radius: 12px;
+    box-shadow:
+        0 24px 70px -16px rgba(0, 0, 0, 0.85),
+        0 0 44px -8px var(--t-glow, transparent);
     padding: 18px 20px 20px;
     min-width: 300px;
     max-width: 420px;
