@@ -2426,13 +2426,23 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     font-family: inherit;
     border: 1px solid var(--t-border, #3c3c3c);
     appearance: none;
+    /* Same 0.12s the settings choice buttons ease their hover with. */
+    transition: background 0.12s, color 0.12s, border-color 0.12s,
+        box-shadow 0.12s, filter 0.12s;
 }
 .dt-modal-btn-cancel {
     background: var(--t-bg, #252526);
     color: var(--t-text, #d4d4d4);
 }
+/* Hover lights the button up, not just the surface swap: --t-bg → --t-surface
+   is one dark tone to a neighbouring dark tone under the dark themes and the
+   button read as dead. The accent border and the glow are the visible part —
+   the same treatment the focused pane's border uses (--t-glow, accent at ~34%
+   alpha, transparent for themes that opt out). */
 .dt-modal-btn-cancel:hover {
     background: var(--t-surface, #2d2d30);
+    border-color: var(--t-accent-soft, rgba(255, 255, 255, 0.25));
+    box-shadow: 0 0 10px var(--t-glow, transparent);
 }
 .dt-modal-btn-confirm {
     background: var(--t-accent, #4f8cff);
@@ -2442,6 +2452,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 }
 .dt-modal-btn-confirm:hover {
     filter: brightness(1.12);
+    box-shadow: 0 0 14px var(--t-glow, transparent);
 }
 .dt-modal-btn-confirm:focus {
     outline: 2px solid var(--t-accent, #4f8cff);
@@ -2464,9 +2475,13 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 }
 .dt-modal-btn-confirm.dt-destructive:hover {
     /* Deepen the tint instead of the brightness filter the accent variant
-       uses — brightening a translucent red wash looks washed-out. */
+       uses — brightening a translucent red wash looks washed-out. Border and
+       glow are restated in the danger colour: without them the confirm rule
+       above paints an accent-coloured halo on a red button. */
     filter: none;
     background: color-mix(in srgb, var(--t-danger, #b33a36) 26%, transparent);
+    border-color: color-mix(in srgb, var(--t-danger, #b33a36) 60%, transparent);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--t-danger, #b33a36) 30%, transparent);
 }
 .dt-modal-btn-confirm.dt-destructive:focus {
     outline-color: var(--t-danger, #b33a36);

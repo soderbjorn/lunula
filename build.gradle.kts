@@ -8,7 +8,7 @@ plugins {
 
 allprojects {
     group = "se.soderbjorn.darkness"
-    version = "0.2.33"
+    version = "0.2.34"
 }
 
 // Default file-Maven-repo locations inside the consumer worktrees. Each
