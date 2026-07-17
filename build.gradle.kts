@@ -8,13 +8,13 @@ plugins {
 
 allprojects {
     group = "se.soderbjorn.darkness"
-    version = "0.2.34"
+    version = "0.2.35"
 }
 
 // Default file-Maven-repo locations inside the consumer worktrees. Each
 // consumer commits its libs-repo so it can build without the toolkit checkout.
 val lunamuxLibsRepoDefault: String = "../../lunamux/main/libs-repo"
-val notegrowLibsRepoDefault: String = "../../notegrow/main/libs-repo"
+val treefactsLibsRepoDefault: String = "../../treefacts/main/libs-repo"
 val lunicleLibsRepoDefault: String = "../../lunicle/main/libs-repo"
 
 fun resolveRepo(propertyName: String, default: String): java.io.File {
@@ -32,8 +32,8 @@ subprojects {
                     url = uri(resolveRepo("lunamuxLibsRepo", lunamuxLibsRepoDefault))
                 }
                 maven {
-                    name = "NotegrowLibsRepo"
-                    url = uri(resolveRepo("notegrowLibsRepo", notegrowLibsRepoDefault))
+                    name = "TreefactsLibsRepo"
+                    url = uri(resolveRepo("treefactsLibsRepo", treefactsLibsRepoDefault))
                 }
                 maven {
                     name = "LunicleLibsRepo"
@@ -46,7 +46,7 @@ subprojects {
 
 tasks.register("publishAllToLibsRepo") {
     group = "publishing"
-    description = "Publishes every toolkit module to the libs-repo of every consumer repo (lunamux, notegrow and lunicle)."
+    description = "Publishes every toolkit module to the libs-repo of every consumer repo (lunamux, treefacts and lunicle)."
     // Filter to toolkit-* modules only — demo modules deliberately don't apply
     // maven-publish, so they have no publishAllPublicationsTo* tasks to depend
     // on. Filtering by name keeps the dependency list resolvable at config
@@ -57,7 +57,7 @@ tasks.register("publishAllToLibsRepo") {
             .flatMap { sub ->
                 listOf(
                     "${sub.path}:publishAllPublicationsToLunamuxLibsRepoRepository",
-                    "${sub.path}:publishAllPublicationsToNotegrowLibsRepoRepository",
+                    "${sub.path}:publishAllPublicationsToTreefactsLibsRepoRepository",
                     "${sub.path}:publishAllPublicationsToLunicleLibsRepoRepository",
                 )
             }

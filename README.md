@@ -67,9 +67,9 @@ single Gradle command (run from this checkout):
 
 Default targets:
 - `../../termtastic/adopt-darkness-toolkit/libs-repo`
-- `../../notegrow/adopt-darkness-toolkit/libs-repo`
+- `../../treefacts/adopt-darkness-toolkit/libs-repo`
 
-Override either with `-PtermtasticLibsRepo=…` or `-PnotegrowLibsRepo=…`
+Override either with `-PtermtasticLibsRepo=…` or `-PtreefactsLibsRepo=…`
 (absolute or relative to this `darkness-toolkit` checkout). Then commit the
 updated `libs-repo/` tree in each consumer repo.
 

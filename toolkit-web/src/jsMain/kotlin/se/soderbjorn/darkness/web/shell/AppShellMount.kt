@@ -2309,6 +2309,12 @@ private class ShellState(
                 leading.appendChild(buildWorldSwitcher(worlds, worldSource))
             }
         }
+        // App content on the leading edge, after the toolkit's own chrome and
+        // before the tab strip. Everything above this point is toolkit-owned
+        // and both parts are opt-out, so an app with no sidebar and no world
+        // source had an empty left edge and no slot to fill it — see
+        // AppShellSpec.topbarLeading.
+        spec.topbarLeading?.invoke()?.let { leading.appendChild(it) }
 
         // Trailing slot order:
         //   spec.extraTopbarBeforeStandard …  ‖  NewPane · Layout · ThemeToggle · ThemeMgr  ‖  spec.extraTopbarTrailing …

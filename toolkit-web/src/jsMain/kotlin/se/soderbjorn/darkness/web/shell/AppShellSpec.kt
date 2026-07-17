@@ -480,6 +480,19 @@ class WorldSource(
  *   standard cluster. Use for app-level actions that conceptually live
  *   alongside the layout/theme controls but aren't toolkit-supplied
  *   (e.g. notegrow's "Starred bookmarks" tab-level button).
+ * @property topbarLeading optional factory returning custom DOM for the
+ *   LEADING (left) edge of the topbar, after the sidebar toggle and world
+ *   switcher and before the tab strip. The counterpart to
+ *   [bottomBarLeading], and the only way to put app content on that side:
+ *   the leading cluster is otherwise built entirely from toolkit chrome, so
+ *   an app with [showSidebar] `false` and no [worldSource] has an empty left
+ *   edge it cannot fill. Apps use it for a persistent brand/identity line —
+ *   e.g. lunicle's "Lunicle — an issue tracker by …", moved off a bottom bar
+ *   that existed only to carry it. Returning `null` leaves the slot empty
+ *   (the toolkit default). Same identity/caching contract and rerender
+ *   cadence as [sidebarHeader]: the factory is invoked on each shell
+ *   rerender, so cache the element on the app side if its identity matters
+ *   for event listeners.
  * @property appPanes retained for call-site compatibility only. Under the
  *   post-revamp theme system there are no per-pane sections, so this map is
  *   no longer consumed by the theme manager. Existing apps may keep passing
@@ -597,6 +610,7 @@ data class AppShellSpec(
     val sidebarFooter: (() -> HTMLElement?)? = null,
     val extraTopbarTrailing: List<TopbarAction> = emptyList(),
     val extraTopbarBeforeStandard: List<TopbarAction> = emptyList(),
+    val topbarLeading: (() -> HTMLElement?)? = null,
     val appPanes: Map<String, String> = emptyMap(),
     val bottomBarLeading: (() -> HTMLElement?)? = null,
     val bottomBarTrailing: (() -> HTMLElement?)? = null,
