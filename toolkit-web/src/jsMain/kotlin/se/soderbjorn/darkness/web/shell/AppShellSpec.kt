@@ -616,6 +616,63 @@ data class AppShellSpec(
      * [bottomBarTrailing] are never invoked.
      */
     val showBottomBar: Boolean = true,
+    /**
+     * Whether the toolkit's left sidebar exists at all. When `true` (the
+     * default) the shell renders the sidebar-toggle button in the topbar
+     * leading cluster and mounts the sidebar (or its collapsed
+     * placeholder) in the left slot, exactly as before. Set to `false`
+     * to omit BOTH: no toggle button, no sidebar, no drag-to-restore
+     * placeholder — the left slot stays empty and
+     * [AppShellHandle.setSidebarOpen] becomes a no-op. For apps whose
+     * window model is simple enough that a tabs→panes tree adds nothing
+     * (single-tab apps with few panes).
+     *
+     * Distinct from [AppShellHandle.setSidebarOpen]`(false)`, which
+     * merely collapses a sidebar that still exists and can be re-opened.
+     */
+    val showSidebar: Boolean = true,
+    /**
+     * Whether the tab strip is rendered in the topbar's middle slot.
+     * When `true` (the default) the full tab bar renders as before. Set
+     * to `false` for apps whose tab model is a single implicit tab: the
+     * tab (and its panes) still exists and renders in the main slot,
+     * but no strip appears — the topbar shows only the leading cluster
+     * and the trailing actions. Tab-related affordances that live in
+     * the strip (dot menus, overflow, drag-reorder) are unreachable
+     * while hidden, which is the point.
+     */
+    val showTabStrip: Boolean = true,
+    /**
+     * When `true` (the default) the pane chrome's close button routes
+     * through the toolkit's [se.soderbjorn.darkness.web.confirmClosePane]
+     * dialog before firing the close callback — the historical
+     * behaviour. Apps that wrap their OWN confirmation around pane
+     * close (e.g. an unsaved-changes Save/Discard dialog shown from
+     * [TabSource.onPaneClose] before the pane is dropped from the
+     * snapshot) set this to `false` so the user isn't asked twice.
+     */
+    val confirmPaneClose: Boolean = true,
+    /**
+     * Per-pane close affordance. Invoked when building each pane's
+     * chrome; returning `false` omits the close button for that pane
+     * entirely (minimize/maximize are unaffected). The default returns
+     * `true` for every pane — the historical chrome. Apps with a
+     * permanent "home" pane (a board, a dashboard) gate it here.
+     *
+     * UI-affordance only: it removes the button, it does not guard
+     * programmatic close paths.
+     */
+    val paneClosable: (tabId: String, paneId: String) -> Boolean = { _, _ -> true },
+    /**
+     * Whether a brand-new pane (one with no persisted geometry yet)
+     * spawns maximized. Consulted once when the pane's geometry entry is
+     * first seeded; the user can restore/re-maximize freely afterwards
+     * and persistence takes over as usual. The default returns `false`
+     * for every pane — the historical cascade-spawn behaviour. Apps use
+     * this for a primary pane that should fill the window on first
+     * launch (with an in-memory persister: on every launch).
+     */
+    val paneOpensMaximized: (tabId: String, paneId: String) -> Boolean = { _, _ -> false },
     val settingsHost: ThemeManagerHost? = null,
     /**
      * Optional factory returning the body element of an app-supplied

@@ -67,6 +67,15 @@ data class FloatingPaneSpec(
      * "minimised" state termtastic surfaces in the sidebar.
      */
     val isMinimized: Boolean = false,
+    /**
+     * When `false`, the chrome header omits the close button for this
+     * pane even though [PaneCallbacks.onFloatingClosed] is wired for the
+     * layout as a whole. Minimize/maximize are unaffected. Defaults to
+     * `true` (every pane closable — the historical chrome). Populated by
+     * `mountAppShell` from `AppShellSpec.paneClosable`; hosts driving the
+     * renderer directly set it per spec entry.
+     */
+    val isClosable: Boolean = true,
 )
 
 /**

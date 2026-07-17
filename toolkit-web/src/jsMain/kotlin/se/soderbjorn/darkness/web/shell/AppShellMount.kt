@@ -904,8 +904,11 @@ private class ShellState(
     init {
         // Seed the SidebarController so it's "open" by default; the very
         // first rerender then mounts the sidebar at its target width
-        // without animation (skipNextOpenAnimation).
-        leftSidebarController.setInitial(open = true, widthPx = 240)
+        // without animation (skipNextOpenAnimation). When the app opts
+        // out of the sidebar entirely (`showSidebar = false`) seed it
+        // closed — the slot is never mounted, but a coherent controller
+        // state costs nothing and guards any stray isOpen reads.
+        leftSidebarController.setInitial(open = spec.showSidebar, widthPx = 240)
     }
 
     fun attach(
@@ -1265,7 +1268,11 @@ private class ShellState(
             var seeded = tabMap
             missing.forEach { id ->
                 topZ += 1
-                seeded = seeded + (id to defaultGeometryForNewPane()
+                // Adopted-blob repair keeps the historical "never seed
+                // maximized" rule even for opens-maximized panes: the
+                // adopted layout is another client's arrangement and a
+                // surprise full-bleed pane would stomp it.
+                seeded = seeded + (id to defaultGeometryForNewPane(tab.id, id)
                     .copy(zIndex = topZ, isMaximized = false))
             }
             geometryState = geometryState.copy(
@@ -1462,6 +1469,9 @@ private class ShellState(
     }
 
     fun setSidebarOpen(open: Boolean) {
+        // No sidebar exists when the app opted out — programmatic opens
+        // (Electron menu items, host hotkeys) must not resurrect it.
+        if (!spec.showSidebar) return
         // Route through the controller so the user-visible width
         // animation (0 ↔ widthPx) plays. The controller flips its
         // own state and calls our rerender once the transition has
@@ -1528,41 +1538,46 @@ private class ShellState(
         val prevLeftScrollTop =
             (leftSlot.querySelector(".dt-sidebar-content") as? HTMLElement)?.scrollTop
         leftSlot.innerHTML = ""
-        val sidebarEl = leftSidebarController.mountSidebarOrPlaceholder(
-            spec = SidebarSpec(
-                // App-supplied header / footer pinned above and below the
-                // scrollable tabs/panes tree (e.g. termtastic's logo at the
-                // top and its Claude-usage + update/news footer at the
-                // bottom). Both factories are re-invoked on every rerender;
-                // apps that cache the element get it re-parented intact.
-                header = spec.sidebarHeader?.invoke(),
-                content = buildLeftSidebarContent(),
-                footer = spec.sidebarFooter?.invoke(),
-                visible = true,
-                isResizable = true,
-                // Floor the drag at the resize handle's own width: the user
-                // can pull the bar "pretty much all the way" against the
-                // window edge but a thin grabbable strip always remains so
-                // the in-bar handle stays reachable. Going to 0 here would
-                // hand the bar off to the collapsed placeholder, whose
-                // handle bleeds 30–44 px in from the edge (CSS rule
-                // `.dt-sidebar-collapsed > .dt-sidebar-resize-handle-right`
-                // — needed to dodge the OS window resize gutter), which
-                // reads as the sidebar popping back out some distance from
-                // where the user released. Toggling the bar fully closed
-                // is still available via the topbar button.
-                minWidthPx = 8,
-                maxWidthPx = 600,
-            ),
-            onLeft = true,
-            requestRebuild = ::rerender,
-        )
-        leftSlot.appendChild(sidebarEl)
-        // Reapply the pre-rebuild scroll offset now that the new content
-        // wrapper is attached and laid out (see the capture above, issue #106).
-        if (prevLeftScrollTop != null) {
-            (sidebarEl.querySelector(".dt-sidebar-content") as? HTMLElement)
-                ?.let { it.scrollTop = prevLeftScrollTop }
+        // `showSidebar = false` skips the mount entirely — no sidebar, no
+        // collapsed drag-to-restore placeholder. The slot stays empty so
+        // the main area starts flush at the frame's left edge.
+        if (spec.showSidebar) {
+            val sidebarEl = leftSidebarController.mountSidebarOrPlaceholder(
+                spec = SidebarSpec(
+                    // App-supplied header / footer pinned above and below the
+                    // scrollable tabs/panes tree (e.g. termtastic's logo at the
+                    // top and its Claude-usage + update/news footer at the
+                    // bottom). Both factories are re-invoked on every rerender;
+                    // apps that cache the element get it re-parented intact.
+                    header = spec.sidebarHeader?.invoke(),
+                    content = buildLeftSidebarContent(),
+                    footer = spec.sidebarFooter?.invoke(),
+                    visible = true,
+                    isResizable = true,
+                    // Floor the drag at the resize handle's own width: the user
+                    // can pull the bar "pretty much all the way" against the
+                    // window edge but a thin grabbable strip always remains so
+                    // the in-bar handle stays reachable. Going to 0 here would
+                    // hand the bar off to the collapsed placeholder, whose
+                    // handle bleeds 30–44 px in from the edge (CSS rule
+                    // `.dt-sidebar-collapsed > .dt-sidebar-resize-handle-right`
+                    // — needed to dodge the OS window resize gutter), which
+                    // reads as the sidebar popping back out some distance from
+                    // where the user released. Toggling the bar fully closed
+                    // is still available via the topbar button.
+                    minWidthPx = 8,
+                    maxWidthPx = 600,
+                ),
+                onLeft = true,
+                requestRebuild = ::rerender,
+            )
+            leftSlot.appendChild(sidebarEl)
+            // Reapply the pre-rebuild scroll offset now that the new content
+            // wrapper is attached and laid out (see the capture above, issue #106).
+            if (prevLeftScrollTop != null) {
+                (sidebarEl.querySelector(".dt-sidebar-content") as? HTMLElement)
+                    ?.let { it.scrollTop = prevLeftScrollTop }
+            }
         }
 
         // Right sidebar — either the theme manager OR the settings
@@ -1937,10 +1952,10 @@ private class ShellState(
                     // Confirm before closing a pane. The toolkit's
                     // `confirmClosePane` shows an accent-styled (non-
                     // destructive) dialog citing the pane title. Apps that
-                    // wrap their own
-                    // confirmation around the pane-close gesture can flip
-                    // this off via a future spec field.
-                    confirmFloatingClose = true,
+                    // wrap their own confirmation around the pane-close
+                    // gesture (e.g. an unsaved-changes dialog shown from
+                    // TabSource.onPaneClose) opt out via the spec.
+                    confirmFloatingClose = spec.confirmPaneClose,
                 ),
             )
         }
@@ -2271,16 +2286,20 @@ private class ShellState(
         )
 
         // Leading: sidebar-toggle button to the LEFT of the tab strip
-        // (matching termtastic / notegrow chrome layout).
+        // (matching termtastic / notegrow chrome layout). Omitted when
+        // the app opts out of the sidebar entirely (`showSidebar =
+        // false`) — a toggle for a bar that never mounts is dead chrome.
         val leading = document.createElement("div") as HTMLElement
         leading.style.display = "flex"
         leading.style.alignItems = "center"
-        leading.appendChild(
-            buildLeftSidebarToggleButton(
-                isOpen = leftSidebarController.isOpen,
-                onToggle = { setSidebarOpen(!leftSidebarController.isOpen) },
+        if (spec.showSidebar) {
+            leading.appendChild(
+                buildLeftSidebarToggleButton(
+                    isOpen = leftSidebarController.isOpen,
+                    onToggle = { setSidebarOpen(!leftSidebarController.isOpen) },
+                )
             )
-        )
+        }
         // World switcher globe — only when the app wires a world source and
         // has pushed at least one world. Sits right of the sidebar toggle
         // and left of the tab strip (the tab strip is the TopBarSpec.tabBar,
@@ -2531,7 +2550,11 @@ private class ShellState(
         return topBarController.mountTopBar(
             TopBarSpec(
                 leadingContent = leading,
-                tabBar = tabBarSpec,
+                // `showTabStrip = false` hides the whole strip: the middle
+                // slot renders empty while the tab model (and its panes)
+                // stays fully live. The TabBarCallbacks above are still
+                // built — the "+" split-button menu reuses them.
+                tabBar = if (spec.showTabStrip) tabBarSpec else null,
                 trailingContent = trailing,
                 isResizable = true,
                 minHeightPx = 0,
@@ -3193,6 +3216,7 @@ private class ShellState(
                     zIndex = g.zIndex,
                     isMaximized = g.isMaximized,
                     isMinimized = g.isMinimized,
+                    isClosable = spec.paneClosable(activeTab, id),
                 )
             },
         )
@@ -3334,7 +3358,8 @@ private class ShellState(
      * [defaultGeometryForNewPane] entry the next persist call will commit.
      */
     private fun geometryFor(tabId: String, paneId: String): PersistedPaneGeometry =
-        geometryState.geometryByTab[tabId]?.get(paneId) ?: defaultGeometryForNewPane()
+        geometryState.geometryByTab[tabId]?.get(paneId)
+            ?: defaultGeometryForNewPane(tabId, paneId)
 
     /**
      * Default geometry for a brand-new pane the controller has not yet
@@ -3347,12 +3372,20 @@ private class ShellState(
      * The next Auto re-tile (if active) overrides this immediately; in
      * [LayoutPreset.Custom] mode it stays the landing geometry until
      * the user drags.
+     *
+     * [AppShellSpec.paneOpensMaximized] is consulted here — the seed is
+     * the one moment "this pane starts maximized" can apply without
+     * fighting persisted state: once an entry exists, the user's own
+     * maximize/restore toggles own the flag.
      */
-    private fun defaultGeometryForNewPane(): PersistedPaneGeometry {
+    private fun defaultGeometryForNewPane(tabId: String, paneId: String): PersistedPaneGeometry {
         val rawX = (0.10 + kotlin.random.Random.nextDouble() * 0.20).coerceIn(0.0, 0.55)
         val rawY = (0.10 + kotlin.random.Random.nextDouble() * 0.20).coerceIn(0.0, 0.45)
         val snapped = DEFAULT_LAYOUT_GRID.snapBox(LayoutBox(rawX, rawY, 0.45, 0.55))
-        return PersistedPaneGeometry(snapped.x, snapped.y, snapped.width, snapped.height)
+        return PersistedPaneGeometry(
+            snapped.x, snapped.y, snapped.width, snapped.height,
+            isMaximized = spec.paneOpensMaximized(tabId, paneId),
+        )
     }
 
     /**
@@ -3366,7 +3399,7 @@ private class ShellState(
         transform: (PersistedPaneGeometry) -> PersistedPaneGeometry,
     ) {
         val tabMap = geometryState.geometryByTab[tabId].orEmpty()
-        val current = tabMap[paneId] ?: defaultGeometryForNewPane()
+        val current = tabMap[paneId] ?: defaultGeometryForNewPane(tabId, paneId)
         val updated = transform(current)
         // No-op guard: a re-tile that computes the exact geometry the pane
         // already has (the common case when Auto re-runs on a focus-only or
@@ -3573,8 +3606,18 @@ private class ShellState(
                     var nextTabMap = restored
                     genuinelyNew.forEach { id ->
                         topZ += 1
-                        val seeded = defaultGeometryForNewPane()
-                            .copy(zIndex = topZ, isMaximized = false)
+                        // `paneOpensMaximized` panes keep the maximized
+                        // flag their geometry seed carries — that's the
+                        // whole point of the spec hook. Every other pane
+                        // keeps the historical force-false so a freshly
+                        // spawned pane lands on top *restored*, never
+                        // surprise-full-bleed.
+                        val seeded = defaultGeometryForNewPane(tab.id, id)
+                            .copy(zIndex = topZ)
+                            .let { g ->
+                                if (spec.paneOpensMaximized(tab.id, id)) g
+                                else g.copy(isMaximized = false)
+                            }
                         nextTabMap = nextTabMap + (id to seeded)
                     }
                     geometryState = geometryState.copy(

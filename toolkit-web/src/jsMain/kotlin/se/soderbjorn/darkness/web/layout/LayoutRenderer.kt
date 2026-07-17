@@ -1286,7 +1286,10 @@ class LayoutRenderer(
                 else PaneActions.expand { onMax(spec.id) }
             )
         }
-        callbacks.onFloatingClosed?.let { onClose ->
+        // Per-pane opt-out: a spec with `isClosable = false` (e.g. an
+        // app's permanent home pane) simply never gets the close button,
+        // regardless of the layout-wide close callback being wired.
+        if (spec.isClosable) callbacks.onFloatingClosed?.let { onClose ->
             controlActions.add(
                 PaneActions.close {
                     if (callbacks.confirmFloatingClose) {

@@ -11,10 +11,11 @@ allprojects {
     version = "0.2.31"
 }
 
-// Default file-Maven-repo locations inside the two consumer worktrees. Each
+// Default file-Maven-repo locations inside the consumer worktrees. Each
 // consumer commits its libs-repo so it can build without the toolkit checkout.
 val lunamuxLibsRepoDefault: String = "../../lunamux/main/libs-repo"
 val notegrowLibsRepoDefault: String = "../../notegrow/main/libs-repo"
+val lunicleLibsRepoDefault: String = "../../lunicle/main/libs-repo"
 
 fun resolveRepo(propertyName: String, default: String): java.io.File {
     val configured = providers.gradleProperty(propertyName).orNull ?: default
@@ -34,6 +35,10 @@ subprojects {
                     name = "NotegrowLibsRepo"
                     url = uri(resolveRepo("notegrowLibsRepo", notegrowLibsRepoDefault))
                 }
+                maven {
+                    name = "LunicleLibsRepo"
+                    url = uri(resolveRepo("lunicleLibsRepo", lunicleLibsRepoDefault))
+                }
             }
         }
     }
@@ -41,7 +46,7 @@ subprojects {
 
 tasks.register("publishAllToLibsRepo") {
     group = "publishing"
-    description = "Publishes every toolkit module to the libs-repo of both consumer repos (lunamux and notegrow)."
+    description = "Publishes every toolkit module to the libs-repo of every consumer repo (lunamux, notegrow and lunicle)."
     // Filter to toolkit-* modules only — demo modules deliberately don't apply
     // maven-publish, so they have no publishAllPublicationsTo* tasks to depend
     // on. Filtering by name keeps the dependency list resolvable at config
@@ -53,6 +58,7 @@ tasks.register("publishAllToLibsRepo") {
                 listOf(
                     "${sub.path}:publishAllPublicationsToLunamuxLibsRepoRepository",
                     "${sub.path}:publishAllPublicationsToNotegrowLibsRepoRepository",
+                    "${sub.path}:publishAllPublicationsToLunicleLibsRepoRepository",
                 )
             }
     )

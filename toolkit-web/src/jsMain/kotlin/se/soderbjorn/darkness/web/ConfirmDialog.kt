@@ -115,6 +115,119 @@ fun showConfirmDialog(
 }
 
 /**
+ * One button in a [showChoiceDialog] modal.
+ *
+ * @property id       stable identifier reported to `onChoice` when picked.
+ * @property label    visible button text.
+ * @property isPrimary styles the button as the accent-colored primary
+ *   action and gives it initial focus + Enter activation. At most one
+ *   choice should set this; with none set, no button is highlighted and
+ *   Enter is inert.
+ * @property destructive styles the button with the muted danger tint
+ *   (`.dt-destructive`) — for choices that discard work or delete data.
+ */
+data class DialogChoice(
+    val id: String,
+    val label: String,
+    val isPrimary: Boolean = false,
+    val destructive: Boolean = false,
+)
+
+/**
+ * Opens a modal dialog offering an arbitrary set of buttons — the N-way
+ * sibling of the two-button [showConfirmDialog], for flows like
+ * unsaved-changes ("Save" / "Discard" / "Keep editing") where cancel vs.
+ * confirm doesn't capture the real decision.
+ *
+ * Exactly one callback fires per open: `onChoice(id)` for a clicked
+ * button, or `onDismiss()` for Escape / backdrop-click. Buttons render in
+ * list order, left to right, in the same `.dt-modal-buttons` row the
+ * two-button dialog uses.
+ *
+ * @param title       dialog title shown in the header.
+ * @param message     body message shown above the buttons.
+ * @param choices     the buttons, in display order. Must be non-empty.
+ * @param messageIsHtml if true, [message] is set as `innerHTML` (callers
+ *   escape user-supplied substrings via [escapeHtmlForConfirm]).
+ * @param onChoice    invoked with the picked choice's [DialogChoice.id].
+ * @param onDismiss   invoked on Escape or backdrop click. Defaults to a
+ *   no-op; flows where dismissal means one of the choices (e.g. "Keep
+ *   editing") route it to the same handler.
+ */
+fun showChoiceDialog(
+    title: String,
+    message: String,
+    choices: List<DialogChoice>,
+    messageIsHtml: Boolean = false,
+    onChoice: (String) -> Unit,
+    onDismiss: () -> Unit = {},
+) {
+    val backdrop = document.createElement("div") as HTMLElement
+    backdrop.className = "dt-modal-backdrop"
+
+    val card = document.createElement("div") as HTMLElement
+    card.className = "dt-modal"
+
+    val titleEl = document.createElement("h2") as HTMLElement
+    titleEl.className = "dt-modal-title"
+    titleEl.textContent = title
+    card.appendChild(titleEl)
+
+    val messageEl = document.createElement("p") as HTMLElement
+    messageEl.className = "dt-modal-message"
+    if (messageIsHtml) messageEl.innerHTML = message else messageEl.textContent = message
+    card.appendChild(messageEl)
+
+    val buttons = document.createElement("div") as HTMLElement
+    buttons.className = "dt-modal-buttons"
+
+    var done = false
+    fun close(action: () -> Unit) {
+        if (done) return
+        done = true
+        backdrop.parentNode?.removeChild(backdrop)
+        action()
+    }
+
+    var primaryBtn: HTMLButtonElement? = null
+    for (choice in choices) {
+        val btn = document.createElement("button") as HTMLButtonElement
+        btn.type = "button"
+        btn.textContent = choice.label
+        // Primary rides the confirm styling, everything else the cancel
+        // styling — same visual language as the two-button dialog.
+        btn.className = if (choice.isPrimary) {
+            "dt-modal-btn dt-modal-btn-confirm" + if (choice.destructive) " dt-destructive" else ""
+        } else {
+            "dt-modal-btn dt-modal-btn-cancel" + if (choice.destructive) " dt-destructive" else ""
+        }
+        btn.addEventListener("click", { close { onChoice(choice.id) } })
+        if (choice.isPrimary && primaryBtn == null) primaryBtn = btn
+        buttons.appendChild(btn)
+    }
+
+    card.appendChild(buttons)
+    backdrop.appendChild(card)
+    document.body?.appendChild(backdrop)
+    primaryBtn?.focus()
+
+    backdrop.addEventListener("click", { ev ->
+        if (ev.target === backdrop) close(onDismiss)
+    })
+    val keyHandler: (org.w3c.dom.events.Event) -> Unit = { ev ->
+        val k = ev as KeyboardEvent
+        if (k.key == "Escape") close(onDismiss)
+        else if (k.key == "Enter" && primaryBtn != null && document.activeElement === primaryBtn) {
+            val primary = choices.first { it.isPrimary }
+            close { onChoice(primary.id) }
+        }
+    }
+    document.addEventListener("keydown", keyHandler)
+    // Same listener-lifecycle note as [showConfirmDialog]: the handler is
+    // a no-op once `done` is set, so it's effectively dead after close.
+}
+
+/**
  * Escapes a user-supplied string for safe inclusion in [showConfirmDialog]
  * messages where `messageIsHtml = true`. Replaces the five HTML special
  * characters (`&<>"'`) with their entity references; nothing else.
