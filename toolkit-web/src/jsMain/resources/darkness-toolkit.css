@@ -1450,6 +1450,22 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    is the reference for every `.dt-pane-floating` percentage geometry. */
 .dt-pane-area {
     position: relative;
+    /* A stacking context, so pane z-indexes cannot escape this element.
+       Panes stack by `--dt-fp-z`, which a raise assigns as `maxZ + 1` and
+       never renumbers (see AppShellMount) — an unbounded counter. `position:
+       relative` alone leaves `z-index: auto`, which is NOT a stacking
+       context, so those numbers competed against the chrome at the root:
+       `.dt-topbar` is `z-index: 10`, so around the eleventh pane raise in a
+       session a pane began painting over the whole topbar — and over anything
+       hanging off it, which is how lunicle's account menu became unreachable.
+       Isolating bounds them for good; giving the chrome a bigger number only
+       moves the count at which the same bug returns.
+
+       Safe for the popovers: `.dt-pane-menu` and `.dt-hover-menu` are
+       appended to <body> and positioned `fixed` (see PaneMenu.kt /
+       HoverMenuButton.kt), so they are not descendants of this element and
+       this does not confine them. */
+    isolation: isolate;
     flex: 1 1 auto;
     min-width: 0;
     min-height: 0;
