@@ -2556,17 +2556,27 @@ private class ShellState(
                 },
             )
         )
-        // App Settings — host-supplied content. Suppressed entirely
-        // when `spec.appSettingsContent` is null so apps that haven't
-        // opted in don't get a phantom icon. Sits immediately to the
-        // right of the Appearance gear so the toolkit's
-        // appearance-related cluster (theme / appearance / app-settings)
-        // reads as a left-to-right grouping.
-        if (spec.appSettingsContent != null) {
+        // App Settings — host-supplied content, or a host-supplied action.
+        // Suppressed entirely when the app asked for neither, so apps that
+        // haven't opted in don't get a phantom icon, and suppressed again
+        // when `isAppSettingsAvailable` says no (a permission-gated settings
+        // surface: omitted, not disabled). Sits immediately to the right of
+        // the Appearance gear so the toolkit's appearance-related cluster
+        // (theme / appearance / app-settings) reads as a left-to-right
+        // grouping.
+        //
+        // `onAppSettingsActivate` wins over `appSettingsContent` when both
+        // are set: the app has told us where its settings live, and opening
+        // a sidebar as well would put the same settings in two places.
+        val appSettingsActivate = spec.onAppSettingsActivate
+        val wantsAppSettings = spec.appSettingsContent != null || appSettingsActivate != null
+        if (wantsAppSettings && spec.isAppSettingsAvailable?.invoke() != false) {
             trailing.appendChild(
                 buildAppSettingsButton(
-                    isOpen = isAppSettingsSidebarOpen(),
-                    onToggle = {
+                    // Nothing to reflect when the app owns the surface — there
+                    // is no toolkit sidebar whose open state this could track.
+                    isOpen = appSettingsActivate == null && isAppSettingsSidebarOpen(),
+                    onToggle = appSettingsActivate ?: {
                         when {
                             isThemeManagerSidebarOpen() -> toggleThemeManagerSidebar {
                                 rerender()

@@ -698,7 +698,9 @@ data class AppShellSpec(
      * body against live state.
      *
      * When `null` (the default), the icon is suppressed entirely — apps
-     * that don't want an app-settings panel simply don't supply one.
+     * that don't want an app-settings panel simply don't supply one —
+     * unless [onAppSettingsActivate] is supplied instead, which is the
+     * other way to ask for the same icon.
      * Mutual exclusion with the Theme Manager and Appearance Settings
      * sidebars is handled by the mount: opening this one animates
      * whichever sibling is open closed first.
@@ -706,6 +708,43 @@ data class AppShellSpec(
      * @see se.soderbjorn.darkness.web.settings.buildAppSettingsSidebar
      */
     val appSettingsContent: (() -> HTMLElement)? = null,
+    /**
+     * Optional click behaviour for the app-settings gear, *instead of*
+     * the toolkit's built-in sidebar.
+     *
+     * The gear is the canonical place for "settings for this app", and
+     * apps that already own such a surface — a modal, a route, a window
+     * of their own — should be able to reach it from that icon rather
+     * than rebuild it as a sidebar body or clone the glyph into their
+     * own [extraTopbarTrailing] button (where it would drift from the
+     * toolkit's icon and sit on the wrong side of the divider).
+     *
+     * When non-null the icon appears exactly as it does for
+     * [appSettingsContent] and clicking it invokes this instead of
+     * toggling the sidebar. Supplying both is not meaningful — this one
+     * wins, and the sidebar is never opened — so supply one or the
+     * other. The button never paints `.dt-active` in this mode: there
+     * is no panel whose open state it could reflect.
+     */
+    val onAppSettingsActivate: (() -> Unit)? = null,
+    /**
+     * Whether the app-settings gear should be shown at all, evaluated on
+     * every topbar rebuild.
+     *
+     * For apps whose settings surface is permission-gated: Lunicle's is
+     * admin-only, and an icon that opens a dialog the server will refuse
+     * is worse than no icon. Returning `false` omits the button outright
+     * rather than disabling it — the same rule the "+" button follows,
+     * and for the same reason: a control that cannot do anything reads
+     * as broken rather than as forbidden.
+     *
+     * `null` (the default) means "always shown", so apps that do not
+     * gate their settings need say nothing. Because this is re-read on
+     * every rebuild, an app whose answer changes (a sign-in, a role
+     * change) gets the button back on the next
+     * [AppShellHandle.refresh].
+     */
+    val isAppSettingsAvailable: (() -> Boolean)? = null,
     /**
      * Optional factory returning the body element of an app-supplied
      * "Hotkeys" sidebar — a keyboard-shortcut reference. Unlike
