@@ -988,6 +988,28 @@ private class ShellState(
         applyHostFontVars()
         applyCustomTitleBar()
         rerender()
+        // [rerender] rebuilds the right-sidebar slot, but NOT the theme manager
+        // inside it: [showThemeManager] is idempotent and re-appends the same
+        // panel element it built when the manager was opened (the orphan-
+        // recovery branch that keeps scroll position across unrelated
+        // rerenders). Its theme cards therefore keep the closures they were
+        // built with — and each card captured `isDarkActive(host.appearance)`
+        // at build time, because that is the slot a click fills.
+        //
+        // So an appearance flip through this path left every card still writing
+        // the *previous* appearance's slot. Toggling dark→light and picking a
+        // theme wrote the dark slot: nothing visibly happened, the pick was
+        // silently lost, and the click's own [pokeManager] then rebuilt the
+        // cards — which is why a second click on the same card "worked". The
+        // slots also drifted apart, the light one keeping whatever was chosen
+        // while dark. Repainting the manager here binds the cards to the
+        // appearance the user is now looking at.
+        //
+        // Gated like the mirror in [syncThemeFromHost]: an app that owns a
+        // [ThemeManagerHost] renders its cards against that host, which this
+        // button does not touch, so its cards were never stale and an
+        // unsolicited repaint could only tear down an editor mid-interaction.
+        if (spec.settingsHost == null) refreshThemeManager()
     }
 
     /**
