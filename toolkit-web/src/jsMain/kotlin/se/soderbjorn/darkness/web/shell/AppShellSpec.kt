@@ -874,9 +874,9 @@ interface AppShellHandle {
 
     /**
      * Pushes an app-resolved [ThemeSnapshotV2] into the toolkit so subsequent
-     * rerenders paint with it. Updates the toolkit's stored snapshot,
-     * repaints `:root` CSS vars on the live chrome, and reapplies host font
-     * vars.
+     * rerenders paint with it. Updates the toolkit's stored snapshot and the
+     * default theme-manager state, repaints `:root` CSS vars on the live
+     * chrome, reapplies host font vars, and repaints an open theme manager.
      *
      * Use this when the app owns theme resolution outside the toolkit's own
      * theme manager (e.g. termtastic's `TermtasticThemeManagerHost`, which
@@ -884,6 +884,15 @@ interface AppShellHandle {
      * snapshot stays at whatever was loaded from the persister at mount, and
      * the next [refresh] (e.g. on tab/pane switch) repaints chrome with that
      * stale snapshot — clobbering the app's own paint.
+     *
+     * Equally usable by an app that supplies **no** [AppShellSpec.settingsHost]
+     * and so leaves the toolkit's own theme manager in charge — for instance to
+     * change theme when the signed-in user changes, under a shell that was
+     * mounted once and outlives the session. Such an app has no host state to
+     * be the truth instead, which is why the push updates the theme manager's
+     * own state too: what is pushed here is the whole answer afterwards, not a
+     * paint laid over a state that still disagrees and would win back the
+     * moment the user opened the theme manager.
      *
      * Does NOT call [refresh]: it paints in place over the existing chrome,
      * mirroring the toolkit's internal `onThemeManagerChanged` path so a

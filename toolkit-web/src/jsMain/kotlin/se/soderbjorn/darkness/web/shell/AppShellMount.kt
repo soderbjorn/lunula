@@ -1000,6 +1000,25 @@ private class ShellState(
      * Called by [AppShellHandle.setThemeSnapshot].
      */
     fun syncThemeFromHost(snap: ThemeSnapshotV2) {
+        // For an app that supplies no [AppShellSpec.settingsHost], mirror into
+        // the default theme-manager state as [applyThemeSnapshot] does — a
+        // sharper version of the same reason. Without a host, [themeState] is
+        // not merely the selection highlight: it *is* the theme manager's
+        // state, and it is what [onThemeManagerChanged] rebuilds the snapshot
+        // from. Leaving it behind meant a pushed snapshot painted correctly and
+        // was then lost the moment the user touched the theme manager, which
+        // rebuilt from the stale state and silently reverted the push — the
+        // appearance being the visible casualty.
+        //
+        // Deliberately NOT done when the app owns a [ThemeManagerHost]. It
+        // would be inert for them — their manager reads the host, never
+        // [themeState] — but "inert" is the whole argument for leaving it
+        // alone: those are precisely the hosts that bridge `onAfterRefresh`
+        // back into [AppShellHandle.setThemeSnapshot], and the appearance-cycle
+        // button above documents how such a bridge can land here holding a
+        // *stale* snapshot mid-rerender. Widening what a stale call overwrites
+        // buys nothing for them and could only cost.
+        if (spec.settingsHost == null) themeState.applySnapshotV2(snap)
         // The topbar appearance-cycle button's icon (sun / moon / half-disc) is
         // painted only when the chrome is rebuilt by [rerender]. A slot/colour
         // sync repaints `:root` in place and needs no rebuild, but an
@@ -1017,6 +1036,20 @@ private class ShellState(
         applyHostFontVars()
         applyCustomTitleBar()
         if (appearanceChanged) rerender()
+        // Repaint an open theme manager against the state just mirrored. A
+        // no-op when none is open (a null-safe call on the open manager's
+        // rerender hook), and the same call [onThemeManagerChanged] already
+        // makes after a theme change — so a manager rebuilt in response to a
+        // theme change is established behaviour, not something introduced here.
+        // The alternative is a manager left showing the themes and selection of
+        // whoever was signed in a moment ago.
+        //
+        // Gated with the mirror above so that an app owning a
+        // [ThemeManagerHost] sees no behaviour change at all from this path:
+        // such an app already calls [refreshThemeManager] itself when its own
+        // state moves, and an extra unsolicited repaint could tear down an
+        // editor its user is mid-interaction in.
+        if (spec.settingsHost == null) refreshThemeManager()
     }
 
     /**
