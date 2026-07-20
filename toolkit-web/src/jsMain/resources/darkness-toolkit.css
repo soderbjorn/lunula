@@ -1647,14 +1647,27 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     opacity: 0;
 }
 /* Maximized floating pane: ignore stored geometry, fill the container
-   minus a small inset for breathing room, force above every other float.
-   Mirrors termtastic's `.floating-pane.maximized` rule. */
+   minus a small inset for breathing room.
+   Mirrors termtastic's `.floating-pane.maximized` rule.
+
+   Deliberately sets NO z-index: the pane keeps `--dt-fp-z` from the base
+   `.dt-pane-floating` rule above. Maximizing is a raise gesture — the host's
+   `onFloatingMaximizeToggled` calls `bringPaneToFront(raise = true)`, the
+   same path a sidebar row click takes — so the stored z is already `maxZ + 1`
+   by the time this class lands.
+
+   This rule used to force `z-index: 1000 !important`, from a time before
+   maximize raised at all. Once it did, the clamp stopped being a floor and
+   became a *ceiling*: `--dt-fp-z` is an unbounded, persisted counter (a raise
+   assigns `maxZ + 1` and never renumbers — see AppShellMount), so in a
+   long-lived tab siblings climb past 1000 and the `!important` dropped the
+   maximized pane *below* them. Raising by sidebar click worked; maximizing
+   the same pane then sent it behind its neighbours. */
 .dt-pane.dt-pane-floating.dt-maximized {
     left: 4px;
     top: 4px;
     width: calc(100% - 8px);
     height: calc(100% - 8px);
-    z-index: 1000 !important;
 }
 .dt-pane-header {
     display: flex;
@@ -2248,10 +2261,14 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    helper sets `position: fixed` and the inline `left`/`top` itself, so
    the rules here only style the surface and rows. */
 .dt-pane-menu {
-    /* Sit above `.dt-pane.dt-pane-floating.dt-maximized` (z-index: 1000)
-       so a kebab popover anchored to a maximized pane's header isn't
-       eclipsed by the pane itself. Stays below modal/overlay layers
-       (10000+) so confirm dialogs and the theme manager still cover it. */
+    /* Historically 1001 to clear `.dt-maximized`'s old `z-index: 1000`. That
+       clamp is gone, and the comparison was moot anyway: this popover is
+       appended to <body> and positioned `fixed`, so it is not a descendant of
+       `.dt-pane-area` and never competed with pane z-indexes — those are
+       confined by that element's `isolation: isolate`. Kept as-is because it
+       still does the job it needs to: above the app chrome (`.dt-topbar` is
+       10), below modal/overlay layers (10000+) so confirm dialogs and the
+       theme manager still cover it. */
     z-index: 1001;
     min-width: 184px;
     padding: 4px;
