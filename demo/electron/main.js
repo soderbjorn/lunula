@@ -4,4 +4,4 @@
  * IPC handlers, BrowserWindow setup, app menu, single-instance lock,
  * external-link handling) lives in the :electron-main Gradle module
  * and is compiled to resources/main/ by `copyMainBundle`. */
-require("./resources/main/DarknessToolkit-demo-electron-main.js");
+require("./resources/main/Lunula-demo-electron-main.js");

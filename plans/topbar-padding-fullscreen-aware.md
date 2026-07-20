@@ -10,13 +10,13 @@ titlebar"). The reservation is gated on two body classes:
 
 - `dt-electron-mac` — auto-applied by the toolkit when running inside an
   Electron renderer on macOS
-  (`toolkit-web/.../DarknessToolkitStyles.kt:autoApplyElectronMacBodyClass`).
+  (`lunula-web/.../LunulaStyles.kt:autoApplyElectronMacBodyClass`).
 - `dt-custom-titlebar` — host opts in via
   `setDtCustomTitleBarBodyClass(enabled)`
-  (`toolkit-web/.../DarknessToolkitStyles.kt:79`) whenever the current
+  (`lunula-web/.../LunulaStyles.kt:79`) whenever the current
   `BrowserWindow` is using `hiddenInset`.
 
-CSS rule today (`toolkit-web/src/jsMain/resources/darkness-toolkit.css:206`):
+CSS rule today (`lunula-web/src/jsMain/resources/lunula.css:206`):
 
 ```css
 body.dt-electron-mac.dt-custom-titlebar .dt-topbar {
@@ -94,9 +94,9 @@ Initial state (window construction / recreation): the main process
 reads `BrowserWindow.isFullScreen()` once and emits the same IPC so the
 renderer doesn't have to wait for the next user action to converge.
 
-## Toolkit changes — `darkness-toolkit/develop`
+## Toolkit changes — `lunula/develop`
 
-### 1. CSS — `toolkit-web/src/jsMain/resources/darkness-toolkit.css`
+### 1. CSS — `lunula-web/src/jsMain/resources/lunula.css`
 
 Replace the rule at line 206:
 
@@ -110,7 +110,7 @@ Update the documentation block immediately above (lines 190–205) to
 list the third gate and explain why fullscreen drops the reservation
 (macOS hides traffic lights in native fullscreen).
 
-### 2. Helper — `toolkit-web/.../DarknessToolkitStyles.kt`
+### 2. Helper — `lunula-web/.../LunulaStyles.kt`
 
 Add a new exported function next to `setDtCustomTitleBarBodyClass`:
 
@@ -302,7 +302,7 @@ The toolkit change is independent and ships first; the app changes are
 no-ops against the old toolkit (the helper just doesn't exist) and
 become live once they pick up the new toolkit version.
 
-1. **darkness-toolkit:** CSS update + `setDtMacFullscreenBodyClass` +
+1. **lunula:** CSS update + `setDtMacFullscreenBodyClass` +
    demo wiring + bump toolkit version. Single commit.
 2. **termtastic:** bump toolkit dep → main-process listeners →
    preload bridge → renderer wiring. Single commit.

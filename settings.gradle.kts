@@ -1,4 +1,4 @@
-rootProject.name = "DarknessToolkit"
+rootProject.name = "Lunula"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 pluginManagement {
@@ -28,10 +28,10 @@ dependencyResolutionManagement {
     }
 }
 
-include(":toolkit-core")
-include(":toolkit-store")
-include(":toolkit-web")
-include(":toolkit-compose")
+include(":lunula-core")
+include(":lunula-store")
+include(":lunula-web")
+include(":lunula-compose")
 
 // In-tree demo app — exercises the toolkit as a pure consumer (web + Electron).
 // Lives under demo/ so module paths stay namespaced (`:demo:client`, etc.) and

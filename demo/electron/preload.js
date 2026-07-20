@@ -1,8 +1,8 @@
-/* preload.js — exposes the darkness IPC bridge to the renderer.
+/* preload.js — exposes the lunula IPC bridge to the renderer.
  *
  * Same shape as notegrow's preload so any future toolkit-side code that
  * looks at `globalThis.darknessApi.{readUiSettings,writeUiSettings,readLayoutState,writeLayoutState}`
- * works identically across Darkness apps. */
+ * works identically across Lunula apps. */
 
 const { contextBridge, ipcRenderer } = require("electron");
 
@@ -25,7 +25,7 @@ if (layoutArg) {
 }
 
 // Authoritative window-chrome flag passed by main.js. Parsed here so
-// darkness-toolkit can synchronously toggle `dt-custom-titlebar` on
+// lunula can synchronously toggle `dt-custom-titlebar` on
 // boot — without it, the toolkit can only learn the state from the
 // async ThemeSnapshot read, which the stock ElectronIpcPersister
 // doesn't round-trip. Defaults to false when absent.
@@ -46,9 +46,9 @@ contextBridge.exposeInMainWorld("darknessApi", {
    * @type {boolean}
    */
   customTitleBar: customTitleBarBoot,
-  /** Persist UI settings JSON to the shared darkness location. */
+  /** Persist UI settings JSON to the shared lunula location. */
   writeUiSettings: (json) => ipcRenderer.invoke("darkness:writeUiSettings", json),
-  /** Read UI settings JSON from the shared darkness location, or null. */
+  /** Read UI settings JSON from the shared lunula location, or null. */
   readUiSettings: () => ipcRenderer.invoke("darkness:readUiSettings"),
   /** Persist this app's layout-state JSON atomically. */
   writeLayoutState: (json) => ipcRenderer.invoke("darkness:writeLayoutState", json),

@@ -4,11 +4,11 @@
 
 Termtastic's pane grid only exposes corner handles for resizing. In a tiled-looking layout (e.g. one tall left pane, two stacked right panes), the natural gesture is to drag the *shared edge* between panes — like in tiling WMs (i3, yabai). The user wants invisible, draggable separator bars to be re-derived after every re-layout so the gesture "just works" on whatever the current layout happens to be.
 
-This lives in **darkness-toolkit** (per memory: layout system in toolkit) so termtastic and notegrow both get it without app-side changes. The toolkit already owns drag-to-move, drag-to-resize via corners, presets, and layout-changed events; this is a pure addition on top.
+This lives in **lunula** (per memory: layout system in toolkit) so termtastic and notegrow both get it without app-side changes. The toolkit already owns drag-to-move, drag-to-resize via corners, presets, and layout-changed events; this is a pure addition on top.
 
 ## Recommended design — smallest viable shape
 
-One new file in `toolkit-web`. One render-hook. Existing pane-update callbacks reused. No new persistence shape, no new menu items, no settings toggle.
+One new file in `lunula-web`. One render-hook. Existing pane-update callbacks reused. No new persistence shape, no new menu items, no settings toggle.
 
 ### Algorithm: edge detection (pure function)
 
@@ -87,13 +87,13 @@ Minimal — invisible default, cursor + faint highlight on hover:
 ## Files
 
 **New:**
-- `darkness-toolkit/develop/toolkit-web/src/jsMain/kotlin/se/soderbjorn/darkness/web/layout/PaneSeparators.kt`
+- `lunula/develop/lunula-web/src/jsMain/kotlin/se/soderbjorn/lunula/web/layout/PaneSeparators.kt`
   - `data class SeparatorSpec`, `enum Orientation`
   - `fun computeSeparators(panes: List<FloatingPaneSpec>, epsilon: Double = 0.005): List<SeparatorSpec>` (pure)
   - `fun mountSeparators(root: HTMLElement, separators: List<SeparatorSpec>, callbacks: SeparatorCallbacks)` (DOM)
 
 **Modified:**
-- `darkness-toolkit/develop/toolkit-web/src/jsMain/kotlin/se/soderbjorn/darkness/web/layout/LayoutRenderer.kt`
+- `lunula/develop/lunula-web/src/jsMain/kotlin/se/soderbjorn/lunula/web/layout/LayoutRenderer.kt`
   - At end of `render()` (~line 282–376): call into `mountSeparators`. Reuse existing `onFloatingMoved` / `onFloatingResized` callbacks (lines 100–101 in `LayoutController.kt`) — no new callback shape.
   - Reuse `snapPct()` (line 446) for grid alignment.
   - Reuse the corner-drag mousedown/mousemove/mouseup template (`wireFloatingCornerResize`, lines 872–974) as the wiring pattern for separator drag.
@@ -133,4 +133,4 @@ Minimal — invisible default, cursor + faint highlight on hover:
 
 ## Note on plan location
 
-Per durable feedback, plans should live in the working repo. After approval, copy this file to `darkness-toolkit/main/PLAN-pane-separators.md` (or similar) so it sits alongside the code being changed.
+Per durable feedback, plans should live in the working repo. After approval, copy this file to `lunula/main/PLAN-pane-separators.md` (or similar) so it sits alongside the code being changed.

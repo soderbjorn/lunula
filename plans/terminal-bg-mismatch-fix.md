@@ -71,12 +71,12 @@ resolver's own opaque `bg` seed.
 
 ### Files touched
 
-1. **`darkness-toolkit/develop/toolkit-core/src/commonMain/kotlin/se/soderbjorn/darkness/core/ColorMath.kt`**
+1. **`lunula/develop/lunula-core/src/commonMain/kotlin/se/soderbjorn/lunula/core/ColorMath.kt`**
    Added `flattenOnto(top: Long, base: Long): Long` — alpha-composites
    `top` over the opaque `base` and returns an opaque ARGB value. No-op
    when `top` is already opaque.
 
-2. **`darkness-toolkit/develop/toolkit-core/src/commonMain/kotlin/se/soderbjorn/darkness/core/ThemeResolver.kt:132`**
+2. **`lunula/develop/lunula-core/src/commonMain/kotlin/se/soderbjorn/lunula/core/ThemeResolver.kt:132`**
    Wrapped the existing `terminal.bg` resolution in `flattenOnto(..., bg)`:
    ```kotlin
    val terminalBg = flattenOnto(overrideFor(ovr, "terminal.bg", isDark) ?: bg, bg)
@@ -162,8 +162,8 @@ Run step 2 above. There are three possible outcomes:
 
 ## Touched files / line numbers (snapshot at fix time)
 
-- `darkness-toolkit/develop/toolkit-core/src/commonMain/kotlin/se/soderbjorn/darkness/core/ColorMath.kt` — `flattenOnto` added below `withAlpha`.
-- `darkness-toolkit/develop/toolkit-core/src/commonMain/kotlin/se/soderbjorn/darkness/core/ThemeResolver.kt:132` — `terminalBg` now flattened.
+- `lunula/develop/lunula-core/src/commonMain/kotlin/se/soderbjorn/lunula/core/ColorMath.kt` — `flattenOnto` added below `withAlpha`.
+- `lunula/develop/lunula-core/src/commonMain/kotlin/se/soderbjorn/lunula/core/ThemeResolver.kt:132` — `terminalBg` now flattened.
 
 Reference (read-only) call sites that rely on the new invariant:
 - `termtastic/develop/web/src/jsMain/kotlin/se/soderbjorn/termtastic/WebStateActions.kt:177` (xterm consumer).

@@ -7,7 +7,7 @@ plugins {
 }
 
 allprojects {
-    group = "se.soderbjorn.darkness"
+    group = "se.soderbjorn.lunula"
     version = "0.2.38"
 }
 
@@ -47,13 +47,13 @@ subprojects {
 tasks.register("publishAllToLibsRepo") {
     group = "publishing"
     description = "Publishes every toolkit module to the libs-repo of every consumer repo (lunamux, treefacts and lunicle)."
-    // Filter to toolkit-* modules only — demo modules deliberately don't apply
+    // Filter to lunula-* modules only — demo modules deliberately don't apply
     // maven-publish, so they have no publishAllPublicationsTo* tasks to depend
     // on. Filtering by name keeps the dependency list resolvable at config
     // time and prevents demo artifacts from ever being published.
     dependsOn(
         subprojects
-            .filter { it.name.startsWith("toolkit-") }
+            .filter { it.name.startsWith("lunula-") }
             .flatMap { sub ->
                 listOf(
                     "${sub.path}:publishAllPublicationsToLunamuxLibsRepoRepository",

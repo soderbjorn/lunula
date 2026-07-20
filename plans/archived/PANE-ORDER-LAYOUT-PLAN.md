@@ -16,11 +16,11 @@ Net effect: importance becomes an explicit, persisted, user-edited list — not 
 
 | File | Role |
 | --- | --- |
-| `toolkit-web/.../shell/AppShellMount.kt` | Sidebar render (`buildLeftSidebarContent`, `buildPaneRow` ~L1423–1523), focus plumbing (L866, L959, L1518, L1759), `applyPresetToPanes` host loop (L1789–1818), persist/restore (L1606–1621, L406+, codec L152–224) |
-| `toolkit-web/.../layout/LayoutController.kt` | `paneOrder`, `recordFocus`, `recordCreate`, `recordRemove`, `applyPresetToPanes` |
-| `toolkit-core/.../layout/LayoutPreset.kt` | Preset enum, `computeBoxes`, `autoBoxes`, dropdown order |
-| `toolkit-web/.../shell/Sidebar.kt` | Existing mouse-drag pattern (`attachSidebarResizeHandle` L192–269) — reusable for row drag |
-| `toolkit-web/.../ElectronIpcPersister.kt` / `LocalStoragePersister.kt` | Already flat-KV persisters; no change |
+| `lunula-web/.../shell/AppShellMount.kt` | Sidebar render (`buildLeftSidebarContent`, `buildPaneRow` ~L1423–1523), focus plumbing (L866, L959, L1518, L1759), `applyPresetToPanes` host loop (L1789–1818), persist/restore (L1606–1621, L406+, codec L152–224) |
+| `lunula-web/.../layout/LayoutController.kt` | `paneOrder`, `recordFocus`, `recordCreate`, `recordRemove`, `applyPresetToPanes` |
+| `lunula-core/.../layout/LayoutPreset.kt` | Preset enum, `computeBoxes`, `autoBoxes`, dropdown order |
+| `lunula-web/.../shell/Sidebar.kt` | Existing mouse-drag pattern (`attachSidebarResizeHandle` L192–269) — reusable for row drag |
+| `lunula-web/.../ElectronIpcPersister.kt` / `LocalStoragePersister.kt` | Already flat-KV persisters; no change |
 
 `paneOrderByTab` is already in `PersistedLayoutState` (AppShellMount L110–114) and is already round-tripped — no new persisted key, no codec migration. Per the user's "no persistence compat" memory, if we ever change shape we just discard old data; today we don't need to.
 
@@ -53,8 +53,8 @@ Implement directly in DOM (no library), modeled on `attachSidebarResizeHandle`:
 
 - In `buildPaneRow` (AppShellMount L1481):
   - Set `draggable="true"` on the whole `.dt-sidebar-row`, with `cursor: grab` on hover and `cursor: grabbing` during drag.
-  - Use **HTML5 drag events** (`dragstart`, `dragover`, `drop`, `dragend`) — supported in the toolkit-web target and gives free OS visuals (cursor, drop-not-allowed).
-  - On `dragstart`, set `dataTransfer.setData("application/x-darkness-pane", JSON.stringify({tabId, paneId}))` and `dataTransfer.effectAllowed = "move"`. Reject drops from other tabs (compare `tabId`) — reordering is intra-tab only.
+  - Use **HTML5 drag events** (`dragstart`, `dragover`, `drop`, `dragend`) — supported in the lunula-web target and gives free OS visuals (cursor, drop-not-allowed).
+  - On `dragstart`, set `dataTransfer.setData("application/x-lunula-pane", JSON.stringify({tabId, paneId}))` and `dataTransfer.effectAllowed = "move"`. Reject drops from other tabs (compare `tabId`) — reordering is intra-tab only.
   - The existing click handler on the row continues to fire normally; a click without a `dragstart` activates the pane as before.
 - In `buildLeftSidebarContent` (L1423):
   - Each section body becomes a drop zone. On `dragover`, compute insertion index by midpoint-of-row (row above/below cursor `Y`) and render a 2 px insertion indicator (CSS `.dt-sidebar-row-drop-before` / `…-after`).
@@ -98,7 +98,7 @@ The dropdown miniatures highlight slots 0/1/2 with decreasing emphasis so the us
 
 ## Verification
 
-End-to-end manual checks (no test infra in toolkit-web that exercises drag — the rest of the codebase verifies via running apps):
+End-to-end manual checks (no test infra in lunula-web that exercises drag — the rest of the codebase verifies via running apps):
 
 1. **Notegrow web** (`pnpm dev` in `notegrow/main`):
    - Open a tab with ≥3 panes. Drag the third pane to the top in the sidebar.

@@ -1,4 +1,4 @@
-# Darkness Toolkit Extraction — Status
+# Lunula Toolkit Extraction — Status
 
 ## Status as of 2026-04-25 — COMPLETE (Phase 1 + Phase 2)
 
@@ -16,11 +16,11 @@ the same worktrees:
 - **Track C** — notegrow `DocumentViewBackingViewModel` and `MainScreen`
   decomposed.
 - **Track D** — toolkit ships its own stylesheet
-  (`darkness-toolkit.css`, 926 lines, `.dt-*` namespaced) and an
-  `injectDarknessToolkitStyles()` helper. Inline `element.style.*`
+  (`lunula.css`, 926 lines, `.dt-*` namespaced) and an
+  `injectLunulaStyles()` helper. Inline `element.style.*`
   calls in toolkit components replaced with `className = "dt-..."`.
 - **Track E** — termtastic web and notegrow web both call
-  `injectDarknessToolkitStyles()` at boot. Verified the CSS string
+  `injectLunulaStyles()` at boot. Verified the CSS string
   ships in each consumer's webpack bundle.
 - **Track F** — `defaultSharedThemesPath()` is the single source of
   truth for theme persistence across termtastic (server-owned writer)
@@ -37,114 +37,114 @@ is the recommended next step before committing.**
 ### Worktrees
 
 ```
-/Users/soderbjorn/repo/darkness/
-  darkness-toolkit/
+/Users/soderbjorn/repo/lunula/
+  lunula/
     main/                       (initial commit only)
     extract-from-termtastic/    ← all toolkit work landed here
   termtastic/
     main/
-    adopt-darkness-toolkit/     ← composite-build wiring + theme migration
+    adopt-lunula/     ← composite-build wiring + theme migration
   notegrow/
     main/
-    adopt-darkness-toolkit/     ← windowing + theme application + Electron IPC
+    adopt-lunula/     ← windowing + theme application + Electron IPC
 ```
 
 ### Commits (Phase 1 — landed)
 
 | Repo                | Branch                  | Commit                                                        |
 | ------------------- | ----------------------- | ------------------------------------------------------------- |
-| darkness-toolkit    | extract-from-termtastic | `e488244` Initial darkness-toolkit extraction                 |
-| darkness-toolkit    | extract-from-termtastic | `bed7d4d` Port ThemeManager (theme/colour-scheme editor)      |
-| termtastic          | adopt-darkness-toolkit  | `4706fa5` Wire darkness-toolkit composite build               |
-| termtastic          | adopt-darkness-toolkit  | `c021f4e` Migrate termtastic theme code to toolkit-core       |
-| termtastic          | adopt-darkness-toolkit  | `bd81972` Adopt toolkit-web ThemeManager via thin host adapter|
-| darkness-toolkit    | extract-from-termtastic | `31631cf` showConfirmDialog: optional messageIsHtml flag      |
-| termtastic          | adopt-darkness-toolkit  | `d6a9f90` Swap ConfirmDialog/ThemeHelpers duplicates          |
-| notegrow            | adopt-darkness-toolkit  | `f784358` Adopt darkness-toolkit: windowing + theme           |
-| notegrow            | adopt-darkness-toolkit  | `3708bd7` Electron IPC: filesystem-backed theme persistence   |
+| lunula    | extract-from-termtastic | `e488244` Initial lunula extraction                 |
+| lunula    | extract-from-termtastic | `bed7d4d` Port ThemeManager (theme/colour-scheme editor)      |
+| termtastic          | adopt-lunula  | `4706fa5` Wire lunula composite build               |
+| termtastic          | adopt-lunula  | `c021f4e` Migrate termtastic theme code to lunula-core       |
+| termtastic          | adopt-lunula  | `bd81972` Adopt lunula-web ThemeManager via thin host adapter|
+| lunula    | extract-from-termtastic | `31631cf` showConfirmDialog: optional messageIsHtml flag      |
+| termtastic          | adopt-lunula  | `d6a9f90` Swap ConfirmDialog/ThemeHelpers duplicates          |
+| notegrow            | adopt-lunula  | `f784358` Adopt lunula: windowing + theme           |
+| notegrow            | adopt-lunula  | `3708bd7` Electron IPC: filesystem-backed theme persistence   |
 
 ### Phase 2 — uncommitted in worktrees
 
 All six Phase 2 tracks landed as uncommitted changes on the same
 branches above. Recommended commit grouping when ready:
 
-- darkness-toolkit `extract-from-termtastic`: one commit per track
+- lunula `extract-from-termtastic`: one commit per track
   touching the toolkit (A, D, F).
-- termtastic `adopt-darkness-toolkit`: one commit per refactor target
+- termtastic `adopt-lunula`: one commit per refactor target
   (six commits for B), one for E, one for F. Or squash into "Phase 2
   refactor pass" if the user prefers.
-- notegrow `adopt-darkness-toolkit`: one for C, one for E, one for F.
+- notegrow `adopt-lunula`: one for C, one for E, one for F.
 
 ## What's in each repo
 
-### `darkness-toolkit/extract-from-termtastic`
+### `lunula/extract-from-termtastic`
 
 - Gradle scaffold, MIT license, NOTICE, README, CLAUDE.md, .gitignore.
-- `toolkit-core` (commonMain): `ColorMath`, `ColorSchemes`,
+- `lunula-core` (commonMain): `ColorMath`, `ColorSchemes`,
   `DefaultThemes`, `ResolvedPalette`, `ThemeResolver`, plus new
   `UiSettings` data class with kotlinx.serialization round-trip helpers
   (`toJsonString`, `fromJsonString`, `defaults`, `resolveAgainst`).
   Targets: android, jvm, ios (arm64+sim), js.
-- `toolkit-store`: `defaultSharedThemesPath()`, `readUiSettings(path)`,
+- `lunula-store`: `defaultSharedThemesPath()`, `readUiSettings(path)`,
   `writeUiSettings(path, settings)` for JVM, Android, iOS. Library-style
   — no `UiSettingsStore` interface.
-- `toolkit-web` (Kotlin/JS): `ThemeCssVars` (`toCssVarMap`,
+- `lunula-web` (Kotlin/JS): `ThemeCssVars` (`toCssVarMap`,
   `toCssAliasMap`, `applyCssVars`, `applyColorScheme`,
   `systemPrefersDark`, `isDarkActive`), `ConfirmDialog`, `shell/TopBar`,
   `shell/Sidebar` (left + right), `layout/PaneTree` (pure data model
   with `PaneTreeOps` for split/close/resize/retitle),
   `layout/LayoutRenderer` (stateless DOM renderer with content callback,
   drag-resize, click-to-close).
-- `toolkit-compose` (Compose Multiplatform): `LocalDarknessPalette`
-  (optional), `darknessPaletteFor(...)`, `Long.toComposeColor()`. No
-  `DarknessTheme {}` wrapper.
+- `lunula-compose` (Compose Multiplatform): `LocalLunulaPalette`
+  (optional), `lunulaPaletteFor(...)`, `Long.toComposeColor()`. No
+  `LunulaTheme {}` wrapper.
 
-### `termtastic/adopt-darkness-toolkit`
+### `termtastic/adopt-lunula`
 
 - `settings.gradle.kts`: composite build with parameterized
-  `darkness.toolkit.path` Gradle property and dependency substitutions.
-- `gradle/libs.versions.toml`: `darkness-core/store/web/compose` library
+  `lunula.toolkit.path` Gradle property and dependency substitutions.
+- `gradle/libs.versions.toml`: `lunula-core/store/web/compose` library
   coords.
-- `gradle.properties`: `darkness.toolkit.path` override pointing at the
+- `gradle.properties`: `lunula.toolkit.path` override pointing at the
   feature worktree.
-- `client/build.gradle.kts`: `api(libs.darkness.core)` plus
-  `export(libs.darkness.core)` on the iOS framework binaries so the
+- `client/build.gradle.kts`: `api(libs.lunula.core)` plus
+  `export(libs.lunula.core)` on the iOS framework binaries so the
   Client framework re-exports the toolkit types for SwiftUI.
-- `server/build.gradle.kts`: `implementation(libs.darkness.core)`.
+- `server/build.gradle.kts`: `implementation(libs.lunula.core)`.
 - **Deleted** `client/commonMain/.../{ColorMath, ColorSchemes,
   DefaultThemes, ResolvedPalette, ThemeResolver}.kt`. The five files
-  now live in `toolkit-core` and are pulled in via the `:client`
+  now live in `lunula-core` and are pulled in via the `:client`
   `api()` dependency.
 - **Rewrote** `client/.../UiSettings.kt`: data class moved out;
   termtastic-specific bits remain (`fetchUiSettings` extension on
   `TermtasticClient`, deprecated `effectiveColors`).
 - **Updated** every termtastic file that referenced the moved types
   (`:client`, `:web`, `:server`, `:androidApp`) to import
-  `se.soderbjorn.darkness.core.*` and rewrote explicit imports /
+  `se.soderbjorn.lunula.core.*` and rewrote explicit imports /
   fully-qualified references from the old package to the new one.
 - **iOS Swift fix**: `iosApp/iosApp/Theme/SidebarPalette.swift` updated
   to use `Client.ColorScheme` (was stale `Client.TerminalTheme`),
   `Client.ColorSchemesKt.recommendedColorSchemes` and
   `Client.ColorSchemesKt.DEFAULT_THEME_NAME` (were stale `ThemesKt`
   references). Pre-existing breakage now fixed.
-- toolkit-compose was deliberately **not** added as a `:androidApp`
-  dependency — mixing `org.jetbrains.compose` (toolkit-compose) with
+- lunula-compose was deliberately **not** added as a `:androidApp`
+  dependency — mixing `org.jetbrains.compose` (lunula-compose) with
   `androidx.compose-bom` (termtastic) caused Compose runtime version
   conflicts (material-icons unresolved). termtastic Android consumes
-  toolkit-core directly via the wildcard import, which is sufficient.
+  lunula-core directly via the wildcard import, which is sufficient.
 - All four build targets pass:
   - `:client:linkDebugFrameworkIosSimulatorArm64`
   - `:web:jsBrowserDistribution`
   - `:server:compileKotlin`
   - `:androidApp:assembleDebug`
 
-### `notegrow/adopt-darkness-toolkit`
+### `notegrow/adopt-lunula`
 
-- `settings.gradle.kts`: composite build with `darkness.toolkit.path`
+- `settings.gradle.kts`: composite build with `lunula.toolkit.path`
   property.
-- `gradle/libs.versions.toml`: `darkness-core/store/web/compose` coords.
-- `web/build.gradle.kts`: `:web` jsMain depends on `darkness-core` and
-  `darkness-web`.
+- `gradle/libs.versions.toml`: `lunula-core/store/web/compose` coords.
+- `web/build.gradle.kts`: `:web` jsMain depends on `lunula-core` and
+  `lunula-web`.
 - **`web/.../main/AppShell.kt`** (new) — boot-time theme application via
   `applyCssVars(documentElement, palette.toCssVarMap())`, plus
   `LayoutRenderer` mounting a single-leaf `PaneTree` whose content is
@@ -158,8 +158,8 @@ branches above. Recommended commit grouping when ready:
   scrollbar/header colours) replaced with `var(--t-…, fallback)` so the
   editor honours the active theme.
 - **`electron/main.js`**: `defaultDarknessSettingsPath()` resolves the
-  per-OS shared darkness UI-settings path (matching
-  toolkit-store/jvmMain). `readDarknessSettingsSync()` runs at startup
+  per-OS shared lunula UI-settings path (matching
+  lunula-store/jvmMain). `readDarknessSettingsSync()` runs at startup
   and packs the JSON into the window's
   `webPreferences.additionalArguments`. New IPC handlers
   `darkness:writeUiSettings` and `darkness:readUiSettings`.
@@ -168,8 +168,8 @@ branches above. Recommended commit grouping when ready:
   before the renderer bundle loads. Exposes a `darknessApi.{read,
   write}UiSettings` bridge for any future renderer-side write surface.
 - `:web:jsBrowserDevelopmentExecutableDistribution` produces a bundle
-  including `DarknessToolkit-toolkit-core.js` (134 KiB) and
-  `DarknessToolkit-toolkit-web.js` (30.5 KiB) alongside notegrow's own
+  including `Lunula-lunula-core.js` (134 KiB) and
+  `Lunula-lunula-web.js` (30.5 KiB) alongside notegrow's own
   modules.
 
 ### Per the user's clarification: notegrow has no shell
@@ -189,15 +189,15 @@ in a future PR.
 
 ### Phase 1 (Phase-1 dedup)
 
-- **Theme Manager modal** lives in `toolkit-web/themeeditor/`.
+- **Theme Manager modal** lives in `lunula-web/themeeditor/`.
   Termtastic adopts via [TermtasticThemeManagerHost] in
   `web/src/jsMain/.../ThemeManager.kt`.
-- **ConfirmDialog** — termtastic's copy deleted; uses toolkit-web's
+- **ConfirmDialog** — termtastic's copy deleted; uses lunula-web's
   `showConfirmDialog`. The toolkit gained an opt-in `messageIsHtml`
   flag so HTML-bearing prompts (TabBarMenu's "Close tab") still work.
 - **ThemeHelpers** — `toCssVarMap` deleted from termtastic in favour
-  of toolkit-web's; `systemPrefersDark` delegates to toolkit-web;
-  `isLightActive` is a one-line inverse of toolkit-web's
+  of lunula-web's; `systemPrefersDark` delegates to lunula-web;
+  `isLightActive` is a one-line inverse of lunula-web's
   `isDarkActive`. Termtastic-specific aliases (`--termtastic-orange`,
   `--terminal-bg`) stay in termtastic's `toCssAliasMap`.
 - **Overlays.kt** — termtastic-specific (auth state, disconnected
@@ -208,7 +208,7 @@ in a future PR.
 
 #### Track A — toolkit ThemeManager decomposition
 
-`toolkit-web/.../themeeditor/ThemeManager.kt` was a 2,137-line modal
+`lunula-web/.../themeeditor/ThemeManager.kt` was a 2,137-line modal
 mixing tab switching, filtering, card rendering, scheme grids, color
 picker, dialogs. Decomposed into five files in the same package:
 
@@ -263,19 +263,19 @@ aggregate VM so existing call sites don't change.
 
 #### Track D — toolkit ships its own CSS
 
-New: `toolkit-web/src/jsMain/resources/darkness-toolkit.css` (926
+New: `lunula-web/src/jsMain/resources/lunula.css` (926
 lines, `.dt-*`-namespaced, theme-bound via `var(--t-*)`).
-New: `toolkit-web/.../DarknessToolkitStyles.kt` (53 lines) — exposes
-`darknessToolkitCss: String` and `injectDarknessToolkitStyles(target = document.head)` (idempotent; appends `<style data-darkness-toolkit>` if not already present).
+New: `lunula-web/.../LunulaStyles.kt` (53 lines) — exposes
+`lunulaToolkitCss: String` and `injectLunulaStyles(target = document.head)` (idempotent; appends `<style data-lunula>` if not already present).
 
 Resource delivery: a Gradle codegen task
-(`generateDarknessToolkitCssKt` in `toolkit-web/build.gradle.kts`)
+(`generateLunulaCssKt` in `lunula-web/build.gradle.kts`)
 reads the `.css` file at build time and emits a Kotlin file with
-`internal val DARKNESS_TOOLKIT_CSS_BUNDLE: String = """..."""`. The
+`internal val LUNULA_CSS_BUNDLE: String = """..."""`. The
 `.css` is also bundled into the toolkit klib via `jsProcessResources`
 so consumers can grab the file directly if preferred.
 
-All toolkit-web components (`ConfirmDialog`, `shell/TopBar`,
+All lunula-web components (`ConfirmDialog`, `shell/TopBar`,
 `shell/Sidebar`, `layout/LayoutRenderer`, `themeeditor/*`) converted
 from inline `element.style.setProperty(...)` calls to
 `element.className = "dt-..."`. Per-instance dynamic values stay
@@ -291,23 +291,23 @@ Pre-existing bugs flagged but **not** fixed (preserved bug-for-bug):
 
 #### Track E — consumer wiring
 
-- `termtastic/adopt-darkness-toolkit/web/src/jsMain/.../main.kt:125` — calls
-  `injectDarknessToolkitStyles()` at boot.
-- `notegrow/adopt-darkness-toolkit/web/src/jsMain/.../AppShell.kt:95` — calls
-  `injectDarknessToolkitStyles()` at boot.
+- `termtastic/adopt-lunula/web/src/jsMain/.../main.kt:125` — calls
+  `injectLunulaStyles()` at boot.
+- `notegrow/adopt-lunula/web/src/jsMain/.../AppShell.kt:95` — calls
+  `injectLunulaStyles()` at boot.
 
 Verified: both consumers' bundled JS contains the embedded CSS string
 (distinctive `dt-pane-divider` class found in both `web.js`).
 
 No consumer-side `build.gradle.kts` change needed — composite-build
-runtime classpath already includes `:toolkit-web`.
+runtime classpath already includes `:lunula-web`.
 
 #### Track F — single-file shared theme persistence
 
 Toolkit additions:
-- `toolkit-store/.../Closeable.kt` (commonMain `expect interface`,
+- `lunula-store/.../Closeable.kt` (commonMain `expect interface`,
   JVM/Android `actual typealias` to `java.io.Closeable`, iOS standalone SAM).
-- `toolkit-store/.../UiSettingsStore.kt` (commonMain) gained
+- `lunula-store/.../UiSettingsStore.kt` (commonMain) gained
   `expect fun watchUiSettings(path, onChange): Closeable`,
   `writeUiSettingsRaw`, `readUiSettingsRaw`.
 - JVM impl: `Files.move(tmp, target, ATOMIC_MOVE, REPLACE_EXISTING)`
@@ -336,9 +336,9 @@ Notegrow Electron writes the same shared file:
   `applyTheme(settings)` on each delivery.
 
 Same path on every OS: macOS
-`~/Library/Application Support/Darkness/ui-settings.json`, Windows
-`%APPDATA%\Darkness\ui-settings.json`, Linux
-`$XDG_CONFIG_HOME/darkness/ui-settings.json`. Electron mirrors the
+`~/Library/Application Support/Lunula/ui-settings.json`, Windows
+`%APPDATA%\Lunula\ui-settings.json`, Linux
+`$XDG_CONFIG_HOME/lunula/ui-settings.json`. Electron mirrors the
 Kotlin path byte-for-byte.
 
 Deferred:
@@ -364,20 +364,20 @@ relax the filter from `if (changedName !== fname) return` to
 
 ```bash
 # Toolkit standalone
-cd /Users/soderbjorn/repo/darkness/darkness-toolkit/extract-from-termtastic
-./gradlew :toolkit-core:build :toolkit-store:compileKotlinJvm \
-          :toolkit-store:compileKotlinIosArm64 \
-          :toolkit-store:compileKotlinIosSimulatorArm64 \
-          :toolkit-web:compileKotlinJs :toolkit-web:jsJar \
-          :toolkit-compose:compileKotlinJvm
+cd /Users/soderbjorn/repo/lunula/lunula/extract-from-termtastic
+./gradlew :lunula-core:build :lunula-store:compileKotlinJvm \
+          :lunula-store:compileKotlinIosArm64 \
+          :lunula-store:compileKotlinIosSimulatorArm64 \
+          :lunula-web:compileKotlinJs :lunula-web:jsJar \
+          :lunula-compose:compileKotlinJvm
 
 # Termtastic — every target
-cd /Users/soderbjorn/repo/darkness/termtastic/adopt-darkness-toolkit
+cd /Users/soderbjorn/repo/lunula/termtastic/adopt-lunula
 ./gradlew :web:jsBrowserDistribution :server:compileKotlin \
           :androidApp:assembleDebug :client:linkDebugFrameworkIosSimulatorArm64
 
 # Notegrow web bundle
-cd /Users/soderbjorn/repo/darkness/notegrow/adopt-darkness-toolkit
+cd /Users/soderbjorn/repo/lunula/notegrow/adopt-lunula
 ./gradlew :web:jsBrowserDevelopmentExecutableDistribution
 ```
 
@@ -405,14 +405,14 @@ each app's golden path:
 ## Distribution / publishing
 
 Composite build via `includeBuild`. No Maven Central publishing. Apps
-require a sibling `darkness-toolkit` clone — per the user's stated
+require a sibling `lunula` clone — per the user's stated
 constraint that this is acceptable.
 
 ## Licensing
 
-`darkness-toolkit` ships under MIT, matching termtastic. All extracted
+`lunula` ships under MIT, matching termtastic. All extracted
 code is original termtastic authorship (Robert Söderbjörn 2026). No
 LGPL/Apache derivative work was extracted — JediTerm and the vendored
 terminal-emulator/-view modules stay in termtastic only.
-`darkness-toolkit/NOTICE` lists the toolkit's transitive Apache-2.0
+`lunula/NOTICE` lists the toolkit's transitive Apache-2.0
 deps (Kotlin, Compose Multiplatform, kotlinx-serialization).

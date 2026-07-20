@@ -1,19 +1,19 @@
-# Re-aligning the darkness-toolkit / app boundary
+# Re-aligning the lunula / app boundary
 
 > **2026-05-06 update:** The `darkness-demo` reference app described throughout
 > this plan is no longer a separate sibling repo. It now lives in-tree at
-> `darkness-toolkit/develop/demo/` as the `:demo:client`, `:demo:web`,
+> `lunula/develop/demo/` as the `:demo:client`, `:demo:web`,
 > `:demo:electron-main`, and `:demo:electron` Gradle modules — pure consumers
 > of the toolkit, never published to either consumer libs-repo. References
-> below to `/Users/soderbjorn/repo/darkness/darkness-demo/develop/` should be
-> read as `/Users/soderbjorn/repo/darkness/darkness-toolkit/develop/demo/`,
+> below to `/Users/soderbjorn/repo/lunula/darkness-demo/develop/` should be
+> read as `/Users/soderbjorn/repo/lunula/lunula/develop/demo/`,
 > and Gradle paths like `:web:jsBrowserDevelopmentRun` are now
 > `:demo:web:jsBrowserDevelopmentRun`. The boundary claims (zero `.css`,
 > zero `.dt-*` selector use in demo source) still hold.
 
 ## Context
 
-The user's stated goal for `darkness-toolkit` is simple: **a new app should be
+The user's stated goal for `lunula` is simple: **a new app should be
 an empty shell that already looks and works like notegrow** — sidebar, topbar
 with tabs (new/close/rename), bottombar, pane chrome, layout management, theme
 editor, and persistence helpers all come "for free." The app supplies pane
@@ -26,8 +26,8 @@ no per-app variant, no `.dt-chrome-classic` opt-in, no preset toggle.** The
 whole purpose of the toolkit is uniform appearance across apps; variants
 defeat that.
 
-An audit of the current state (notegrow, termtastic, darkness-toolkit, all
-under `/Users/soderbjorn/repo/darkness/`) shows that **today's toolkit does not
+An audit of the current state (notegrow, termtastic, lunula, all
+under `/Users/soderbjorn/repo/lunula/`) shows that **today's toolkit does not
 deliver on the empty-shell promise**. Four concrete failures:
 
 1. **The default chrome look serves termtastic's prior aesthetic, not the
@@ -76,7 +76,7 @@ through notegrow's override block. The toolkit must ship the agreed-upon look
 *as the default*, with no opt-in classic mode.
 
 **Approach:** in
-`darkness-toolkit/develop/toolkit-web/src/jsMain/resources/darkness-toolkit.css`,
+`lunula/develop/lunula-web/src/jsMain/resources/lunula.css`,
 rewrite each affected rule so the default value is the flat-chrome value.
 Termtastic adopts the new defaults — no opt-in classes, no preserved-old-look
 escape hatch. Any termtastic CSS rule that was relying on the old defaults
@@ -100,7 +100,7 @@ treated as a toolkit-default tuning issue (adjust the toolkit), **not** as a
 case for a termtastic-only override.
 
 **Critical files:**
-- `darkness-toolkit/develop/toolkit-web/src/jsMain/resources/darkness-toolkit.css` — flip defaults; no preset block added.
+- `lunula/develop/lunula-web/src/jsMain/resources/lunula.css` — flip defaults; no preset block added.
 - `notegrow/develop/web/src/jsMain/kotlin/se/soderbjorn/notegrow/main/OutlinePaintLoop.kt` — delete the entire chrome override block in `ensureStyles()` (keep only `.notegrow-*` rules that are genuinely about notegrow's editor content).
 - `termtastic/develop/web/src/jsMain/.../*.css` (or equivalent stylesheet sites) — audit for any rule that was load-bearing on the old defaults; delete redundant rules. No `dt-chrome-classic` is added anywhere.
 
@@ -141,7 +141,7 @@ Token set (start here; resist growing):
 ```
 
 **Critical files:**
-- `darkness-toolkit/develop/toolkit-web/src/jsMain/resources/darkness-toolkit.css` — add the `--dt-*` block under `.dt-app-frame { ... }`; replace literals throughout.
+- `lunula/develop/lunula-web/src/jsMain/resources/lunula.css` — add the `--dt-*` block under `.dt-app-frame { ... }`; replace literals throughout.
 - No app changes required.
 
 ### Track 3 — Provide a one-call shell mount in the toolkit
@@ -151,7 +151,7 @@ Token set (start here; resist growing):
 toolkit already has the parts; it just needs an opinionated assembler.
 
 **Approach:** add `mountAppShell(spec: AppShellSpec): AppShellHandle` to
-`toolkit-web` (likely under `toolkit-web/src/jsMain/kotlin/se/soderbjorn/darkness/web/shell/`).
+`lunula-web` (likely under `lunula-web/src/jsMain/kotlin/se/soderbjorn/lunula/web/shell/`).
 The spec is a small data class describing only what the app cares about:
 
 ```kotlin
@@ -181,8 +181,8 @@ post-mount: `focusActivePane()`, `setSidebarOpen(Boolean)`, lifecycle
 `dispose()`.
 
 **Critical files:**
-- New: `toolkit-web/src/jsMain/kotlin/se/soderbjorn/darkness/web/shell/AppShellMount.kt` (or similar) implementing `mountAppShell`.
-- New: `toolkit-web/src/jsMain/kotlin/se/soderbjorn/darkness/web/shell/AppShellSpec.kt` for the spec/handle types.
+- New: `lunula-web/src/jsMain/kotlin/se/soderbjorn/lunula/web/shell/AppShellMount.kt` (or similar) implementing `mountAppShell`.
+- New: `lunula-web/src/jsMain/kotlin/se/soderbjorn/lunula/web/shell/AppShellSpec.kt` for the spec/handle types.
 - Migrate: `notegrow/develop/web/src/jsMain/kotlin/se/soderbjorn/notegrow/main/AppShell.kt` to call `mountAppShell` and shed the topbar/sidebar/layout-renderer wiring (~400 lines should go).
 - Migrate: termtastic's equivalent shell mount.
 
@@ -193,7 +193,7 @@ termtastic uses an HTTP-backed flat-KV `SettingsPersister`. Each app owns its
 own bridge AND its own theme/layout serialization decisions. The toolkit
 doesn't even define what "persisting the theme" means.
 
-**Approach:** define a single small interface in `toolkit-core`:
+**Approach:** define a single small interface in `lunula-core`:
 
 ```kotlin
 interface Persister {
@@ -202,7 +202,7 @@ interface Persister {
 }
 ```
 
-Plus toolkit-side standard keys (`darkness.theme`, `darkness.layout`,
+Plus toolkit-side standard keys (`lunula.theme`, `darkness.layout`,
 `darkness.uiSettings`) and serializer helpers that convert the relevant
 state to/from JSON strings. Apps implement `Persister` against their
 backend (notegrow → Electron IPC + localStorage; termtastic → HTTP) and
@@ -214,8 +214,8 @@ persister (its `Persister` impl is just a thin wrapper around what it
 already has); the toolkit's codecs already support flat-KV vs blob shapes.
 
 **Critical files:**
-- New: `toolkit-core/src/commonMain/kotlin/se/soderbjorn/darkness/core/Persister.kt`.
-- New: `toolkit-core/src/commonMain/kotlin/se/soderbjorn/darkness/core/PersistKeys.kt` (key constants, JSON helpers).
+- New: `lunula-core/src/commonMain/kotlin/se/soderbjorn/lunula/core/Persister.kt`.
+- New: `lunula-core/src/commonMain/kotlin/se/soderbjorn/lunula/core/PersistKeys.kt` (key constants, JSON helpers).
 - Migrate: `notegrow/.../AppShell.kt` `persistThemeSnapshot()`, `loadInitialUiSettings()`, `persistUiSettings()`, layout-state init/save — replace with a thin `Persister` impl handed to `mountAppShell`.
 - Migrate: termtastic's settings/layout persistence — wrap in a `Persister` impl.
 
@@ -231,7 +231,7 @@ not notegrow — and the comparison "what did I add to make my app, vs.
 what came for free" is exactly the line the toolkit boundary draws.
 
 **Approach:** add a fourth sibling repo `darkness-demo/` under
-`/Users/soderbjorn/repo/darkness/`, structured identically to notegrow
+`/Users/soderbjorn/repo/lunula/`, structured identically to notegrow
 (`develop/` worktree, same Gradle layout, same `client/` (commonMain) +
 `web/` (jsMain) module split, same Electron host bootstrap). The app:
 
@@ -260,7 +260,7 @@ content for tab N". A side-by-side screenshot of `darkness-demo` and
 notegrow should be visually indistinguishable except for the pane
 contents.
 
-This **replaces** the lighter `toolkit-web-example/` idea from earlier —
+This **replaces** the lighter `lunula-web-example/` idea from earlier —
 demonstrating the promise inside the toolkit repo isn't strong enough.
 The proof must be a structurally-real sibling app.
 
@@ -293,17 +293,17 @@ Order:
 2. **Track 2** — layout tokens. Pure refactor inside the toolkit CSS; no app changes.
 3. **Track 4** — `Persister` interface. Additive; both apps migrate to the new interface. Lands before Track 3 because Track 3 consumes it.
 4. **Track 3** — `mountAppShell`. The big assembler; both apps migrate from hand-wired `AppShell.kt` to a single `mountAppShell` call.
-5. **Track 5** — `darkness-demo` reference app. A full sibling KMP+Electron app under `/Users/soderbjorn/repo/darkness/darkness-demo/` mirroring notegrow's architectural footprint (client/commonMain + web/jsMain + Electron host, per-pane backing view models, Metro DI, Persister bridge), but with all chrome / layout / theme / tabs / persistence wiring delegated to the toolkit and zero app-side CSS. Serves as the empty-shell proof and the boundary regression test.
+5. **Track 5** — `darkness-demo` reference app. A full sibling KMP+Electron app under `/Users/soderbjorn/repo/lunula/darkness-demo/` mirroring notegrow's architectural footprint (client/commonMain + web/jsMain + Electron host, per-pane backing view models, Metro DI, Persister bridge), but with all chrome / layout / theme / tabs / persistence wiring delegated to the toolkit and zero app-side CSS. Serves as the empty-shell proof and the boundary regression test.
 
 Each track is independently revertible if a verification fails, but the
 expectation is that the whole sequence lands as a single unit of work.
 
 ## Critical files (consolidated)
 
-- `darkness-toolkit/develop/toolkit-web/src/jsMain/resources/darkness-toolkit.css` — Track 1 + Track 2.
-- `darkness-toolkit/develop/toolkit-web/src/jsMain/kotlin/se/soderbjorn/darkness/web/shell/` (new files: `AppShellMount.kt`, `AppShellSpec.kt`) — Track 3.
-- `darkness-toolkit/develop/toolkit-core/src/commonMain/kotlin/se/soderbjorn/darkness/core/Persister.kt` (new) — Track 4.
-- `darkness-demo/` (new sibling repo under `/Users/soderbjorn/repo/darkness/`, full KMP+Electron app mirroring notegrow's structure with zero app-side CSS) — Track 5.
+- `lunula/develop/lunula-web/src/jsMain/resources/lunula.css` — Track 1 + Track 2.
+- `lunula/develop/lunula-web/src/jsMain/kotlin/se/soderbjorn/lunula/web/shell/` (new files: `AppShellMount.kt`, `AppShellSpec.kt`) — Track 3.
+- `lunula/develop/lunula-core/src/commonMain/kotlin/se/soderbjorn/lunula/core/Persister.kt` (new) — Track 4.
+- `darkness-demo/` (new sibling repo under `/Users/soderbjorn/repo/lunula/`, full KMP+Electron app mirroring notegrow's structure with zero app-side CSS) — Track 5.
 - `notegrow/develop/web/src/jsMain/kotlin/se/soderbjorn/notegrow/main/OutlinePaintLoop.kt` — drop chrome overrides (Track 1).
 - `notegrow/develop/web/src/jsMain/kotlin/se/soderbjorn/notegrow/main/AppShell.kt` — migrate to `mountAppShell` + `Persister` (Tracks 3, 4).
 - `termtastic/develop/web/src/jsMain/.../*.css` and shell-mount Kotlin — drop redundant chrome rules (Track 1); migrate shell + persistence (Tracks 3, 4). No opt-in classes added.
@@ -367,7 +367,7 @@ time but no upfront merge order is required between the two work streams.
 ## Current state (2026-05-06, second pass)
 
 All five tracks landed in this session and all four repos
-(`darkness-toolkit`, `notegrow`, `termtastic`, `darkness-demo`) build
+(`lunula`, `notegrow`, `termtastic`, `darkness-demo`) build
 cleanly. The new `darkness-demo` sibling app boots through
 `mountAppShell` with **zero CSS** of its own and produces a working
 webpack bundle.
@@ -376,7 +376,7 @@ Status by track:
 
 ### ✅ Track 1 — DONE
 
-`darkness-toolkit/develop/toolkit-web/src/jsMain/resources/darkness-toolkit.css`:
+`lunula/develop/lunula-web/src/jsMain/resources/lunula.css`:
 - `.dt-app-frame-main` background → `var(--t-surface-base)` (was `--t-surface-sunken`).
 - `.dt-topbar` `padding-top` → `6px`; `border-bottom` → `transparent`; `box-shadow` → `none`.
 - `.dt-bottombar` `border-top` → `transparent`.
@@ -390,12 +390,12 @@ App-side cleanup:
 - `notegrow/develop/web/src/jsMain/kotlin/se/soderbjorn/notegrow/main/OutlinePaintLoop.kt` — chrome override block (~80 lines) deleted from `ensureStyles()`.
 - `termtastic/develop/web/src/jsMain/resources/styles.css` — redundant `.dt-sidebar-section.active-tab` colour rule + `.dt-sidebar-section-header:hover` background rule deleted.
 
-Build verification: `./gradlew :toolkit-web:compileKotlinJs`, `:web:compileKotlinJs` in notegrow, and `:web:compileKotlinJs` in termtastic all pass.
+Build verification: `./gradlew :lunula-web:compileKotlinJs`, `:web:compileKotlinJs` in notegrow, and `:web:compileKotlinJs` in termtastic all pass.
 
 ### ✅ Track 2 — DONE
 
 `--dt-*` token block added to `.dt-app-frame { ... }` in
-`darkness-toolkit.css`. Tokens shipped: `--dt-frame-pad`,
+`lunula.css`. Tokens shipped: `--dt-frame-pad`,
 `--dt-frame-radius`, `--dt-topbar-h`, `--dt-topbar-pad-x`,
 `--dt-topbar-pad-top`, `--dt-tab-radius`, `--dt-tab-pad`,
 `--dt-tab-gap`, `--dt-tab-font-size`, `--dt-pane-header-pad`,
@@ -406,8 +406,8 @@ No app-side changes; defaults preserve current visuals.
 ### ✅ Track 4 — DONE
 
 Shipped:
-- `darkness-toolkit/develop/toolkit-core/src/commonMain/kotlin/se/soderbjorn/darkness/core/Persister.kt` — `Persister` interface + `PersistKeys` (UI_SETTINGS, LAYOUT, THEME_SNAPSHOT) + `InMemoryPersister`.
-- `darkness-toolkit/develop/toolkit-web/src/jsMain/kotlin/se/soderbjorn/darkness/web/LocalStoragePersister.kt` — namespace-prefixed localStorage backend.
+- `lunula/develop/lunula-core/src/commonMain/kotlin/se/soderbjorn/lunula/core/Persister.kt` — `Persister` interface + `PersistKeys` (UI_SETTINGS, LAYOUT, THEME_SNAPSHOT) + `InMemoryPersister`.
+- `lunula/develop/lunula-web/src/jsMain/kotlin/se/soderbjorn/lunula/web/LocalStoragePersister.kt` — namespace-prefixed localStorage backend.
 
 Both compile and are consumed by `mountAppShell`. The migration of notegrow's
 existing `persistThemeSnapshot()` / `persistUiSettings()` / layout-state IO and
@@ -420,12 +420,12 @@ their current persistence and can adopt the interface incrementally.
 Shipped:
 - `AppShellSpec.kt` — `AppShellSpec`, `AppShellSidebarSection`, `TopbarAction`, `HotkeyBinding`, `ThemeBootstrap`, `AppShellHandle`.
 - `AppShellMount.kt` — `mountAppShell(spec)` is a working assembler that:
-  - Injects `darkness-toolkit.css`, sets the document title, mounts the `renderAppFrame`.
+  - Injects `lunula.css`, sets the document title, mounts the `renderAppFrame`.
   - Restores `UiSettings` + the persisted shell layout (tabs + per-tab panes) via the supplied `Persister`; falls back to a single-tab seed.
   - Builds a top bar with the toolkit's full tab bar (new/close/rename/reorder, with confirmation off so the demo doesn't show modal dialogs by default), plus a trailing actions row (sidebar toggle, theme toggle) and any `extraTopbarTrailing` actions.
   - Builds a left sidebar containing the host-supplied `sidebarSections` (rendered through the toolkit's `renderSidebarSection`).
   - Mounts a `LayoutRenderer` in the main slot and re-renders the active tab's panes; pane content is delegated to `spec.paneContent(paneId)`. Move/resize/maximize callbacks persist back to the `Persister`.
-  - Custom JSON encode/decode (`JSON.stringify` based) for the persisted layout, keeping toolkit-web off the kotlinx.serialization plugin dep.
+  - Custom JSON encode/decode (`JSON.stringify` based) for the persisted layout, keeping lunula-web off the kotlinx.serialization plugin dep.
 
 The full migration of notegrow's ~800-line `AppShell.kt` and termtastic's
 shell-mount code to call `mountAppShell` instead of hand-wiring is left as
@@ -435,7 +435,7 @@ proves the assembler works end-to-end.
 
 ### ✅ Track 5 — DONE
 
-New sibling repo at `/Users/soderbjorn/repo/darkness/darkness-demo/`:
+New sibling repo at `/Users/soderbjorn/repo/lunula/darkness-demo/`:
 
 ```
 develop/
@@ -446,14 +446,14 @@ develop/
   gradle/wrapper/…             — gradlew + wrapper jar copied from notegrow
   client/
     build.gradle.kts           — KMP commonMain (web target)
-    src/commonMain/kotlin/se/soderbjorn/darknessdemo/
+    src/commonMain/kotlin/se/soderbjorn/lunula/demo/
       Document.kt              — minimal stand-in for notegrow's Document
       DocumentRegistry.kt      — refcounted slot per tab
       PaneBackingViewModel.kt  — per-pane VM mirroring notegrow's layering
   web/
     build.gradle.kts           — JS module + Metro plugin
     src/jsMain/resources/index.html
-    src/jsMain/kotlin/se/soderbjorn/darknessdemo/
+    src/jsMain/kotlin/se/soderbjorn/lunula/demo/
       Main.kt                  — entry; calls mountAppShell with a textarea pane factory
       MainViewModel.kt         — thin per-platform facade
       di/JsAppGraph.kt         — Metro graph (CoroutineScope, DocumentRegistry, Persister)
@@ -461,7 +461,7 @@ develop/
 
 Verification done:
 - `./gradlew :web:compileKotlinJs` succeeds (full composite build with the toolkit).
-- `./gradlew :web:jsBrowserDevelopmentWebpack` produces a bundled `web.js` from `DarknessDemo-web` + `DarknessDemo-client` + `DarknessToolkit-toolkit-web` + `DarknessToolkit-toolkit-core`. Webpack reports "compiled successfully".
+- `./gradlew :web:jsBrowserDevelopmentWebpack` produces a bundled `web.js` from `DarknessDemo-web` + `DarknessDemo-client` + `Lunula-lunula-web` + `Lunula-lunula-core`. Webpack reports "compiled successfully".
 - The demo source tree contains **zero `.css` files**. The demo never names a `.dt-*` selector.
 - `Main.kt` is ~75 lines including the textarea wiring. The pane content factory is the only app-specific code; everything else is `mountAppShell` + `AppShellSpec`.
 
@@ -473,8 +473,8 @@ Run from each repo's `develop/`:
 
 | Repo                | Task                                            | Result |
 |---------------------|-------------------------------------------------|--------|
-| darkness-toolkit    | `:toolkit-core:compileKotlinJs`                 | ✅      |
-| darkness-toolkit    | `:toolkit-web:compileKotlinJs`                  | ✅      |
+| lunula    | `:lunula-core:compileKotlinJs`                 | ✅      |
+| lunula    | `:lunula-web:compileKotlinJs`                  | ✅      |
 | notegrow            | `:web:compileKotlinJs`                          | ✅      |
 | termtastic          | `:web:compileKotlinJs`                          | ✅      |
 | darkness-demo       | `:web:compileKotlinJs`                          | ✅      |
@@ -541,17 +541,17 @@ A production termtastic swap is blocked on a refactor *outside* the toolkit boun
 
 ### Demo Electron host — DONE
 
-`darkness-demo/develop/electron/` ships the standard darkness Electron
+`darkness-demo/develop/electron/` ships the standard lunula Electron
 shell so the demo can run as a real desktop app:
 
-- `package.json` — Electron + electron-builder devDependencies; `start` and `dist` scripts; appId `se.soderbjorn.darknessdemo`.
-- `main.js` — single BrowserWindow loading `resources/web/index.html`. Reads the shared `Library/Application Support/Darkness/ui-settings.json` and per-app `…/DarknessDemo/layout-state.json` synchronously at startup, packs the JSON into `additionalArguments` for the preload script, and exposes IPC handlers `darkness:readUiSettings` / `writeUiSettings` / `readLayoutState` / `writeLayoutState` (atomic tmp+rename writes).
+- `package.json` — Electron + electron-builder devDependencies; `start` and `dist` scripts; appId `se.soderbjorn.lunula.demo`.
+- `main.js` — single BrowserWindow loading `resources/web/index.html`. Reads the shared `Library/Application Support/Lunula/ui-settings.json` and per-app `…/DarknessDemo/layout-state.json` synchronously at startup, packs the JSON into `additionalArguments` for the preload script, and exposes IPC handlers `darkness:readUiSettings` / `writeUiSettings` / `readLayoutState` / `writeLayoutState` (atomic tmp+rename writes).
 - `preload.js` — exposes `globalThis.__darknessSettings` / `__darknessLayoutState` (boot snapshots) and `globalThis.darknessApi.{readUiSettings, writeUiSettings, readLayoutState, writeLayoutState}` (IPC bridge). Same shape as notegrow's preload.
 - `build.gradle.kts` — Gradle wrapper exposing `:electron:run` (runs `electron .`) and `:electron:dist` (runs `electron-builder`). Depends on `:web:jsBrowserDistribution` so the latest bundle gets staged into `resources/web/` automatically.
 
 `settings.gradle.kts` updated to include `:electron`.
 
-A new toolkit type `ElectronIpcPersister` (in `toolkit-web`) implements
+A new toolkit type `ElectronIpcPersister` (in `lunula-web`) implements
 `Persister` against `globalThis.darknessApi`, with boot-snapshot fallback
 (`__darknessSettings` / `__darknessLayoutState`). Helper
 `tryElectronIpcPersister()` returns the persister when the bridge is
@@ -567,7 +567,7 @@ To run the demo as an Electron desktop app, from `darkness-demo/develop/`:
 
 First run installs Electron locally (~250MB) and stages the web bundle —
 takes a minute. Subsequent runs are instant. Theme picks + layout
-state persist to the same shared darkness files notegrow uses, so a
+state persist to the same shared lunula files notegrow uses, so a
 theme change in one app surfaces in the other on next launch.
 
 ### Toolkit topbar layout — sidebar toggle + new-pane + layout buttons
@@ -583,8 +583,8 @@ was missing icons notegrow had:
 
 | Repo                | Task                                            | Result |
 |---------------------|-------------------------------------------------|--------|
-| darkness-toolkit    | `:toolkit-core:compileKotlinJs`                 | ✅      |
-| darkness-toolkit    | `:toolkit-web:compileKotlinJs`                  | ✅      |
+| lunula    | `:lunula-core:compileKotlinJs`                 | ✅      |
+| lunula    | `:lunula-web:compileKotlinJs`                  | ✅      |
 | notegrow            | `:web:compileKotlinJs`                          | ✅      |
 | termtastic          | `:web:compileKotlinJs`                          | ✅      |
 | darkness-demo       | `:web:compileKotlinJs`                          | ✅      |
@@ -592,7 +592,7 @@ was missing icons notegrow had:
 
 ## Out of scope
 
-- Compose/Android/iOS shells. This plan is `toolkit-web`-only; the same
+- Compose/Android/iOS shells. This plan is `lunula-web`-only; the same
   shape (Persister interface + spec-based mount) can be replicated per
   platform later but isn't part of the same change.
 - The theme editor's UI surface itself. It's already in the toolkit and

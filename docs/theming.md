@@ -1,6 +1,6 @@
-# Darkness theming system
+# Lunula theming system
 
-How themes are modeled, resolved, persisted, and edited across the Darkness app family (`termtastic`, `notegrow`, future siblings).
+How themes are modeled, resolved, persisted, and edited across the Lunula app family (`termtastic`, `notegrow`, future siblings).
 
 The toolkit owns the data model, codec, resolver, and editor UI. Apps declare which concrete panes they render and plug in their own persistence backend.
 
@@ -8,7 +8,7 @@ The toolkit owns the data model, codec, resolver, and editor UI. Apps declare wh
 
 ## The shape of a theme
 
-A theme is a small, app-agnostic data class living in `toolkit-core`:
+A theme is a small, app-agnostic data class living in `lunula-core`:
 
 ```kotlin
 data class Theme(
@@ -199,19 +199,19 @@ electronCustomTitleBar // bool
                             │ read / write JSON
                             ▼
             ┌───────────────────────────────┐
-            │  ThemeSnapshot (toolkit-core) │
+            │  ThemeSnapshot (lunula-core) │
             │  fromJsonObject / encodeAs*   │
             └───────────────┬───────────────┘
                             │ applySnapshot / toSnapshot
                             ▼
             ┌───────────────────────────────┐
             │  DefaultThemeManagerState     │
-            │  (toolkit-web — mutable bag)  │
+            │  (lunula-web — mutable bag)  │
             └───────────────┬───────────────┘
                             │ resolveActiveUiSettings(state, base, paneToSection)
                             ▼
             ┌───────────────────────────────┐
-            │  UiSettings (toolkit-core)    │
+            │  UiSettings (lunula-core)    │
             │  theme + paneSchemes          │
             └───────────────┬───────────────┘
                             │ applyUiSettings(documentElement, settings, isDark)
@@ -344,15 +344,15 @@ The one upfront design call when implementing per-instance theming: pick Route A
 ## File map
 
 ```
-darkness-toolkit/develop/
-├── toolkit-core/src/commonMain/kotlin/se/soderbjorn/darkness/core/
+lunula/develop/
+├── lunula-core/src/commonMain/kotlin/se/soderbjorn/lunula/core/
 │   ├── Sections.kt              ← universal section vocabulary
 │   ├── DefaultThemes.kt         ← Theme data class + ~40 default themes
 │   ├── UiSettings.kt            ← per-paint wire
 │   ├── ThemeSnapshot.kt         ← persisted state codec
 │   ├── ResolvedThemeBundle.kt   ← resolveActiveTheme / resolvePaneSchemes
 │   └── ColorSchemes.kt          ← scheme definitions + CustomScheme
-└── toolkit-web/src/jsMain/kotlin/se/soderbjorn/darkness/web/
+└── lunula-web/src/jsMain/kotlin/se/soderbjorn/lunula/web/
     ├── ThemeCssVars.kt          ← applyUiSettings (DOM painter)
     └── themeeditor/
         ├── ThemeManagerHost.kt          ← host interface (incl. appPanes)

@@ -24,8 +24,8 @@ kotlin {
         jsMain.dependencies {
             implementation(projects.demo.client)
             implementation(libs.kotlinx.coroutines.core)
-            implementation(projects.toolkitCore)
-            implementation(projects.toolkitWeb)
+            implementation(projects.lunulaCore)
+            implementation(projects.lunulaWeb)
         }
     }
 }

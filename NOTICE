@@ -1,4 +1,4 @@
-Darkness Toolkit
+Lunula Toolkit
 Copyright (c) 2026 Robert Söderbjörn
 
 This product depends on third-party libraries. Their licenses and copyright
@@ -18,5 +18,5 @@ The following dependencies are used under the Apache License, Version 2.0
     Copyright JetBrains s.r.o. and contributors
     Source: https://github.com/JetBrains/compose-multiplatform
 
-  AndroidX libraries (used transitively in toolkit-compose Android target)
+  AndroidX libraries (used transitively in lunula-compose Android target)
     Copyright The Android Open Source Project

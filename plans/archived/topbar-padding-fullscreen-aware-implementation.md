@@ -67,16 +67,16 @@ correct state at first paint without waiting for the next user action.
 
 ## Files changed
 
-### darkness-toolkit (`develop/`)
+### lunula (`develop/`)
 
-- **`toolkit-web/src/jsMain/resources/darkness-toolkit.css`** — added
+- **`lunula-web/src/jsMain/resources/lunula.css`** — added
   `:not(.dt-mac-fullscreen)` to the rule at line 206 and extended the
   comment block above it to describe the third gate.
-- **`toolkit-web/src/jsMain/kotlin/se/soderbjorn/darkness/web/DarknessToolkitStyles.kt`**
+- **`lunula-web/src/jsMain/kotlin/se/soderbjorn/lunula/web/LunulaStyles.kt`**
   — new exported function `setDtMacFullscreenBodyClass(enabled: Boolean)`
   alongside the existing `setDtCustomTitleBarBodyClass`. KDoc on the
   existing setter updated with `@see` cross-reference; the comment in
-  `injectDarknessToolkitStyles` now mentions the new helper as the
+  `injectLunulaStyles` now mentions the new helper as the
   fullscreen-suppression hook.
 
 ### termtastic (`develop/`)
@@ -156,7 +156,7 @@ existing exports.
 ## Verification
 
 Compilation: `./gradlew :web:compileKotlinJs :electron-main:compileKotlinJs`
-clean in all three projects (`darkness-toolkit/develop`,
+clean in all three projects (`lunula/develop`,
 `termtastic/develop`, `notegrow/develop`).
 
 **Manual verification** — required on macOS, not done from the

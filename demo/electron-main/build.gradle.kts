@@ -23,7 +23,7 @@ kotlin {
     sourceSets {
         jsMain.dependencies {
             implementation(libs.kotlinx.coroutines.core)
-            implementation(project(":toolkit-core"))
+            implementation(project(":lunula-core"))
         }
     }
 }

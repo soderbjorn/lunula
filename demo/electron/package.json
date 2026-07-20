@@ -1,7 +1,7 @@
 {
-  "name": "darknessdemo-electron",
+  "name": "lunulademo-electron",
   "version": "0.1.0",
-  "description": "Electron desktop wrapper for the DarknessDemo reference app",
+  "description": "Electron desktop wrapper for the LunulaDemo reference app",
   "main": "main.js",
   "private": true,
   "scripts": {
@@ -13,8 +13,8 @@
     "electron-builder": "^25.0.0"
   },
   "build": {
-    "appId": "se.soderbjorn.darknessdemo",
-    "productName": "DarknessDemo",
+    "appId": "se.soderbjorn.lunulademo",
+    "productName": "LunulaDemo",
     "copyright": "Copyright © 2026 Robert Söderbjörn",
     "files": [
       "main.js",
