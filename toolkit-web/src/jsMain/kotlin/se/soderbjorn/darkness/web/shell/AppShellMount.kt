@@ -14,6 +14,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.w3c.dom.HTMLButtonElement
 import org.w3c.dom.HTMLElement
+import org.w3c.dom.MediaQueryList
+import org.w3c.dom.events.Event
 import se.soderbjorn.darkness.core.Appearance
 import se.soderbjorn.darkness.core.PersistKeys
 import se.soderbjorn.darkness.core.ThemeSnapshotV2
@@ -433,6 +435,7 @@ fun mountAppShell(
     spec.rootContainer.appendChild(frame)
 
     state.attach(frame, topBarSlot, leftSidebarSlot, rightSidebarSlot, main, bottomBarSlot)
+    state.watchSystemAppearance()
 
     val initJob: Job = scope.launch {
         // 1. Restore the v2 theme snapshot from its two persisted parts:
@@ -561,6 +564,7 @@ fun mountAppShell(
 
         override fun dispose() {
             initJob.cancel()
+            state.unwatchSystemAppearance()
             spec.rootContainer.innerHTML = ""
         }
     }
@@ -969,6 +973,75 @@ private class ShellState(
         }
         obs.observe(main)
         mainResizeObserver = obs
+    }
+
+    /**
+     * The `prefers-color-scheme: dark` query this shell is listening to, and
+     * the listener on it. Null when nothing is installed — either because the
+     * app owns theme resolution (see [watchSystemAppearance]) or because the
+     * shell has been disposed.
+     */
+    private var systemAppearanceQuery: MediaQueryList? = null
+    private var systemAppearanceListener: ((Event) -> Unit)? = null
+
+    /**
+     * Repaint when the OS switches between light and dark while the user's
+     * appearance preference is [Appearance.Auto].
+     *
+     * Auto means "whatever the system is doing", and [isDarkActive] answers
+     * that by reading `prefers-color-scheme` — but it was only ever *read*, at
+     * paint time, and nothing subscribed to it. A tab left open across the
+     * evening switchover (macOS's scheduled Auto Appearance, a user flipping it
+     * by hand) went on wearing the slot it had resolved at load, until some
+     * unrelated rerender happened to repaint it. The preference said "follow
+     * the system" and the window did not follow.
+     *
+     * A change is handled by re-applying the snapshot the shell already holds:
+     * nothing about the user's stored preference changed, only which of its two
+     * slots is live, so this paints and rerenders but deliberately does not
+     * persist. Routing through [applyThemeSnapshot] also rebinds the theme
+     * manager's cards, which read the active appearance the same way the paint
+     * does and would otherwise be left filling the slot the OS just stopped
+     * showing.
+     *
+     * Not installed when the app supplies a [AppShellSpec.settingsHost]: those
+     * apps own theme resolution outside the toolkit and already watch the media
+     * query themselves (Lunamux repaints through its own
+     * `refreshAndApplyActiveTheme`), so a second listener here would paint over
+     * their answer with the toolkit's.
+     */
+    fun watchSystemAppearance() {
+        if (spec.settingsHost != null) return
+        if (systemAppearanceQuery != null) return
+        val query = kotlinx.browser.window.matchMedia("(prefers-color-scheme: dark)")
+        val listener: (Event) -> Unit = {
+            // Dark and Light pin the slot regardless of the OS, so only Auto
+            // has anything to react to. Guarding here rather than relying on
+            // the repaint being a no-op keeps a pinned appearance genuinely
+            // inert — no rerender, no `onAfterRefresh` into host code.
+            if (snapshot.appearance == Appearance.Auto) applyThemeSnapshot(snapshot)
+        }
+        // `addListener` is the pre-2020 spelling, still the only one Safari
+        // understood until 14. Preferred form first, fall back rather than
+        // leave older engines silently unsubscribed.
+        val dyn = query.asDynamic()
+        if (dyn.addEventListener != undefined) query.addEventListener("change", listener)
+        else dyn.addListener(listener)
+        systemAppearanceQuery = query
+        systemAppearanceListener = listener
+    }
+
+    /** Undo [watchSystemAppearance]. Safe to call when nothing is installed. */
+    fun unwatchSystemAppearance() {
+        val query = systemAppearanceQuery ?: return
+        val listener = systemAppearanceListener
+        if (listener != null) {
+            val dyn = query.asDynamic()
+            if (dyn.removeEventListener != undefined) query.removeEventListener("change", listener)
+            else dyn.removeListener(listener)
+        }
+        systemAppearanceQuery = null
+        systemAppearanceListener = null
     }
 
     fun applyThemeSnapshot(snap: ThemeSnapshotV2) {
