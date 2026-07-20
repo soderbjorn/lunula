@@ -476,6 +476,90 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     border-style: dashed;
 }
 
+/* ── App-defined ("fixed") tab strip (TabBarSpec.isFixed) ───────
+   A strip the consuming app declares and the user cannot edit. The
+   editable strip's chrome exists to advertise that the tabs are objects
+   you can pick up: the border says "this is a thing", the hover state
+   says "you can act on it", the reserved right-hand gutter holds the `⋮`.
+   None of that is true here, and left in place it promises affordances
+   the bar does not have — so the fixed variant strips the border, tightens
+   the padding and reads as a row of section links rather than as a set of
+   draggable objects. Selected keeps the accent-soft tint (the one signal
+   that is still meaningful) but drops the accent ring, which on a
+   borderless row would be the only outline on screen and would read as
+   focus rather than as selection.
+
+   Scoped entirely under `.dt-tabbar-fixed`, so no consumer that does not
+   set the flag is touched by any of it. */
+.dt-tabbar-fixed {
+    /* Don't claim the whole middle slot. The editable strip grows to fill
+       it (tabs are the primary content of the bar); a handful of
+       app-defined sections should sit next to whatever the host put in
+       the leading slot — in Lunicle's case its brand/subtitle line —
+       rather than being pushed away from it by a flex-grow. */
+    flex: 0 1 auto;
+}
+.dt-tabbar-fixed .dt-tabbar-strip {
+    flex: 0 1 auto;
+    column-gap: 4px;
+}
+.dt-tabbar-fixed .dt-tab {
+    padding: 3px 10px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    color: var(--t-chrome-text-dim, #b8b8b8);
+    font-weight: 500;
+}
+.dt-tabbar-fixed .dt-tab:hover {
+    background: var(--t-chrome-track, rgba(255, 255, 255, 0.06));
+    color: var(--t-chrome-text, #e6e6e6);
+}
+/* Selected: accent-soft fill + accent text, no ring. `--t-chrome-accent-soft`
+   is the theme's own tint of the accent — the token the design prototype's
+   literal `rgba(77,200,245,.12)` is the dark-theme instance of — so this
+   tracks whatever accent the user has picked instead of pinning one hue. */
+.dt-tabbar-fixed .dt-tab.dt-selected {
+    background: var(--t-chrome-accent-soft, rgba(255, 255, 255, 0.10));
+    color: var(--t-chrome-accent, #ff8a3d);
+    border-color: transparent;
+    box-shadow: none;
+    font-weight: 600;
+}
+
+/* ── Declarative tab badges (TabBadge) ──────────────────────────
+   Toolkit-drawn unread markers, so every consumer's badge looks the same
+   (see TabBar.kt#buildTabBadgeElement). Both variants sit in the existing
+   `.dt-tab-trailing-badge` slot. */
+.dt-tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: var(--t-chrome-accent, #ff8a3d);
+    color: var(--t-chrome-bg, #101010);
+}
+/* Numeric: a pill wide enough for "99+" but circular for a single digit,
+   via min-width + a fully-rounded radius rather than a fixed width. */
+.dt-tab-badge-count {
+    min-width: 16px;
+    height: 16px;
+    padding: 0 5px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    /* Digits, not prose: tabular figures keep the pill from jittering as
+       the count changes width. */
+    font-variant-numeric: tabular-nums;
+}
+/* Dot: the same accent, no number — "something is new here". */
+.dt-tab-badge-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+}
+
 /* ── Tab-bar overflow `⋮` menu (TabBarOverflowMenu.kt) ────── */
 /* Ported from termtastic .tab-bar-menu*. The button lives inline in the
    bar; the dropdown list is mounted on document.body so the bar's

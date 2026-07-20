@@ -2207,6 +2207,13 @@ private class ShellState(
         val activePaneId: String?,
         val isHidden: Boolean = false,
         val isHiddenFromSidebar: Boolean = false,
+        /**
+         * Declarative badge pushed with the snapshot. Always `null` in
+         * local mode: the local tab list is the toolkit's own persisted
+         * state and has no unread model to report — hosts with one are
+         * source-mode hosts by definition.
+         */
+        val badge: TabBadge? = null,
     )
     private data class PaneView(val tabId: String, val id: String)
 
@@ -2218,6 +2225,7 @@ private class ShellState(
                 activePaneId = it.activePaneId,
                 isHidden = it.isHidden,
                 isHiddenFromSidebar = it.isHiddenFromSidebar,
+                badge = it.badge,
             )
         }
         local != null -> local!!.tabs.map { id ->
@@ -2248,6 +2256,12 @@ private class ShellState(
         val view = viewTabs()
         val activeId = viewActiveTabId()
         val srcMode = spec.tabSource != null
+        // An app-defined strip is only expressible through a TabSource —
+        // the local tab list IS the user's own persisted arrangement, so
+        // there is nothing for a local-mode host to have declared. That
+        // also means this whole branch is unreachable for every consumer
+        // that predates the flag.
+        val fixedStrip = spec.tabSource?.isFixed == true
 
         val tabs = view.map { t ->
             TabSpec(
@@ -2259,9 +2273,10 @@ private class ShellState(
                 // a tab keeps the affordance discoverable without the visual
                 // clutter of a per-tab cross.
                 isClosable = false,
-                isDraggable = if (srcMode) spec.tabSource!!.onReorder != null else true,
-                isRenamable = if (srcMode) spec.tabSource!!.onRename != null else true,
+                isDraggable = !fixedStrip && (if (srcMode) spec.tabSource!!.onReorder != null else true),
+                isRenamable = !fixedStrip && (if (srcMode) spec.tabSource!!.onRename != null else true),
                 trailingBadge = spec.tabTrailingBadge(t.id),
+                badge = t.badge,
                 isHidden = t.isHidden,
                 isHiddenFromSidebar = t.isHiddenFromSidebar,
             )
@@ -2288,10 +2303,18 @@ private class ShellState(
                     }
                     src.onSelect(id)
                 },
-                onClose = src.onClose,
-                onAdd = src.onAdd,
-                onRename = src.onRename,
-                onReorder = src.onReorder,
+                // Tab-mutation callbacks are dropped outright on a fixed
+                // strip. TabBar re-checks the flag before rendering each
+                // affordance, so this is belt-and-braces there — but it is
+                // load-bearing for the surfaces OUTSIDE the strip that read
+                // these callbacks to decide what to offer: the topbar "New"
+                // (`+`) split-button asks `callbacks.onAdd != null` for its
+                // "New tab" row, and would otherwise put back the very
+                // gesture the flag exists to withhold.
+                onClose = if (fixedStrip) null else src.onClose,
+                onAdd = if (fixedStrip) null else src.onAdd,
+                onRename = if (fixedStrip) null else src.onRename,
+                onReorder = if (fixedStrip) null else src.onReorder,
                 // Source-mode tabs are app-owned, so the toolkit forwards
                 // the visibility toggles to the host's TabSource. The host
                 // mutates its own model (and persists / pushes upstream as
@@ -2299,8 +2322,8 @@ private class ShellState(
                 // touch tab visibility locally in this branch. When the
                 // host opts out by leaving these callbacks null, the
                 // overflow menu omits the corresponding rows.
-                onSetHidden = src.onSetHidden,
-                onSetHiddenFromSidebar = src.onSetHiddenFromSidebar,
+                onSetHidden = if (fixedStrip) null else src.onSetHidden,
+                onSetHiddenFromSidebar = if (fixedStrip) null else src.onSetHiddenFromSidebar,
                 // Confirm before closing a tab from the kebab. With the
                 // inline × button removed, the kebab "Close" row is the
                 // only entry point so a single confirmation is enough.
@@ -2308,13 +2331,16 @@ private class ShellState(
                 // "Move to world" submenu: every world except the active one,
                 // wired to the host's WorldSource. Empty (no submenu) when the
                 // host doesn't support world moves or there's only one world.
-                moveToWorlds = if (spec.worldSource?.onMoveTab != null) {
+                // "Move to world" relocates a tab out of the set the app
+                // declared, so it is an edit of that set and goes with the
+                // rest of them on a fixed strip.
+                moveToWorlds = if (!fixedStrip && spec.worldSource?.onMoveTab != null) {
                     worldSnapshot?.let { snap -> snap.worlds.filter { it.id != snap.activeWorldId } }
                         ?: emptyList()
                 } else {
                     emptyList()
                 },
-                onMoveToWorld = spec.worldSource?.onMoveTab,
+                onMoveToWorld = if (fixedStrip) null else spec.worldSource?.onMoveTab,
             )
         } else {
             TabBarCallbacks(
@@ -2411,6 +2437,10 @@ private class ShellState(
             // Toolkit owns all of this rendering.
             showOverflowMenu = true,
             callbacks = callbacks,
+            // App-defined strip: TabBar withholds the add button, the dot
+            // menus, drag-reorder, inline rename and the overflow list, and
+            // paints the lighter pill treatment.
+            isFixed = fixedStrip,
         )
 
         // Leading: sidebar-toggle button to the LEFT of the tab strip

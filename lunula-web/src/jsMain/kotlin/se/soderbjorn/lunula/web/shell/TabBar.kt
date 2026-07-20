@@ -9,6 +9,13 @@
  * lunula.css) and the surrounding chrome grows vertically to
  * accommodate.
  *
+ * A strip can also be **app-defined** ([TabBarSpec.isFixed]): the same
+ * primitive, with every editing affordance withheld, for hosts whose tab
+ * set is part of the application rather than a document the user
+ * arranges. Tabs may then carry a declarative [TabBadge] — a capped count
+ * or a bare dot — which the toolkit draws itself so unread indicators
+ * look the same in every consumer.
+ *
  * The toolkit owns rendering and gesture wiring only; tab state (the list,
  * active id, ordering) lives in the host app, which mutates its model
  * inside the callbacks and re-renders by calling [renderTabBar] again or
@@ -46,6 +53,111 @@ import se.soderbjorn.lunula.web.showConfirmDialog
 const val DT_TAB_DRAG_MIME: String = "application/x-lunula-tab"
 
 /**
+ * A declarative unread/attention marker rendered at the trailing edge of a
+ * tab.
+ *
+ * Distinct from [TabSpec.trailingBadge], which takes a host-built
+ * `HTMLElement` and is deliberately opaque: that slot exists for live
+ * widgets the host mutates in place (spinners, state dots it repaints
+ * itself), and it makes the host responsible for the badge's *looks* as
+ * well as its contents. An unread count is the opposite kind of thing —
+ * every host wants it to look the same, and every host would otherwise
+ * reinvent the same pill in its own markup and drift from the toolkit's
+ * chrome. So this variant is a value, not an element: the host says
+ * *what* the badge means and the toolkit decides how it is drawn.
+ *
+ * Two shapes, because two questions are worth answering differently:
+ *
+ * - [Count] — "how many", for a bounded backlog the user is expected to
+ *   work through (unread direct messages). Rendered as a number, capped
+ *   (see [formatTabBadgeCount]) so a runaway count cannot widen the tab.
+ * - [Dot] — "something is new", for a feed whose volume is unbounded and
+ *   which nobody is obliged to read to the end. A number there creates
+ *   inbox-zero pressure for a stream that has no zero.
+ *
+ * @see TabSpec.badge
+ * @see TabSnapshotEntry.badge
+ * @see formatTabBadgeCount
+ */
+sealed class TabBadge {
+    /**
+     * A numeric badge showing [value], capped for display.
+     *
+     * A [value] of zero or less renders nothing at all, so hosts can push
+     * the live count unconditionally on every snapshot rather than
+     * branching on emptiness at the call site — "no unread" and "no badge"
+     * are the same statement.
+     *
+     * @property value the count to show. `<= 0` renders no badge.
+     * @property cap   the largest number rendered literally; anything above
+     *   it renders as `"<cap>+"`. Defaults to [DEFAULT_TAB_BADGE_CAP] (99),
+     *   giving the conventional `99+`.
+     */
+    data class Count(val value: Int, val cap: Int = DEFAULT_TAB_BADGE_CAP) : TabBadge()
+
+    /** A dot with no number — "there is something new here". */
+    data object Dot : TabBadge()
+}
+
+/**
+ * Default cap for [TabBadge.Count]: counts above 99 render as `99+`.
+ *
+ * Chosen as the widest value that still fits the tab pill without the
+ * strip reflowing, and it is what every mail client and chat app trains
+ * users to read.
+ */
+const val DEFAULT_TAB_BADGE_CAP: Int = 99
+
+/**
+ * Pure formatter behind [TabBadge.Count]: renders [count] as badge text,
+ * or `null` when no badge should be drawn.
+ *
+ * Kept free of any DOM dependency so the capping rule — the part with an
+ * off-by-one worth getting wrong — can be unit-tested directly, the same
+ * way [resolveTabSwitchIndex] is.
+ *
+ * @param count the live count the host pushed.
+ * @param cap the largest number rendered literally.
+ * @return the badge text, or `null` when [count] is zero or negative (no
+ *   badge) — note that a non-positive [cap] degrades to `"0+"` rather
+ *   than being rejected, since a host that asks for a nonsense cap has a
+ *   bug in its own call and silently drawing nothing would hide it.
+ */
+internal fun formatTabBadgeCount(count: Int, cap: Int = DEFAULT_TAB_BADGE_CAP): String? = when {
+    count <= 0 -> null
+    count > cap -> "$cap+"
+    else -> "$count"
+}
+
+/**
+ * Builds the DOM for a declarative [badge].
+ *
+ * @param badge the badge to render.
+ * @return the badge element, or `null` when the badge resolves to nothing
+ *   visible (a [TabBadge.Count] of zero).
+ */
+internal fun buildTabBadgeElement(badge: TabBadge): HTMLElement? {
+    val el = document.createElement("span") as HTMLElement
+    when (badge) {
+        is TabBadge.Dot -> {
+            el.className = "${TabBarClassNames.TAB_BADGE} ${TabBarClassNames.TAB_BADGE_DOT}"
+            // Purely decorative next to the tab's own label: a screen
+            // reader gets the meaning from aria-label, not from a bullet.
+            el.setAttribute("aria-label", "unread")
+        }
+        is TabBadge.Count -> {
+            val text = formatTabBadgeCount(badge.value, badge.cap) ?: return null
+            el.className = "${TabBarClassNames.TAB_BADGE} ${TabBarClassNames.TAB_BADGE_COUNT}"
+            el.textContent = text
+            // The capped text ("99+") is what is drawn; the label carries
+            // the uncapped truth so assistive tech isn't lied to.
+            el.setAttribute("aria-label", "${badge.value} unread")
+        }
+    }
+    return el
+}
+
+/**
  * One tab in the [TabBarSpec.tabs] list.
  *
  * @property id            stable id used by the host to identify the tab in
@@ -62,6 +174,11 @@ const val DT_TAB_DRAG_MIME: String = "application/x-lunula-tab"
  *   Esc cancels. Defaults to `false`.
  * @property trailingBadge optional element rendered after the label
  *   (e.g. a status spinner or icon). The toolkit appends it as-is.
+ * @property badge optional declarative unread/attention badge rendered in
+ *   the same trailing slot, drawn by the toolkit rather than the host.
+ *   [trailingBadge] wins when both are set — an explicit element is the
+ *   more specific instruction, and stacking two badges in one slot reads
+ *   as a rendering bug rather than as two facts. Defaults to `null`.
  */
 data class TabSpec(
     val id: String,
@@ -70,6 +187,7 @@ data class TabSpec(
     val isDraggable: Boolean = false,
     val isRenamable: Boolean = false,
     val trailingBadge: HTMLElement? = null,
+    val badge: TabBadge? = null,
     /**
      * When `true`, the tab is omitted from the visible strip but still
      * known to the spec. Surfaces in the [TabBarOverflowMenu] under
@@ -188,11 +306,48 @@ class TabBarSpec(
      * instead — see [appendTabDotMenu].
      */
     val showOverflowMenu: Boolean = false,
+    /**
+     * When `true`, the strip is **app-defined**: the tab set belongs to the
+     * consuming app and the user may not add to it, remove from it, rename
+     * it or reorder it. The bar renders selection and nothing else — no `+`
+     * button, no per-tab `⋮` dot menu, no drag handles, no far-right
+     * overflow list — and carries [TabBarClassNames.BAR_FIXED] so CSS can
+     * give it the lighter, chromeless pill treatment such a strip wants.
+     *
+     * Enforced here rather than left to the caller passing the right
+     * combination of nulls. A host *can* already suppress each affordance
+     * individually by wiring no callback, but then "fixed" is an emergent
+     * property of five separate omissions that nothing states and nothing
+     * checks — add one callback for an unrelated reason and a control the
+     * app never intended reappears. This flag is the statement, and the
+     * bar honours it even if callbacks are wired: the flag wins.
+     *
+     * Selection affordances are deliberately untouched. Clicking a tab,
+     * the Next/Previous chords and Cmd/Ctrl+`<digit>` all keep working —
+     * a fixed strip constrains what the tab set *is*, not which member of
+     * it the user is looking at.
+     *
+     * Defaults to `false`: every existing consumer keeps the fully
+     * user-editable strip it has today.
+     *
+     * @see TabSource.fixed
+     */
+    val isFixed: Boolean = false,
 )
 
 /** Toolkit DOM class names used by [renderTabBar]. */
 object TabBarClassNames {
     const val BAR = "dt-tabbar"
+
+    /**
+     * Added alongside [BAR] when [TabBarSpec.isFixed] is set. Selects the
+     * app-defined pill treatment in `lunula.css` — borderless, tighter,
+     * accent-tinted when selected — instead of the bordered, editable
+     * strip. Scoped as an extra class rather than a replacement so a fixed
+     * bar still inherits every `.dt-tabbar` rule (fonts, wrapping) it has
+     * no reason to differ on.
+     */
+    const val BAR_FIXED = "dt-tabbar-fixed"
     const val STRIP = "dt-tabbar-strip"
     const val TAB = "dt-tab"
     const val TAB_SELECTED = "dt-selected"
@@ -203,6 +358,15 @@ object TabBarClassNames {
     const val TAB_LABEL = "dt-tab-label"
     const val TAB_LABEL_INPUT = "dt-tab-label-input"
     const val TAB_TRAILING_BADGE = "dt-tab-trailing-badge"
+
+    /** Base class on a toolkit-drawn [TabBadge] element. */
+    const val TAB_BADGE = "dt-tab-badge"
+
+    /** Modifier on a [TabBadge.Count] badge (numeric pill). */
+    const val TAB_BADGE_COUNT = "dt-tab-badge-count"
+
+    /** Modifier on a [TabBadge.Dot] badge (bare dot, no number). */
+    const val TAB_BADGE_DOT = "dt-tab-badge-dot"
     const val TAB_CLOSE = "dt-tab-close"
     const val TAB_ADD = "dt-tab-add"
 }
@@ -229,7 +393,8 @@ fun renderTabBar(spec: TabBarSpec): HTMLElement {
     for (i in 0 until staleLists.length) (staleLists.item(i) as HTMLElement).remove()
 
     val bar = document.createElement("div") as HTMLElement
-    bar.className = TabBarClassNames.BAR
+    bar.className = TabBarClassNames.BAR +
+        (if (spec.isFixed) " ${TabBarClassNames.BAR_FIXED}" else "")
 
     val strip = document.createElement("div") as HTMLElement
     strip.className = TabBarClassNames.STRIP
@@ -245,7 +410,11 @@ fun renderTabBar(spec: TabBarSpec): HTMLElement {
         strip.appendChild(buildTabElement(tab, spec))
     }
 
-    if (spec.showAddButton && spec.callbacks.onAdd != null) {
+    // A fixed strip never grows: the `+` is suppressed even if the host
+    // asked for it, because [TabBarSpec.isFixed] is the stronger statement
+    // of the two and a button that adds a tab to a set the app declared
+    // would contradict it.
+    if (!spec.isFixed && spec.showAddButton && spec.callbacks.onAdd != null) {
         val addBtn = document.createElement("button") as HTMLButtonElement
         addBtn.type = "button"
         addBtn.className = TabBarClassNames.TAB_ADD
@@ -256,7 +425,10 @@ fun renderTabBar(spec: TabBarSpec): HTMLElement {
         strip.appendChild(addBtn)
     }
 
-    if (spec.showOverflowMenu) {
+    // Likewise the far-right `⋮`: since issue #65 it lists only hidden
+    // ("Unlisted") tabs, and a fixed strip offers no way to hide one, so
+    // the menu could only ever be empty here.
+    if (!spec.isFixed && spec.showOverflowMenu) {
         // The `⋮` overflow menu is appended into the strip itself so it sits
         // right after the last tab (part of the tab bar), and lists the
         // hidden ("Unlisted") tabs (click to activate, or un-hide). It
@@ -445,7 +617,11 @@ fun buildTabElement(tab: TabSpec, spec: TabBarSpec): HTMLElement {
     label.textContent = tab.label
     el.appendChild(label)
 
-    tab.trailingBadge?.let {
+    // One trailing slot, two ways to fill it. A host-built element is the
+    // more specific instruction so it wins outright; the declarative badge
+    // is only consulted when there is no element to defer to.
+    val badgeContent = tab.trailingBadge ?: tab.badge?.let { buildTabBadgeElement(it) }
+    badgeContent?.let {
         val slot = document.createElement("span") as HTMLElement
         slot.className = TabBarClassNames.TAB_TRAILING_BADGE
         slot.appendChild(it)
@@ -457,7 +633,13 @@ fun buildTabElement(tab: TabSpec, spec: TabBarSpec): HTMLElement {
         if (tab.id != spec.activeTabId) spec.callbacks.onSelect(tab.id)
     })
 
-    if (tab.isClosable && spec.callbacks.onClose != null) {
+    // Everything below this line is a way to *edit* the tab set, so a
+    // fixed strip stops here: selection is wired, nothing else is. The
+    // guards are repeated per affordance rather than hoisted into one
+    // early return because the pane-drop target below is not an edit of
+    // the tab set — it moves a pane between tabs the app already declared
+    // — and should keep working on a fixed strip.
+    if (!spec.isFixed && tab.isClosable && spec.callbacks.onClose != null) {
         val closeBtn = document.createElement("button") as HTMLButtonElement
         closeBtn.type = "button"
         closeBtn.className = TabBarClassNames.TAB_CLOSE
@@ -474,7 +656,7 @@ fun buildTabElement(tab: TabSpec, spec: TabBarSpec): HTMLElement {
         el.appendChild(closeBtn)
     }
 
-    if (tab.isDraggable && spec.callbacks.onReorder != null) {
+    if (!spec.isFixed && tab.isDraggable && spec.callbacks.onReorder != null) {
         wireTabDragAndDrop(el, tab.id, spec)
     }
 
@@ -482,7 +664,7 @@ fun buildTabElement(tab: TabSpec, spec: TabBarSpec): HTMLElement {
         wireTabAsPaneDropTarget(el, tab.id, spec)
     }
 
-    if (tab.isRenamable && spec.callbacks.onRename != null) {
+    if (!spec.isFixed && tab.isRenamable && spec.callbacks.onRename != null) {
         wireInlineRename(label, tab, spec)
     }
 
@@ -491,7 +673,8 @@ fun buildTabElement(tab: TabSpec, spec: TabBarSpec): HTMLElement {
     // bar). Self-gates: renders nothing when no relevant callback is wired.
     // Issue #65 moved these out of the far-right `⋮` overflow menu so the
     // overflow only carries cross-tab concerns (the hidden-tabs list).
-    appendTabDotMenu(el, tab, spec)
+    // Every row it can offer is an edit, so a fixed strip skips it whole.
+    if (!spec.isFixed) appendTabDotMenu(el, tab, spec)
 
     return el
 }

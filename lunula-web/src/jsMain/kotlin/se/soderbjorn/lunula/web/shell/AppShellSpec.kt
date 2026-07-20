@@ -153,6 +153,19 @@ data class TabListSnapshot(
  *   [isHidden] is also set). Orthogonal to [isHidden]. Toggled by the
  *   host through [TabSource.onSetHiddenFromSidebar]. Defaults to
  *   `false`.
+ * @property badge optional declarative unread/attention marker drawn by
+ *   the toolkit at the trailing edge of the tab — a capped count
+ *   ([TabBadge.Count]) or a bare dot ([TabBadge.Dot]).
+ *
+ *   The push-based counterpart of [AppShellSpec.tabTrailingBadge], and
+ *   the one to reach for when the badge is a *fact about the model*
+ *   rather than a live widget: it rides along with the snapshot the host
+ *   already pushes when its unread state changes, so there is no second
+ *   invalidation path to remember and no element identity to preserve
+ *   across rerenders. [AppShellSpec.tabTrailingBadge] stays for hosts
+ *   that need to own the markup (a spinner they animate themselves), and
+ *   wins when both are supplied. Defaults to `null` — no badge.
+ * @see TabBadge
  */
 data class TabSnapshotEntry(
     val id: String,
@@ -161,6 +174,7 @@ data class TabSnapshotEntry(
     val activePaneId: String? = null,
     val isHidden: Boolean = false,
     val isHiddenFromSidebar: Boolean = false,
+    val badge: TabBadge? = null,
 )
 
 /**
@@ -212,6 +226,14 @@ data class PaneAddMenuItem(
  * tabs come from somewhere the toolkit cannot own — a server feed
  * (termtastic), a typed app document with migration logic
  * (notegrow's `LayoutState`), an external sync source, etc.
+ *
+ * ### User-editable vs. app-defined
+ * By default the strip is the user's: they add, close, rename and reorder
+ * tabs, and the source's callbacks are how those gestures reach the app.
+ * A host whose tab set is instead part of the *application* — a fixed few
+ * top-level sections rather than a workspace the user arranges — declares
+ * that with [fixed] (or [isFixed]), and the shell withholds every editing
+ * affordance while leaving selection intact. See [fixed].
  *
  * ### Push contract
  * The assembler invokes [subscribe] once during mount, handing the
@@ -311,7 +333,88 @@ class TabSource(
      * the new value. `null` suppresses the menu item entirely.
      */
     val onSetHiddenFromSidebar: ((id: String, hidden: Boolean) -> Unit)? = null,
-)
+    /**
+     * When `true`, the tab set is **app-defined**: it is part of the
+     * application's structure, not a document the user arranges, and the
+     * shell renders no affordance to add, close, rename, reorder or hide
+     * a tab. Selection is untouched — clicking a tab, the Next/Previous
+     * chords and Cmd/Ctrl+`<digit>` all keep working, because a fixed
+     * strip constrains what the tab set *is*, not which member of it the
+     * user is looking at.
+     *
+     * Prefer the [fixed] factory over setting this by hand: it also
+     * refuses the mutation callbacks at the type level, so a host cannot
+     * end up with a wired-but-unreachable `onClose` that reads, later, as
+     * a bug in the shell rather than as a deliberate omission.
+     *
+     * The flag is decisive rather than advisory. A host could already
+     * suppress each affordance one at a time by leaving the matching
+     * callback `null`, but then "fixed" is an emergent property of five
+     * separate omissions that nothing states and nothing checks — wire
+     * one of them for an unrelated reason and a control the app never
+     * intended is back in the strip. So when this is set the shell
+     * withholds the affordances regardless of what is wired.
+     *
+     * Defaults to `false`, which is every existing consumer: tabs stay
+     * fully user-editable everywhere they are today.
+     *
+     * @see fixed
+     * @see TabBarSpec.isFixed
+     */
+    val isFixed: Boolean = false,
+) {
+    companion object {
+        /**
+         * Declare an **app-defined** tab set: the tabs are the consuming
+         * app's own structure and the user may not add to them, remove
+         * from them, rename them or reorder them.
+         *
+         * The tab list still arrives by push, exactly as for an ordinary
+         * [TabSource], and deliberately so. "Fixed" is a statement about
+         * who *owns* the set, not about whether it can ever change: the
+         * active tab moves, panes open and close inside a tab, and unread
+         * badges tick — all of which the host must be able to report. A
+         * plain `List<TabSnapshotEntry>` parameter would have been the
+         * shorter-looking API and would have made every one of those a
+         * remount.
+         *
+         * Pane-level callbacks are accepted because panes remain
+         * user-owned in the general case: an app with a fixed *tab* strip
+         * may still let the user open, close and rearrange windows inside
+         * each tab. Hosts that don't want that leave them `null`, which
+         * is the default.
+         *
+         * @param subscribe invoked once at mount with a `push` callback;
+         *   the host calls it with the current snapshot immediately and
+         *   again whenever its model changes. Same contract as
+         *   [TabSource.subscribe].
+         * @param onSelect fires when the user activates a tab — the one
+         *   gesture a fixed strip still offers.
+         * @param onPaneSelect see [TabSource.onPaneSelect].
+         * @param onPaneClose see [TabSource.onPaneClose].
+         * @param onPaneAdd see [TabSource.onPaneAdd].
+         * @param paneAddMenuItems see [TabSource.paneAddMenuItems].
+         * @return a [TabSource] with [isFixed] set and every tab-mutation
+         *   callback left `null`.
+         */
+        fun fixed(
+            subscribe: (push: (TabListSnapshot) -> Unit) -> Unit,
+            onSelect: (id: String) -> Unit,
+            onPaneSelect: ((tabId: String, paneId: String) -> Unit)? = null,
+            onPaneClose: ((tabId: String, paneId: String) -> Unit)? = null,
+            onPaneAdd: ((tabId: String) -> Unit)? = null,
+            paneAddMenuItems: ((tabId: String) -> List<PaneAddMenuItem>)? = null,
+        ): TabSource = TabSource(
+            subscribe = subscribe,
+            onSelect = onSelect,
+            onPaneSelect = onPaneSelect,
+            onPaneClose = onPaneClose,
+            onPaneAdd = onPaneAdd,
+            paneAddMenuItems = paneAddMenuItems,
+            isFixed = true,
+        )
+    }
+}
 
 /**
  * One world in [WorldListSnapshot.worlds] — a named workspace one level
