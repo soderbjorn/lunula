@@ -283,6 +283,15 @@ class TabSource(
      *
      * The callback receives the active tab id and is evaluated every
      * time the menu opens, so it can return contextual items.
+     *
+     * **Returning an empty list hides the button.** When a host supplies
+     * this provider, the list is taken as the whole answer to "what can be
+     * added right now" — for the click as well as for the dropdown, since
+     * [onPaneAdd] is that menu's default rather than a separate offer. So
+     * a permission-gated host can return nothing and get no "+" at all,
+     * rather than a button that opens an empty menu and does nothing when
+     * clicked. A host that wants the historical always-on button should
+     * leave this null and supply only [onPaneAdd].
      */
     val paneAddMenuItems: ((tabId: String) -> List<PaneAddMenuItem>)? = null,
     /**

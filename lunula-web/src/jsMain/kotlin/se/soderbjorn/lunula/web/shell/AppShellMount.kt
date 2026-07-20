@@ -2505,12 +2505,19 @@ private class ShellState(
         // rerender that follows the permission change. The provider is a
         // cheap pure read by its own contract ("evaluated every time the
         // menu opens"), so probing it here adds nothing measurable.
-        val newButtonHasAnyAction = callbacks.onAdd != null ||
-            spec.tabSource?.onPaneAdd != null ||
-            spec.worldSource?.onAdd != null ||
-            (paneAddItemsProvider != null &&
-                (external?.activeTabId ?: viewActiveTabId())
-                    ?.let { paneAddItemsProvider(it).isNotEmpty() } == true)
+        // The rule itself is [shouldShowNewPaneButton], which is pure so it
+        // can be tested without a shell; everything here is the reading of
+        // the live state it needs.
+        val activeTabIdForAdd = external?.activeTabId ?: viewActiveTabId()
+        val newButtonHasAnyAction = shouldShowNewPaneButton(
+            hasNewTabAction = callbacks.onAdd != null,
+            hasPaneAddAction = spec.tabSource?.onPaneAdd != null,
+            hasNewWorldAction = spec.worldSource?.onAdd != null,
+            describesPaneAddMenu = paneAddItemsProvider != null,
+            paneAddItemCount = activeTabIdForAdd
+                ?.let { paneAddItemsProvider?.invoke(it)?.size }
+                ?: 0,
+        )
         val newPaneButton = buildNewWindowSplitButton(
             tooltip = "New",
             iconHtml = ICON_NEW_TAB,
@@ -4141,4 +4148,53 @@ private fun clearSidebarRowDropIndicators(el: HTMLElement) {
         sibling.classList.remove("dt-sidebar-row-drop-before")
         sibling.classList.remove("dt-sidebar-row-drop-after")
     }
+}
+
+/**
+ * Whether the topbar's "+" (New) button can currently do anything, and so
+ * whether it should be rendered at all.
+ *
+ * The button is **omitted** rather than disabled when the answer is no: a
+ * "+" whose hover menu is empty and whose click is a no-op reads as broken,
+ * not as unavailable. Called on every topbar rebuild, so a host whose menu
+ * is permission-gated gets the button back on the rerender that follows the
+ * permission change.
+ *
+ * ── Why [hasPaneAddAction] is not enough on its own ─────────────────────
+ *
+ * A host that supplies both [TabSource.onPaneAdd] and
+ * [TabSource.paneAddMenuItems] has described the "+" in one place, not two:
+ * the callback is the *default* of the menu the provider fills, which is why
+ * clicking the icon and picking the first row do the same thing everywhere.
+ * So an empty item list is that host saying there is nothing to add right
+ * now, and honouring it for the dropdown while ignoring it for the click
+ * leaves exactly the dead button this function exists to prevent. Lunicle
+ * hit that: a reader with no create-issue right saw a "+", got an empty
+ * dropdown, and a click that silently did nothing.
+ *
+ * A host that supplies [TabSource.onPaneAdd] and **no** provider is
+ * unaffected — it never described a menu, so there is no list to be empty
+ * and the callback is the whole of what the button offers. That is what
+ * [describesPaneAddMenu] distinguishes, and why it is a separate parameter
+ * from [paneAddItemCount] being zero.
+ *
+ * @param hasNewTabAction whether a "New tab" row would be offered.
+ * @param hasPaneAddAction whether [TabSource.onPaneAdd] is wired.
+ * @param hasNewWorldAction whether a "New workspace" row would be offered.
+ * @param describesPaneAddMenu whether [TabSource.paneAddMenuItems] is wired
+ *   at all — distinct from it returning nothing.
+ * @param paneAddItemCount how many pane flavours it returned for the active
+ *   tab; zero when there is no provider or no active tab.
+ * @return true to render the button.
+ * @see TabSource.paneAddMenuItems
+ */
+internal fun shouldShowNewPaneButton(
+    hasNewTabAction: Boolean,
+    hasPaneAddAction: Boolean,
+    hasNewWorldAction: Boolean,
+    describesPaneAddMenu: Boolean,
+    paneAddItemCount: Int,
+): Boolean {
+    val paneAddCounts = hasPaneAddAction && (!describesPaneAddMenu || paneAddItemCount > 0)
+    return hasNewTabAction || paneAddCounts || hasNewWorldAction || paneAddItemCount > 0
 }
