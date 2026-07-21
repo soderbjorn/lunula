@@ -341,9 +341,12 @@ object TabBarClassNames {
 
     /**
      * Added alongside [BAR] when [TabBarSpec.isFixed] is set. Selects the
-     * app-defined pill treatment in `lunula.css` — borderless, tighter,
-     * accent-tinted when selected — instead of the bordered, editable
-     * strip. Scoped as an extra class rather than a replacement so a fixed
+     * app-defined strip's **layout** rules in `lunula.css`: it sits beside
+     * the topbar's leading slot instead of growing to fill the middle one.
+     * The tabs themselves are styled by the plain `.dt-tab` rules — a fixed
+     * tab is meant to look exactly like an editable one, so that an app
+     * built on the toolkit has one kind of tab rather than two dialects of
+     * one. Scoped as an extra class rather than a replacement so a fixed
      * bar still inherits every `.dt-tabbar` rule (fonts, wrapping) it has
      * no reason to differ on.
      */

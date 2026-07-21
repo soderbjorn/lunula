@@ -477,17 +477,24 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 }
 
 /* ── App-defined ("fixed") tab strip (TabBarSpec.isFixed) ───────
-   A strip the consuming app declares and the user cannot edit. The
-   editable strip's chrome exists to advertise that the tabs are objects
-   you can pick up: the border says "this is a thing", the hover state
-   says "you can act on it", the reserved right-hand gutter holds the `⋮`.
-   None of that is true here, and left in place it promises affordances
-   the bar does not have — so the fixed variant strips the border, tightens
-   the padding and reads as a row of section links rather than as a set of
-   draggable objects. Selected keeps the accent-soft tint (the one signal
-   that is still meaningful) but drops the accent ring, which on a
-   borderless row would be the only outline on screen and would read as
-   focus rather than as selection.
+   A strip the consuming app declares and the user cannot edit.
+
+   **Layout only.** A fixed tab looks exactly like an editable one — same
+   border, same hover, same accent-ring selection — and that is deliberate:
+   a toolkit whose tabs come in two visual dialects makes an app built from
+   it read as two apps, and the toolkit's tab IS the `.dt-tab` above.
+
+   This variant originally de-chromed itself, on the argument that the
+   border and hover advertise affordances (drag, rename, close) a fixed
+   strip does not have. That argument does not survive contact: the same
+   border sits on every button in the bar without promising it can be
+   dragged, "you can act on it" is true here — clicking switches section —
+   and the affordance the chrome supposedly over-promised, the `⋮` gutter,
+   is not drawn for a fixed tab anyway (TabBar.kt withholds it). What the
+   de-chroming actually cost was the selection signal: a tinted fill with
+   no ring, on a row with no outlines, reads as hover rather than as "you
+   are here". So the visual rules are gone and only the two layout rules
+   below remain.
 
    Scoped entirely under `.dt-tabbar-fixed`, so no consumer that does not
    set the flag is touched by any of it. */
@@ -501,30 +508,6 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 }
 .dt-tabbar-fixed .dt-tabbar-strip {
     flex: 0 1 auto;
-    column-gap: 4px;
-}
-.dt-tabbar-fixed .dt-tab {
-    padding: 3px 10px;
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 999px;
-    color: var(--t-chrome-text-dim, #b8b8b8);
-    font-weight: 500;
-}
-.dt-tabbar-fixed .dt-tab:hover {
-    background: var(--t-chrome-track, rgba(255, 255, 255, 0.06));
-    color: var(--t-chrome-text, #e6e6e6);
-}
-/* Selected: accent-soft fill + accent text, no ring. `--t-chrome-accent-soft`
-   is the theme's own tint of the accent — the token the design prototype's
-   literal `rgba(77,200,245,.12)` is the dark-theme instance of — so this
-   tracks whatever accent the user has picked instead of pinning one hue. */
-.dt-tabbar-fixed .dt-tab.dt-selected {
-    background: var(--t-chrome-accent-soft, rgba(255, 255, 255, 0.10));
-    color: var(--t-chrome-accent, #ff8a3d);
-    border-color: transparent;
-    box-shadow: none;
-    font-weight: 600;
 }
 
 /* ── Declarative tab badges (TabBadge) ──────────────────────────
