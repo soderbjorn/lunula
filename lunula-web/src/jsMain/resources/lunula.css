@@ -278,6 +278,16 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     flex-grow: 1;
     min-width: 0;
 }
+/* Center-content variant (TopBarSpec.centerContent): with no tab strip in the
+   middle slot, a single app-supplied element (brand / status line) is centered
+   both ways in the flex-grow slot, so it reads as centered between the leading
+   and trailing clusters. `overflow: hidden` keeps a long line from pushing the
+   trailing cluster off-screen on a narrow window. */
+.dt-topbar-tabstrip--center {
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
 .dt-topbar-tab {
     padding: 6px 12px;
     background: transparent;

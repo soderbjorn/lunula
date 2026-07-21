@@ -52,6 +52,12 @@ data class TopBarTab(
  *   Ignored when [tabBar] is non-null.
  * @property tabBar             full-featured [TabBarSpec], or null to
  *   fall back to the legacy [tabs] list.
+ * @property centerContent      element placed in the middle slot, centered
+ *   between the leading and trailing clusters. Only rendered when the middle
+ *   slot is not already claimed by a tab strip ([tabBar] non-null or a
+ *   non-empty [tabs] list) — tabs win the slot. For apps whose middle is
+ *   otherwise empty (no tab strip) and want a centered brand / status line
+ *   there instead of on an edge. May be null.
  * @property trailingContent    element shown at the far right (action
  *   buttons, menus). May be null.
  *
@@ -63,6 +69,7 @@ class TopBarSpec(
     val activeTabId: String? = null,
     val onTabSelected: (String) -> Unit = {},
     val tabBar: TabBarSpec? = null,
+    val centerContent: HTMLElement? = null,
     val trailingContent: HTMLElement? = null,
     /**
      * When `true`, attach a vertical resize handle on the bar's bottom
@@ -117,6 +124,14 @@ fun renderTopBar(spec: TopBarSpec): HTMLElement {
         // the middle slot and overflow-scrolls instead of pushing trailing
         // content off-screen.
         tabStrip.appendChild(renderTabBar(spec.tabBar))
+    } else if (spec.tabs.isEmpty() && spec.centerContent != null) {
+        // No tab strip: the middle slot is free, so an app-supplied center
+        // element (a brand / status line) takes it, horizontally centered
+        // between the leading and trailing clusters. The `--center` modifier
+        // flips the strip's justify/align to center this single item; tabs
+        // (either path above) always win the slot when present.
+        tabStrip.classList.add("dt-topbar-tabstrip--center")
+        tabStrip.appendChild(spec.centerContent)
     } else {
         for (tab in spec.tabs) {
             val tabEl = document.createElement("button") as HTMLButtonElement

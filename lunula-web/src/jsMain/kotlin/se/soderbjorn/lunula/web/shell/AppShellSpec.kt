@@ -748,6 +748,17 @@ data class AppShellSpec(
     val extraTopbarTrailing: List<TopbarAction> = emptyList(),
     val extraTopbarBeforeStandard: List<TopbarAction> = emptyList(),
     val topbarLeading: (() -> HTMLElement?)? = null,
+    /**
+     * App content for the topbar's middle slot, centered between the
+     * leading and trailing clusters. Invoked on each mount; the returned
+     * element is placed in the same slot the tab strip uses, so it is only
+     * rendered when there is no tab strip (`showTabStrip = false`, and the
+     * app supplies no legacy tabs) — tabs always win the middle. Apps whose
+     * middle is otherwise empty use this for a centered brand / identity
+     * line instead of parking it on an edge or in the bottom bar. Returning
+     * `null` (the default) leaves the middle slot empty.
+     */
+    val topbarCenter: (() -> HTMLElement?)? = null,
     val appPanes: Map<String, String> = emptyMap(),
     val bottomBarLeading: (() -> HTMLElement?)? = null,
     val bottomBarTrailing: (() -> HTMLElement?)? = null,

@@ -2757,6 +2757,10 @@ private class ShellState(
                 // stays fully live. The TabBarCallbacks above are still
                 // built — the "+" split-button menu reuses them.
                 tabBar = if (spec.showTabStrip) tabBarSpec else null,
+                // App content for the empty middle slot, centered between the
+                // leading and trailing clusters. Ignored when the tab strip
+                // above claims the slot (see TopBarSpec.centerContent).
+                centerContent = spec.topbarCenter?.invoke(),
                 trailingContent = trailing,
                 isResizable = true,
                 minHeightPx = 0,

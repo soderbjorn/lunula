@@ -215,6 +215,7 @@ class BarController {
         activeTabId = spec.activeTabId,
         onTabSelected = spec.onTabSelected,
         tabBar = spec.tabBar,
+        centerContent = spec.centerContent,
         trailingContent = spec.trailingContent,
         isResizable = spec.isResizable,
         minHeightPx = spec.minHeightPx,
