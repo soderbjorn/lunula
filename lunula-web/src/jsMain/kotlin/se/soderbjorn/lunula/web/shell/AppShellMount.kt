@@ -558,6 +558,10 @@ fun mountAppShell(
         override fun currentLayoutStateJson(): String =
             state.currentLayoutStateJson()
 
+        override fun bringPaneToFront(paneId: String) {
+            state.bringPaneToFrontFromHost(paneId)
+        }
+
         override fun openHotkeysSidebar() {
             state.openHotkeysSidebar()
         }
@@ -2945,6 +2949,35 @@ private class ShellState(
         }
     }
 
+    /**
+     * Bring [paneId] to the front on behalf of the HOST — [AppShellHandle.bringPaneToFront].
+     *
+     * Raises the pane's z above every sibling, makes it the active pane, and
+     * rerenders so both take effect. The z-raise is the point in a free-floating
+     * layout: a snapshot's `activePaneId` only *focuses* a pane, it does not
+     * re-stack it, so a host that re-selects an already-open window (clicking its
+     * card while a full-area board sits on top) needs this to lift it out from
+     * behind. The optimistic active-pane hold is recorded too, so the confirming
+     * snapshot round-trip doesn't bounce focus back to whatever the last pane
+     * mousedown left pending.
+     *
+     * Unlike the internal [bringPaneToFront], this does NOT call
+     * [TabSource.onPaneSelect] / [TabSource.onSelect]: the host is the one asking,
+     * so echoing a selection back to it would be circular. A no-op when [paneId]
+     * is not a pane of the active tab — a host raising a pane on a tab the user
+     * has since left must not yank the view.
+     */
+    fun bringPaneToFrontFromHost(paneId: String) {
+        val tabId = viewActiveTabId() ?: return
+        val panes = geometryState.geometryByTab[tabId].orEmpty()
+        if (paneId !in panes) return
+        val maxZ = panes.values.maxOfOrNull { it.zIndex } ?: 0
+        updateGeometry(tabId, paneId) { it.copy(zIndex = maxZ + 1) }
+        controllerFor(tabId).setActiveQuiet(paneId)
+        recordPendingActivePane(tabId, paneId)
+        rerender()
+    }
+
     private fun activePaneCountForPresets(): Int {
         val activeTab = viewActiveTabId() ?: return 0
         // Minimized panes are docked and excluded from layout, so the preset
@@ -3537,15 +3570,17 @@ private class ShellState(
     private fun controllerFor(tabId: String): LayoutController =
         layoutControllers.getOrPut(tabId) {
             LayoutController(
-                // Brand-new tabs default to Auto so panes tile themselves as
-                // they are added/removed without the user picking a preset
-                // from the dropdown. Restored tabs are unaffected: their
-                // controller is pre-seeded with the persisted preset (including
-                // "custom") by [applyPersistedLayoutState] before the first
-                // snapshot lands, so hand-placed geometry never re-tiles on
-                // reload. Only tabs the persisted state has never heard of —
-                // i.e. freshly created ones — fall through to this default.
-                initialPreset = LayoutPreset.Auto,
+                // Brand-new tabs start in [AppShellSpec.defaultLayoutPreset]
+                // (Auto unless the app opts into free-floating), so panes
+                // tile themselves as they are added/removed without the user
+                // picking a preset from the dropdown. Restored tabs are
+                // unaffected: their controller is pre-seeded with the persisted
+                // preset (including "custom") by [applyPersistedLayoutState]
+                // before the first snapshot lands, so hand-placed geometry never
+                // re-tiles on reload. Only tabs the persisted state has never
+                // heard of — i.e. freshly created ones — fall through to this
+                // default.
+                initialPreset = spec.defaultLayoutPreset,
                 grid = DEFAULT_LAYOUT_GRID,
                 onChange = { persistLayoutState(); rerender() },
             )
@@ -3577,9 +3612,20 @@ private class ShellState(
      * maximize/restore toggles own the flag.
      */
     private fun defaultGeometryForNewPane(tabId: String, paneId: String): PersistedPaneGeometry {
-        val rawX = (0.10 + kotlin.random.Random.nextDouble() * 0.20).coerceIn(0.0, 0.55)
-        val rawY = (0.10 + kotlin.random.Random.nextDouble() * 0.20).coerceIn(0.0, 0.45)
-        val snapped = DEFAULT_LAYOUT_GRID.snapBox(LayoutBox(rawX, rawY, 0.45, 0.55))
+        // The app may override the seed size (and optionally pin the origin) via
+        // [AppShellSpec.paneInitialGeometry]; null falls back to the historical
+        // 45 % × 55 % cascade. The origin, whether the app's or the jittered
+        // default, is clamped to the size so the rect stays on-screen — the fixed
+        // 0.55 / 0.45 bounds the default used were the same clamp specialised to
+        // 0.45 × 0.55.
+        val override = spec.paneInitialGeometry(tabId, paneId)
+        val width = override?.widthPct ?: 0.45
+        val height = override?.heightPct ?: 0.55
+        val rawX = override?.xPct ?: (0.10 + kotlin.random.Random.nextDouble() * 0.20)
+        val rawY = override?.yPct ?: (0.10 + kotlin.random.Random.nextDouble() * 0.20)
+        val x = rawX.coerceIn(0.0, (1.0 - width).coerceAtLeast(0.0))
+        val y = rawY.coerceIn(0.0, (1.0 - height).coerceAtLeast(0.0))
+        val snapped = DEFAULT_LAYOUT_GRID.snapBox(LayoutBox(x, y, width, height))
         return PersistedPaneGeometry(
             snapped.x, snapped.y, snapped.width, snapped.height,
             isMaximized = spec.paneOpensMaximized(tabId, paneId),

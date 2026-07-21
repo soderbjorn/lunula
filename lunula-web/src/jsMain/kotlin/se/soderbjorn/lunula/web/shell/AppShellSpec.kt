@@ -11,6 +11,7 @@ package se.soderbjorn.lunula.web.shell
 import org.w3c.dom.HTMLElement
 import se.soderbjorn.lunula.core.Persister
 import se.soderbjorn.lunula.core.ThemeSnapshotV2
+import se.soderbjorn.lunula.web.layout.LayoutPreset
 import se.soderbjorn.lunula.web.layout.PaneAction
 import se.soderbjorn.lunula.web.layout.PaneTitleSegment
 import se.soderbjorn.lunula.web.themeeditor.ThemeManagerHost
@@ -56,6 +57,30 @@ typealias PaneContentFactory = (paneId: String) -> HTMLElement
  * @property element   pre-built element to append verbatim. When non-null,
  *   the icon-trio fields are ignored.
  */
+/**
+ * The initial rectangle a brand-new pane spawns at, as fractions of the pane
+ * area (0..1), returned by [AppShellSpec.paneInitialGeometry] to override the
+ * toolkit's default 45 % × 55 % cascade size.
+ *
+ * [widthPct] / [heightPct] are required — the whole point is to change the size.
+ * [xPct] / [yPct] are optional: leave them `null` to keep the toolkit's
+ * cascade-down-right origin (jittered so successive spawns don't stack), or pin
+ * them (e.g. `0.0, 0.0` together with a full 1.0 × 1.0 size) for a pane that
+ * should fill the area as an ordinary — *non-maximized* — window. Values are
+ * clamped so the rectangle stays within the area, then snapped to the layout
+ * grid, exactly as the default seed is.
+ *
+ * Consulted only at the moment a pane's geometry is first seeded, like
+ * [AppShellSpec.paneOpensMaximized]; once the entry exists, the user's own
+ * drags/resizes own it.
+ */
+data class InitialPaneGeometry(
+    val widthPct: Double,
+    val heightPct: Double,
+    val xPct: Double? = null,
+    val yPct: Double? = null,
+)
+
 data class TopbarAction(
     val id: String = "",
     val iconHtml: String = "",
@@ -799,6 +824,30 @@ data class AppShellSpec(
      * launch (with an in-memory persister: on every launch).
      */
     val paneOpensMaximized: (tabId: String, paneId: String) -> Boolean = { _, _ -> false },
+    /**
+     * The layout preset a brand-new tab starts in — the one with no persisted
+     * state yet. The default is [LayoutPreset.Auto], the historical behaviour:
+     * panes auto-tile as they are added and removed. Set it to
+     * [LayoutPreset.Custom] for a free-floating app where opening a pane must
+     * NOT reflow the others — each pane keeps the geometry it was seeded at
+     * (see [paneInitialGeometry]) until the user drags it.
+     *
+     * Restored tabs are unaffected: they adopt whatever preset was persisted,
+     * so this only decides the starting point for tabs the persisted state has
+     * never heard of.
+     */
+    val defaultLayoutPreset: LayoutPreset = LayoutPreset.Auto,
+    /**
+     * The initial rectangle a brand-new pane spawns at, or `null` to keep the
+     * toolkit's default 45 % × 55 % cascade seed. Consulted once, when the
+     * pane's geometry entry is first seeded — the counterpart to
+     * [paneOpensMaximized], and evaluated alongside it. Returning a full-area
+     * `InitialPaneGeometry(1.0, 1.0, 0.0, 0.0)` gives a pane that fills the
+     * area as a plain floating window (distinct from maximizing it); returning
+     * a size with `null` origin gives a larger/smaller cascade window. See
+     * [InitialPaneGeometry].
+     */
+    val paneInitialGeometry: (tabId: String, paneId: String) -> InitialPaneGeometry? = { _, _ -> null },
     val settingsHost: ThemeManagerHost? = null,
     /**
      * Optional factory returning the body element of an app-supplied
@@ -1085,6 +1134,23 @@ interface AppShellHandle {
      *   [applyExternalLayoutState].
      */
     fun currentLayoutStateJson(): String
+
+    /**
+     * Bring [paneId] to the front of the active tab: raise it above every
+     * overlapping sibling and make it the active/focused pane.
+     *
+     * For a free-floating layout ([AppShellSpec.defaultLayoutPreset] =
+     * [LayoutPreset.Custom]) where a host re-selects an already-open window —
+     * clicking a board card whose issue window is open but sitting behind the
+     * full-area board. Pushing that pane as the snapshot's active pane only
+     * *focuses* it; it does not re-stack it, so the window stays hidden. This
+     * lifts it out. In an auto-tiled layout every pane is already visible, so
+     * this is only meaningful for overlapping (Custom) layouts.
+     *
+     * A no-op when [paneId] is not a pane of the active tab. Does not notify the
+     * host back through [TabSource.onSelect] — the host is the caller.
+     */
+    fun bringPaneToFront(paneId: String)
 
     /**
      * Opens the app-supplied Hotkeys sidebar (see
