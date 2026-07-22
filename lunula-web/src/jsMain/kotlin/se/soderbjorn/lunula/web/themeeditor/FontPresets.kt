@@ -137,6 +137,42 @@ private val systemMonoStack: String =
 private val systemPropStack: String =
     fontPresets.first { it.key == "systemProp" }.cssStack
 
+// ── App-injected presets ────────────────────────────────────────────
+//
+// The built-in [fontPresets] above are the toolkit's own; the list below
+// is the seam the *consuming app* fills at runtime — parallel to how a host
+// injects its `customThemes` rather than the toolkit shipping them. A deploy
+// that wants a company font reaching the chrome registers it here (family +
+// `cssStack`), and every resolver walks [allFontPresets] so an injected key
+// resolves exactly like a built-in. The toolkit stays free of any specific
+// family: the value arrives from the app.
+
+/** App-injected font presets, keyed by [FontPreset.key]. */
+private val injectedFontPresets: MutableList<FontPreset> = mutableListOf()
+
+/**
+ * Register [presets] as app-provided font presets, resolvable alongside the
+ * built-in [fontPresets]. Re-registering an existing [FontPreset.key] replaces
+ * it, so a host can refresh a family without accumulating duplicates.
+ *
+ * Injected presets are treated as always-available by [detectInstalledFonts]
+ * (the app ships the `@font-face`, exactly like a [FontPreset.bundled] built-in),
+ * so they are never hidden by the installed-fonts probe.
+ */
+fun registerFontPresets(presets: List<FontPreset>) {
+    for (preset in presets) {
+        val idx = injectedFontPresets.indexOfFirst { it.key == preset.key }
+        if (idx >= 0) injectedFontPresets[idx] = preset else injectedFontPresets.add(preset)
+    }
+}
+
+/**
+ * The built-in [fontPresets] followed by any [registerFontPresets]-injected
+ * ones. Every family-resolving path walks this so an app-injected preset
+ * resolves identically to a built-in.
+ */
+fun allFontPresets(): List<FontPreset> = fontPresets + injectedFontPresets
+
 /**
  * Resolves a persisted preset key to its CSS font-family stack.
  *
@@ -150,7 +186,7 @@ private val systemPropStack: String =
  */
 fun resolveFontFamilyCss(key: String?): String {
     if (key.isNullOrEmpty()) return systemMonoStack
-    return fontPresets.firstOrNull { it.key == key }?.cssStack ?: systemMonoStack
+    return allFontPresets().firstOrNull { it.key == key }?.cssStack ?: systemMonoStack
 }
 
 /**
@@ -163,7 +199,7 @@ fun resolveFontFamilyCss(key: String?): String {
  */
 fun resolveProportionalFontFamilyCss(key: String?): String {
     if (key.isNullOrEmpty()) return systemPropStack
-    return fontPresets.firstOrNull { it.key == key }?.cssStack ?: systemPropStack
+    return allFontPresets().firstOrNull { it.key == key }?.cssStack ?: systemPropStack
 }
 
 /** Cached result of [detectInstalledFonts]; null until the first call. */
@@ -198,7 +234,7 @@ fun detectInstalledFonts(): Set<String> {
     val baselineWidths = baselines.associateWith { widthOf(it) }
 
     val available = mutableSetOf<String>()
-    for (preset in fontPresets) {
+    for (preset in allFontPresets()) {
         val detect = preset.detectFamily
         if (detect == null) {
             available.add(preset.key)

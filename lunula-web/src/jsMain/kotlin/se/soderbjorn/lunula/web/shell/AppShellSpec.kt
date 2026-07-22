@@ -861,6 +861,24 @@ data class AppShellSpec(
     val paneInitialGeometry: (tabId: String, paneId: String) -> InitialPaneGeometry? = { _, _ -> null },
     val settingsHost: ThemeManagerHost? = null,
     /**
+     * App-supplied fallback chrome font, as a [FontPreset.key], evaluated on
+     * every host-font application (mount, theme change, refresh).
+     *
+     * When the user has selected no chrome font of their own, the resolved key
+     * is applied to the sidebar/topbar, tab strip, pane headers and proportional
+     * surfaces — the `--dt-font-*` chrome vars — instead of clearing them to the
+     * system default. A user's own pick still wins: the host's own family is
+     * consulted first and this is only the `?:` fallback beneath it.
+     *
+     * This is the generic seam a deployment uses to push an injected font onto
+     * the chrome (Lunicle's LNL-110 brand font): the app registers the family via
+     * [se.soderbjorn.lunula.web.themeeditor.registerFontPresets] and returns its
+     * key here. A lambda, not a value, so an app that resolves its branding
+     * asynchronously after mount can still feed it in. Returns `null` ⇒ the
+     * toolkit's system default, unchanged.
+     */
+    val defaultChromeFontFamily: () -> String? = { null },
+    /**
      * Optional factory returning the body element of an app-supplied
      * "App settings" sidebar. When non-null, [mountAppShell] adds a
      * gear-style icon to the trailing topbar cluster, immediately to

@@ -21,7 +21,7 @@ import org.w3c.dom.HTMLElement
 import se.soderbjorn.lunula.core.Appearance
 import se.soderbjorn.lunula.core.ResolvedTheme
 import se.soderbjorn.lunula.core.argbToCss
-import se.soderbjorn.lunula.web.themeeditor.fontPresets
+import se.soderbjorn.lunula.web.themeeditor.allFontPresets
 import se.soderbjorn.lunula.web.themeeditor.resolveFontFamilyCss
 import se.soderbjorn.lunula.web.themeeditor.resolveProportionalFontFamilyCss
 
@@ -236,7 +236,7 @@ fun applySidebarFontFamily(key: String?) {
         setOrClearVar("--dt-font-sidebar", null)
         return
     }
-    val css = fontPresets.firstOrNull { it.key == key }?.cssStack
+    val css = allFontPresets().firstOrNull { it.key == key }?.cssStack
         ?: resolveProportionalFontFamilyCss(key)
     setOrClearVar("--dt-font-sidebar", css)
 }
@@ -255,7 +255,7 @@ fun applyTabbarFontFamily(key: String?) {
         setOrClearVar("--dt-font-tabbar", null)
         return
     }
-    val css = fontPresets.firstOrNull { it.key == key }?.cssStack
+    val css = allFontPresets().firstOrNull { it.key == key }?.cssStack
         ?: resolveProportionalFontFamilyCss(key)
     setOrClearVar("--dt-font-tabbar", css)
 }
@@ -274,7 +274,7 @@ fun applyPaneHeaderFontFamily(key: String?) {
         setOrClearVar("--dt-font-pane-header", null)
         return
     }
-    val css = fontPresets.firstOrNull { it.key == key }?.cssStack
+    val css = allFontPresets().firstOrNull { it.key == key }?.cssStack
         ?: resolveProportionalFontFamilyCss(key)
     setOrClearVar("--dt-font-pane-header", css)
 }

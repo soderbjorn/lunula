@@ -1180,15 +1180,20 @@ private class ShellState(
      */
     private fun applyHostFontVars() {
         val host = spec.settingsHost ?: themeHost
+        // The app's fallback chrome font (e.g. a deploy-time brand font), applied
+        // to the chrome/prose surfaces only when the user has selected none of
+        // their own — so it survives every reapply here, and the user's own pick
+        // (a non-null host family) still wins. Content mono is never touched by it.
+        val chromeFallback = spec.defaultChromeFontFamily()
         applyMonoFontFamily(host.monoFontFamily)
         applyMonoFontSizePx(host.monoFontSizePx)
-        applyProportionalFontFamily(host.proportionalFontFamily)
+        applyProportionalFontFamily(host.proportionalFontFamily ?: chromeFallback)
         applyProportionalFontSizePx(host.proportionalFontSizePx)
-        applySidebarFontFamily(host.sidebarFontFamily)
+        applySidebarFontFamily(host.sidebarFontFamily ?: chromeFallback)
         applySidebarFontSizePx(host.sidebarFontSizePx)
-        applyTabbarFontFamily(host.tabbarFontFamily)
+        applyTabbarFontFamily(host.tabbarFontFamily ?: chromeFallback)
         applyTabbarFontSizePx(host.tabbarFontSizePx)
-        applyPaneHeaderFontFamily(host.paneHeaderFontFamily)
+        applyPaneHeaderFontFamily(host.paneHeaderFontFamily ?: chromeFallback)
         applyPaneHeaderFontSizePx(host.paneHeaderFontSizePx)
     }
 
