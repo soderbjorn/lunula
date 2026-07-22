@@ -934,6 +934,24 @@ data class AppShellSpec(
      * @see se.soderbjorn.lunula.web.settings.buildHotkeysSidebar
      */
     val hotkeysContent: (() -> HTMLElement)? = null,
+    /**
+     * Optional factory returning the body element of an app-supplied
+     * "Notifications" sidebar — an alarm-bell inbox. Like [hotkeysContent]
+     * and unlike [appSettingsContent] this does NOT add a toolkit topbar
+     * button: the host renders its own bell (which it also flashes from its
+     * own unread state) and opens the panel programmatically via
+     * [AppShellHandle.openNotificationsSidebar]. The factory is invoked each
+     * time the sidebar opens, so apps can rebuild the list against live state
+     * (e.g. having just fetched it).
+     *
+     * When `null` (the default) [AppShellHandle.openNotificationsSidebar] is a
+     * no-op. Mutual exclusion with the Theme Manager, Appearance, App Settings
+     * and Hotkeys sidebars is handled by the mount: opening any one animates
+     * whichever sibling is open closed first.
+     *
+     * @see se.soderbjorn.lunula.web.settings.buildNotificationsSidebar
+     */
+    val notificationsContent: (() -> HTMLElement)? = null,
     val isElectron: Boolean = false,
     val theme: ThemeBootstrap = ThemeBootstrap.default(),
     /**
@@ -1175,6 +1193,19 @@ interface AppShellHandle {
      * "Hotkeys" button and, on Electron, an application-menu item.
      */
     fun openHotkeysSidebar()
+
+    /**
+     * Opens the app-supplied Notifications sidebar (see
+     * [AppShellSpec.notificationsContent]), animating any other right-side
+     * panel (Theme Manager / Appearance / App Settings / Hotkeys) closed
+     * first so only one is ever mounted. Idempotent — a no-op when the
+     * Notifications sidebar is already open, and a no-op entirely when
+     * [AppShellSpec.notificationsContent] is `null`.
+     *
+     * Hosts wire this to their own alarm-bell button, which they render (and
+     * flash) themselves from their own unread state.
+     */
+    fun openNotificationsSidebar()
 
     /** Tears down the shell, releasing toolkit-owned resources. */
     fun dispose()

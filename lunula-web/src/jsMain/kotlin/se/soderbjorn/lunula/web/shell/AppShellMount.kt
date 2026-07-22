@@ -47,17 +47,21 @@ import se.soderbjorn.lunula.web.applyPaneHeaderFontSizePx
 import se.soderbjorn.lunula.web.setDtCustomTitleBarBodyClass
 import se.soderbjorn.lunula.web.settings.AppSettingsSidebarSpec
 import se.soderbjorn.lunula.web.settings.HotkeysSidebarSpec
+import se.soderbjorn.lunula.web.settings.NotificationsSidebarSpec
 import se.soderbjorn.lunula.web.settings.SettingsSidebarSpec
 import se.soderbjorn.lunula.web.settings.buildAppSettingsSidebar
 import se.soderbjorn.lunula.web.settings.buildHotkeysSidebar
+import se.soderbjorn.lunula.web.settings.buildNotificationsSidebar
 import se.soderbjorn.lunula.web.settings.buildSettingsSidebar
 import se.soderbjorn.lunula.web.settings.closeAppSettingsSidebar
 import se.soderbjorn.lunula.web.settings.closeSettingsSidebar
 import se.soderbjorn.lunula.web.settings.isAppSettingsSidebarOpen
 import se.soderbjorn.lunula.web.settings.isHotkeysSidebarOpen
+import se.soderbjorn.lunula.web.settings.isNotificationsSidebarOpen
 import se.soderbjorn.lunula.web.settings.isSettingsSidebarOpen
 import se.soderbjorn.lunula.web.settings.toggleAppSettingsSidebar
 import se.soderbjorn.lunula.web.settings.toggleHotkeysSidebar
+import se.soderbjorn.lunula.web.settings.toggleNotificationsSidebar
 import se.soderbjorn.lunula.web.settings.toggleSettingsSidebar
 import se.soderbjorn.lunula.web.themeeditor.DefaultThemeManagerHost
 import se.soderbjorn.lunula.web.themeeditor.DefaultThemeManagerState
@@ -564,6 +568,10 @@ fun mountAppShell(
 
         override fun openHotkeysSidebar() {
             state.openHotkeysSidebar()
+        }
+
+        override fun openNotificationsSidebar() {
+            state.openNotificationsSidebar()
         }
 
         override fun dispose() {
@@ -1635,7 +1643,41 @@ private class ShellState(
                 rerender()
                 toggleHotkeysSidebar(::rerender)
             }
+            isNotificationsSidebarOpen() -> toggleNotificationsSidebar {
+                rerender()
+                toggleHotkeysSidebar(::rerender)
+            }
             else -> toggleHotkeysSidebar(::rerender)
+        }
+    }
+
+    /**
+     * Opens the Notifications sidebar, animating any other right-side panel
+     * closed first (same mutually-exclusive hand-off the topbar buttons use).
+     * No-op when the host supplied no [AppShellSpec.notificationsContent] or the
+     * panel is already open. Backs [AppShellHandle.openNotificationsSidebar].
+     */
+    fun openNotificationsSidebar() {
+        if (spec.notificationsContent == null) return
+        if (isNotificationsSidebarOpen()) return
+        when {
+            isThemeManagerSidebarOpen() -> toggleThemeManagerSidebar {
+                rerender()
+                toggleNotificationsSidebar(::rerender)
+            }
+            isSettingsSidebarOpen() -> toggleSettingsSidebar {
+                rerender()
+                toggleNotificationsSidebar(::rerender)
+            }
+            isAppSettingsSidebarOpen() -> toggleAppSettingsSidebar {
+                rerender()
+                toggleNotificationsSidebar(::rerender)
+            }
+            isHotkeysSidebarOpen() -> toggleHotkeysSidebar {
+                rerender()
+                toggleNotificationsSidebar(::rerender)
+            }
+            else -> toggleNotificationsSidebar(::rerender)
         }
     }
 
@@ -1767,6 +1809,19 @@ private class ShellState(
             rightSlot.appendChild(buildHotkeysSidebar(
                 HotkeysSidebarSpec(
                     title = "Keyboard shortcuts",
+                    bodyFactory = { factory() },
+                )
+            ))
+        } else if (isNotificationsSidebarOpen() && spec.notificationsContent != null) {
+            // App-supplied Notifications list — same chrome contract as the
+            // Hotkeys panel above. Opened programmatically via
+            // [AppShellHandle.openNotificationsSidebar] from the host's own
+            // alarm-bell button; the null-check guards hot-reload / config-flip
+            // races the same way.
+            val factory = spec.notificationsContent
+            rightSlot.appendChild(buildNotificationsSidebar(
+                NotificationsSidebarSpec(
+                    title = "Notifications",
                     bodyFactory = { factory() },
                 )
             ))
@@ -2658,6 +2713,10 @@ private class ShellState(
                             rerender()
                             toggleThemeManagerSidebar(::rerender)
                         }
+                        isNotificationsSidebarOpen() -> toggleNotificationsSidebar {
+                            rerender()
+                            toggleThemeManagerSidebar(::rerender)
+                        }
                         else -> toggleThemeManagerSidebar(::rerender)
                     }
                 },
@@ -2684,6 +2743,10 @@ private class ShellState(
                             toggleSettingsSidebar(::rerender)
                         }
                         isHotkeysSidebarOpen() -> toggleHotkeysSidebar {
+                            rerender()
+                            toggleSettingsSidebar(::rerender)
+                        }
+                        isNotificationsSidebarOpen() -> toggleNotificationsSidebar {
                             rerender()
                             toggleSettingsSidebar(::rerender)
                         }
@@ -2723,6 +2786,10 @@ private class ShellState(
                                 toggleAppSettingsSidebar(::rerender)
                             }
                             isHotkeysSidebarOpen() -> toggleHotkeysSidebar {
+                                rerender()
+                                toggleAppSettingsSidebar(::rerender)
+                            }
+                            isNotificationsSidebarOpen() -> toggleNotificationsSidebar {
                                 rerender()
                                 toggleAppSettingsSidebar(::rerender)
                             }
