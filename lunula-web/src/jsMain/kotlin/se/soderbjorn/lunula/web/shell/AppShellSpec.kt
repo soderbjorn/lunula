@@ -879,6 +879,27 @@ data class AppShellSpec(
      */
     val defaultChromeFontFamily: () -> String? = { null },
     /**
+     * App-supplied fallback for the PROPORTIONAL main-content ("prose") font,
+     * as a [FontPreset.key], evaluated on every host-font application alongside
+     * [defaultChromeFontFamily].
+     *
+     * The counterpart to [defaultChromeFontFamily], but for the `--dt-font-prop`
+     * content surface (issue titles, note/prose bodies — whatever the app binds
+     * to `var(--dt-font-prop)`) rather than the chrome vars. When the user has
+     * picked no proportional main-content font of their own, the resolved key is
+     * applied to `--dt-font-prop`; the user's own pick still wins as the `?:`
+     * above it. The monospaced content surface (`--dt-font-mono`) is never
+     * touched by this — code stays code.
+     *
+     * Defaults to `null`, and when it returns `null` the prose surface falls
+     * back to [defaultChromeFontFamily] exactly as before — so every existing
+     * app is byte-identical and an app that only sets a chrome font still has it
+     * reach prose. An app returns a key HERE (independently of chrome) when a
+     * deployment wants to default its prose content face on its own: e.g.
+     * Lunicle's LNL-118 brand `surfaces: ["prose"]`.
+     */
+    val defaultProseFontFamily: () -> String? = { null },
+    /**
      * Optional factory returning the body element of an app-supplied
      * "App settings" sidebar. When non-null, [mountAppShell] adds a
      * gear-style icon to the trailing topbar cluster, immediately to

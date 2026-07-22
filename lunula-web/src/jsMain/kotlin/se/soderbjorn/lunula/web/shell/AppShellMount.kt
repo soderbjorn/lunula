@@ -1185,9 +1185,15 @@ private class ShellState(
         // their own — so it survives every reapply here, and the user's own pick
         // (a non-null host family) still wins. Content mono is never touched by it.
         val chromeFallback = spec.defaultChromeFontFamily()
+        // The prose surface has its own deploy-time default seam (LNL-118) so a
+        // brand can default proportional content independently of chrome. It
+        // defaults to null and then falls through to the chrome fallback, which
+        // keeps every existing app — and a brand that only names a chrome font —
+        // byte-identical.
+        val proseFallback = spec.defaultProseFontFamily() ?: chromeFallback
         applyMonoFontFamily(host.monoFontFamily)
         applyMonoFontSizePx(host.monoFontSizePx)
-        applyProportionalFontFamily(host.proportionalFontFamily ?: chromeFallback)
+        applyProportionalFontFamily(host.proportionalFontFamily ?: proseFallback)
         applyProportionalFontSizePx(host.proportionalFontSizePx)
         applySidebarFontFamily(host.sidebarFontFamily ?: chromeFallback)
         applySidebarFontSizePx(host.sidebarFontSizePx)
