@@ -2153,6 +2153,22 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    "panes have two vertical scrollbars". Plain-website consumers that
    want native scroll on the slot can override to `auto` per-pane. */
 .dt-pane-content {
+    /* The pane-content font opt-out the `.dt-app-frame` note points at.
+       Chrome cascades its own font down the frame; content must NOT inherit
+       it, or a host can never brand (or let a user pick) a proportional
+       body face distinct from the chrome. So content reads `--dt-font-prop`
+       — the proportional-content token the shell paints from
+       `AppShellSpec.defaultProseFontFamily` / the Appearance "Proportional
+       (main-content)" picker — falling back to the SAME system stack the
+       frame cascades. Unset (unbranded, no user pick) ⇒ byte-identical to
+       the old inherit-from-chrome behaviour; set ⇒ content gets the face.
+       Host editors that paint their own root font (termtastic's xterm,
+       notegrow's editor) still win, since they set `font-family` on their
+       own element below this. Code/mono content is untouched: it names
+       `--dt-font-mono` directly, never this. */
+    font-family: var(--dt-font-prop, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif);
+
     /* `display: flex` so children that opt into `flex: 1` (e.g.
        termtastic's `.terminal-cell`, notegrow's editor root) actually
        fill the slot's current height. Without it the slot resizes
