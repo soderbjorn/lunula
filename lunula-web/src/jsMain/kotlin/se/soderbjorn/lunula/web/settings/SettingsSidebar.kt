@@ -10,8 +10,9 @@
  *  3. Tab bar font face + size pill rows.
  *  4. Monospaced (main-content) font face + size pill rows.
  *  5. Proportional (main-content) font face + size pill rows.
- *  6. Desktop notifications On/Off.
- *  7. Custom title bar On/Off (Electron only).
+ *  6. Display (main-content headings) font face + size pill rows.
+ *  7. Desktop notifications On/Off.
+ *  8. Custom title bar On/Off (Electron only).
  *
  * Mutual exclusion with the [ThemeManagerSidebar]: both occupy the
  * single right-sidebar slot owned by [mountAppShell]. The slot's
@@ -46,12 +47,14 @@ import se.soderbjorn.lunula.web.applyTabbarFontFamily
 import se.soderbjorn.lunula.web.applyTabbarFontSizePx
 import se.soderbjorn.lunula.web.applyPaneHeaderFontFamily
 import se.soderbjorn.lunula.web.applyPaneHeaderFontSizePx
+import se.soderbjorn.lunula.web.applyDisplayFontFamily
+import se.soderbjorn.lunula.web.applyDisplayFontSizePx
 import se.soderbjorn.lunula.web.shell.SidebarSpec
 import se.soderbjorn.lunula.web.shell.renderRightSidebar
 import se.soderbjorn.lunula.web.themeeditor.FontKind
 import se.soderbjorn.lunula.web.themeeditor.ThemeManagerHost
 import se.soderbjorn.lunula.web.themeeditor.detectInstalledFonts
-import se.soderbjorn.lunula.web.themeeditor.fontPresets
+import se.soderbjorn.lunula.web.themeeditor.allFontPresets
 
 /**
  * Spec passed to [buildSettingsSidebar].
@@ -416,6 +419,29 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
         },
     ))
 
+    // ── Display font (main content — headings) ──────────────────────
+    body.appendChild(buildFontFaceSection(
+        title = "Display font",
+        hint = "Used by headings (falls back to Proportional when unset).",
+        kind = FontKind.Proportional,
+        showKinds = setOf(FontKind.Proportional, FontKind.Mono),
+        currentKey = { spec.host.displayFontFamily },
+        onPick = { key ->
+            spec.host.setDisplayFontFamily(key)
+            applyDisplayFontFamily(key)
+        },
+    ))
+    body.appendChild(buildFontSizeSection(
+        title = "Display size",
+        sizes = spec.mainSizePresets,
+        defaultSize = spec.mainSizeDefault,
+        currentSize = { spec.host.displayFontSizePx },
+        onPick = { px ->
+            spec.host.setDisplayFontSizePx(px)
+            applyDisplayFontSizePx(px)
+        },
+    ))
+
     target.appendChild(panel)
 }
 
@@ -465,14 +491,20 @@ private fun buildFontFaceSection(
     val row = section.row
     val installed = detectInstalledFonts()
     val current = currentKey()
-    // System default first, regardless of order in [fontPresets], so
+    // System default first, regardless of order in [allFontPresets], so
     // users without a strong opinion always see a familiar label at the
     // start of the row. When the row offers more than one kind (e.g.
     // chrome sections that also list monospaced faces), presets matching
     // the section's primary [kind] are floated ahead of the rest while
     // preserving each group's declared order (sortedWith is stable).
+    //
+    // Iterates [allFontPresets] (built-ins + app-injected via
+    // [registerFontPresets]) — not just the built-ins — so a deployment's
+    // brand font appears as a pickable pill exactly like a built-in, matching
+    // how every resolver already walks the merged list. detectInstalledFonts()
+    // reports injected presets as always-available, so they pass the filter.
     val systemKey = if (kind == FontKind.Mono) "system" else "systemProp"
-    val sortedPresets = fontPresets
+    val sortedPresets = allFontPresets()
         .filter { it.kind in showKinds }
         .sortedWith(compareBy(
             { if (it.key == systemKey) 0 else 1 },

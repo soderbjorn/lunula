@@ -65,6 +65,10 @@ class DefaultThemeManagerState(
     var tabbarFontFamily: String? = null,
     /** Tab strip font size override (px; falls back to sidebar). */
     var tabbarFontSizePx: Int? = null,
+    /** Display (heading) font family override (falls back to prose). */
+    var displayFontFamily: String? = null,
+    /** Display (heading) font size override (px). */
+    var displayFontSizePx: Int? = null,
     /** Per-app custom-titlebar opt-in (Electron `hiddenInset` etc.). */
     var useCustomTitleBar: Boolean = false,
 )
@@ -100,6 +104,8 @@ open class DefaultThemeManagerHost(
     override val sidebarFontSizePx: Int? get() = state.sidebarFontSizePx
     override val tabbarFontFamily: String? get() = state.tabbarFontFamily
     override val tabbarFontSizePx: Int? get() = state.tabbarFontSizePx
+    override val displayFontFamily: String? get() = state.displayFontFamily
+    override val displayFontSizePx: Int? get() = state.displayFontSizePx
     override val useCustomTitleBar: Boolean get() = state.useCustomTitleBar
 
     override fun setDarkThemeName(name: String) { state.darkThemeName = name; onChange() }
@@ -133,6 +139,8 @@ open class DefaultThemeManagerHost(
     override fun setSidebarFontSizePx(value: Int?) { state.sidebarFontSizePx = value; onChange() }
     override fun setTabbarFontFamily(value: String?) { state.tabbarFontFamily = value; onChange() }
     override fun setTabbarFontSizePx(value: Int?) { state.tabbarFontSizePx = value; onChange() }
+    override fun setDisplayFontFamily(value: String?) { state.displayFontFamily = value; onChange() }
+    override fun setDisplayFontSizePx(value: Int?) { state.displayFontSizePx = value; onChange() }
     override fun setUseCustomTitleBar(value: Boolean) { state.useCustomTitleBar = value; onChange() }
 }
 

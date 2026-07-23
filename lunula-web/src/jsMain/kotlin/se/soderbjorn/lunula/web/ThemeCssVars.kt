@@ -179,6 +179,11 @@ fun applyTheme(element: HTMLElement, theme: ResolvedTheme, isDark: Boolean) {
 //     .dt-pane-title        { font-family: var(--dt-font-pane-header, inherit);
 //                              font-size:   var(--dt-font-pane-header-size, var(--dt-pane-title-size, 11px)); }
 //
+// The `display` category (`--dt-font-display`) has no toolkit-native element:
+// it is written for a consuming app whose own stylesheet binds a heading /
+// display face to `var(--dt-font-display, …)` (e.g. Lunicle's issue titles and
+// board column headers), parallel to how `--dt-font-prop` drives app prose.
+//
 // Helpers below resolve preset keys to CSS stacks via [resolveFontFamilyCss] /
 // [resolveProportionalFontFamilyCss], then write the resulting value (or
 // remove the property if `null`) on `documentElement`. The Settings
@@ -282,4 +287,27 @@ fun applyPaneHeaderFontFamily(key: String?) {
 /** Apply [px] as the pane-title (pane header) font size. */
 fun applyPaneHeaderFontSizePx(px: Int?) {
     setOrClearVar("--dt-font-pane-header-size", px?.let { "${it}px" })
+}
+
+/**
+ * Apply [key] as the display (heading) font — the consuming app's largest
+ * headings, e.g. issue titles and column names. Resolved like prose (any
+ * preset key, built-in or app-injected, walks [allFontPresets]); the app's
+ * stylesheet consumes `--dt-font-display` on whichever elements it treats as
+ * display. Falls back to prose in the app CSS when unset, so an app that
+ * never sets it is unchanged.
+ */
+fun applyDisplayFontFamily(key: String?) {
+    if (key.isNullOrEmpty()) {
+        setOrClearVar("--dt-font-display", null)
+        return
+    }
+    val css = allFontPresets().firstOrNull { it.key == key }?.cssStack
+        ?: resolveProportionalFontFamilyCss(key)
+    setOrClearVar("--dt-font-display", css)
+}
+
+/** Apply [px] as the display (heading) font size. */
+fun applyDisplayFontSizePx(px: Int?) {
+    setOrClearVar("--dt-font-display-size", px?.let { "${it}px" })
 }

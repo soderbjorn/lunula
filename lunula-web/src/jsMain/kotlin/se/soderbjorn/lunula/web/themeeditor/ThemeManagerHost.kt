@@ -126,6 +126,13 @@ interface ThemeManagerHost {
      *  the sidebar size. */
     val paneHeaderFontSizePx: Int? get() = null
 
+    /** Display (heading) font family, or `null` to fall back to the app's
+     *  display default (and thence prose). */
+    val displayFontFamily: String? get() = null
+
+    /** Display (heading) font size in px, or `null` for the app default. */
+    val displayFontSizePx: Int? get() = null
+
     /** When `true`, the host renders an in-window titlebar drag region
      *  (Electron's `titleBarStyle: hiddenInset` pattern) instead of the
      *  OS-native chrome. Default `false`. */
@@ -160,6 +167,12 @@ interface ThemeManagerHost {
 
     /** Persist a new pane-title-font-size preference. `null` clears it. */
     fun setPaneHeaderFontSizePx(value: Int?) {}
+
+    /** Persist a new display-font-family preference. `null` clears it. */
+    fun setDisplayFontFamily(value: String?) {}
+
+    /** Persist a new display-font-size preference. `null` clears it. */
+    fun setDisplayFontSizePx(value: Int?) {}
 
     /** Persist the custom-titlebar toggle. */
     fun setUseCustomTitleBar(value: Boolean) {}

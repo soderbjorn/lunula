@@ -44,6 +44,8 @@ import se.soderbjorn.lunula.web.applyTabbarFontFamily
 import se.soderbjorn.lunula.web.applyTabbarFontSizePx
 import se.soderbjorn.lunula.web.applyPaneHeaderFontFamily
 import se.soderbjorn.lunula.web.applyPaneHeaderFontSizePx
+import se.soderbjorn.lunula.web.applyDisplayFontFamily
+import se.soderbjorn.lunula.web.applyDisplayFontSizePx
 import se.soderbjorn.lunula.web.setDtCustomTitleBarBodyClass
 import se.soderbjorn.lunula.web.settings.AppSettingsSidebarSpec
 import se.soderbjorn.lunula.web.settings.HotkeysSidebarSpec
@@ -1191,6 +1193,11 @@ private class ShellState(
         // keeps every existing app — and a brand that only names a chrome font —
         // byte-identical.
         val proseFallback = spec.defaultProseFontFamily() ?: chromeFallback
+        // The display (heading) surface has its own deploy-time default seam so a
+        // brand can default a distinct heading face (e.g. a serif) while prose
+        // stays sans. Null ⇒ falls through to the prose fallback, so an app that
+        // never names a display font is unchanged.
+        val displayFallback = spec.defaultDisplayFontFamily() ?: proseFallback
         applyMonoFontFamily(host.monoFontFamily)
         applyMonoFontSizePx(host.monoFontSizePx)
         applyProportionalFontFamily(host.proportionalFontFamily ?: proseFallback)
@@ -1201,6 +1208,8 @@ private class ShellState(
         applyTabbarFontSizePx(host.tabbarFontSizePx)
         applyPaneHeaderFontFamily(host.paneHeaderFontFamily ?: chromeFallback)
         applyPaneHeaderFontSizePx(host.paneHeaderFontSizePx)
+        applyDisplayFontFamily(host.displayFontFamily ?: displayFallback)
+        applyDisplayFontSizePx(host.displayFontSizePx)
     }
 
     /** Last value pushed to the Electron main process; lets us skip

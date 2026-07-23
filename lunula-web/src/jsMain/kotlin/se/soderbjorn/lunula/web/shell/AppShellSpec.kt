@@ -900,6 +900,25 @@ data class AppShellSpec(
      */
     val defaultProseFontFamily: () -> String? = { null },
     /**
+     * App-supplied fallback for the DISPLAY (heading) font, as a
+     * [FontPreset.key], evaluated on every host-font application alongside
+     * [defaultChromeFontFamily] / [defaultProseFontFamily].
+     *
+     * Drives `--dt-font-display`, the surface an app binds to its largest
+     * headings (e.g. Lunicle's issue titles and board column names) rather than
+     * running prose. When the user has picked no display font of their own, the
+     * resolved key is applied to `--dt-font-display`; the user's own pick wins
+     * as the `?:` above it.
+     *
+     * Defaults to `null`; when it returns `null` the display surface falls back
+     * to [defaultProseFontFamily] (and thus [defaultChromeFontFamily]) in the
+     * apply ladder, and an app that never binds `var(--dt-font-display)` is
+     * unaffected. An app returns a key HERE when a deployment wants a distinct
+     * display face — e.g. Lunicle's brand `surfaces: ["display"]` pointing at a
+     * serif while prose stays sans.
+     */
+    val defaultDisplayFontFamily: () -> String? = { null },
+    /**
      * Optional factory returning the body element of an app-supplied
      * "App settings" sidebar. When non-null, [mountAppShell] adds a
      * gear-style icon to the trailing topbar cluster, immediately to
