@@ -87,6 +87,20 @@ data class SettingsSidebarSpec(
     val sidebarSizePresets: List<Int> = (10..18).toList(),
     val sidebarSizeDefault: Int = 13,
     val mainSizeDefault: Int = 14,
+    /**
+     * Effective font-preset key applied to the CHROME surfaces (sidebar / tab
+     * bar / window title) when the user has picked none — i.e. a deployment
+     * brand font, resolved the same way [se.soderbjorn.lunula.web.shell.AppShellSpec.defaultChromeFontFamily]
+     * is. Returns null on an unbranded instance. The chrome font rows highlight
+     * this pill (falling back to `systemProp`) when there is no explicit user
+     * pick, so the ringed option matches the font actually painted rather than
+     * misleadingly showing "System Default" while a brand font is on screen.
+     */
+    val chromeDefaultKey: () -> String? = { null },
+    /** Effective proportional (prose) default key when the user picked none, or null. */
+    val proseDefaultKey: () -> String? = { null },
+    /** Effective display (heading) default key when the user picked none, or null. */
+    val displayDefaultKey: () -> String? = { null },
 )
 
 /** True while the Settings sidebar is considered open. */
@@ -312,6 +326,7 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
         kind = FontKind.Proportional,
         showKinds = setOf(FontKind.Proportional, FontKind.Mono),
         currentKey = { spec.host.sidebarFontFamily },
+        appDefaultKey = { spec.chromeDefaultKey() },
         onPick = { key ->
             spec.host.setSidebarFontFamily(key)
             applySidebarFontFamily(key)
@@ -335,6 +350,7 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
         kind = FontKind.Proportional,
         showKinds = setOf(FontKind.Proportional, FontKind.Mono),
         currentKey = { spec.host.tabbarFontFamily },
+        appDefaultKey = { spec.chromeDefaultKey() },
         onPick = { key ->
             spec.host.setTabbarFontFamily(key)
             applyTabbarFontFamily(key)
@@ -358,6 +374,7 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
         kind = FontKind.Proportional,
         showKinds = setOf(FontKind.Proportional, FontKind.Mono),
         currentKey = { spec.host.paneHeaderFontFamily },
+        appDefaultKey = { spec.chromeDefaultKey() },
         onPick = { key ->
             spec.host.setPaneHeaderFontFamily(key)
             applyPaneHeaderFontFamily(key)
@@ -403,6 +420,7 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
         kind = FontKind.Proportional,
         showKinds = setOf(FontKind.Proportional, FontKind.Mono),
         currentKey = { spec.host.proportionalFontFamily },
+        appDefaultKey = { spec.proseDefaultKey() },
         onPick = { key ->
             spec.host.setProportionalFontFamily(key)
             applyProportionalFontFamily(key)
@@ -426,6 +444,7 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
         kind = FontKind.Proportional,
         showKinds = setOf(FontKind.Proportional, FontKind.Mono),
         currentKey = { spec.host.displayFontFamily },
+        appDefaultKey = { spec.displayDefaultKey() },
         onPick = { key ->
             spec.host.setDisplayFontFamily(key)
             applyDisplayFontFamily(key)
@@ -478,6 +497,11 @@ private fun makeSection(title: String, hint: String? = null): Section {
  *   bar / Proportional) pass both kinds so users can also pick a
  *   monospaced face for chrome — the proportional presets stay first,
  *   monospaced ones follow.
+ * @param appDefaultKey the preset key the app applies to this surface when the
+ *   user has picked none (e.g. a deployment brand font). When [currentKey] is
+ *   null/empty the row highlights this key — falling back to the system default
+ *   — so the ringed pill matches the font actually painted, not just the user's
+ *   override. Returns null when the app has no default for the surface.
  */
 private fun buildFontFaceSection(
     title: String,
@@ -486,6 +510,7 @@ private fun buildFontFaceSection(
     currentKey: () -> String?,
     onPick: (String?) -> Unit,
     showKinds: Set<FontKind> = setOf(kind),
+    appDefaultKey: () -> String? = { null },
 ): HTMLElement {
     val section = makeSection(title, hint)
     val row = section.row
@@ -504,6 +529,10 @@ private fun buildFontFaceSection(
     // how every resolver already walks the merged list. detectInstalledFonts()
     // reports injected presets as always-available, so they pass the filter.
     val systemKey = if (kind == FontKind.Mono) "system" else "systemProp"
+    // When the user has overridden nothing, the ringed pill is the app's default
+    // for this surface (a brand font) if it has one, else the system default —
+    // so the highlight tracks what is actually painted, not an empty override.
+    val effectiveDefaultKey = appDefaultKey() ?: systemKey
     val sortedPresets = allFontPresets()
         .filter { it.kind in showKinds }
         .sortedWith(compareBy(
@@ -513,7 +542,7 @@ private fun buildFontFaceSection(
     for (preset in sortedPresets) {
         if (preset.key !in installed) continue
         val isSelected = preset.key == current ||
-            (current.isNullOrEmpty() && preset.key == systemKey)
+            (current.isNullOrEmpty() && preset.key == effectiveDefaultKey)
         val btn = document.createElement("button") as HTMLElement
         btn.setAttribute("type", "button")
         btn.className = "dt-settings-choice-btn" + if (isSelected) " dt-selected" else ""

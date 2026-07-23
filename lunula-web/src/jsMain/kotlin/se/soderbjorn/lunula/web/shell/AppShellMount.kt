@@ -1799,6 +1799,17 @@ private class ShellState(
                         closeSettingsSidebar()
                         toggleThemeManagerSidebar(::rerender)
                     },
+                    // The effective app-default keys per surface, resolved with the
+                    // same fallback ladder applyHostFontVars uses — so the picker
+                    // highlights the pill that is actually painted when the user has
+                    // overridden nothing (e.g. a deployment brand font).
+                    chromeDefaultKey = { spec.defaultChromeFontFamily() },
+                    proseDefaultKey = { spec.defaultProseFontFamily() ?: spec.defaultChromeFontFamily() },
+                    displayDefaultKey = {
+                        spec.defaultDisplayFontFamily()
+                            ?: spec.defaultProseFontFamily()
+                            ?: spec.defaultChromeFontFamily()
+                    },
                 )
             ))
         } else if (isAppSettingsSidebarOpen() && spec.appSettingsContent != null) {
