@@ -8,7 +8,7 @@ plugins {
 
 allprojects {
     group = "se.soderbjorn.lunula"
-    version = "0.2.49"
+    version = "0.2.50"
 }
 
 // Default file-Maven-repo locations inside the consumer worktrees. Each
