@@ -130,6 +130,25 @@ object PersistKeys {
     const val THEME_V2_SELECTION: String = "darkness.theme.v2.selection"
 
     /**
+     * Serialized shell shape/density preferences:
+     * `{"cornerRadiusPx": 18, "uiDensity": "comfortable"}`. Either field may
+     * be absent, meaning "toolkit default".
+     *
+     * Deliberately its own key rather than a field on [THEME_V2_SELECTION].
+     * These are preferences about the *shell*, not about the theme, and the
+     * distinction is load-bearing: a user who squares their corners keeps them
+     * square across every theme change, so the value must neither travel with
+     * a theme selection nor be overwritten by one. Storing it alongside would
+     * have quietly given "switch theme" the power to reshape the app.
+     *
+     * Per-app, like the selection — an app may reasonably be roomier than its
+     * sibling. A missing key means every value is at its default.
+     *
+     * @see UiDensity
+     */
+    const val APPEARANCE_SHAPE: String = "darkness.appearance.shape"
+
+    /**
      * Serialized JSON array of theme *names* the user has starred / favorited
      * (e.g. `["Solarized Dark","Ayu Light"]`). Per-app (not shared via
      * `themes.json`): each app remembers its own starred set. A missing key

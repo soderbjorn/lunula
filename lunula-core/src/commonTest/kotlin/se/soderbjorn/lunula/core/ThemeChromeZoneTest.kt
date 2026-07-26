@@ -109,16 +109,23 @@ class ThemeChromeZoneTest {
             ),
             withChrome,
         )
-        // Every split theme sets the zone completely — a half-set zone would
-        // silently mix chrome and content colours.
+        // Every theme that opens the zone sets it completely — a half-set zone
+        // would silently mix chrome and content colours. No exceptions: each of
+        // these is a free choice with no defensible derivation, so each has to
+        // be stated. (An earlier revision exempted `chromeTextDim` so it could
+        // be blended from its own backdrop; that derivation is gone, and the
+        // contrast lint guards the value instead. See ThemeContrastTest.)
         for (t in builtinThemes.filter { it.chromeBg != null }) {
             for (id in listOf(
                 "canvas", "chromeBg", "chromeText", "chromeTextDim", "chromeTextBright",
                 "chromeBorder", "chromeAccent", "chromeTrack",
             )) {
-                assertTrue(t.token(id).startsWith("#"), "${t.name} must set $id")
+                assertTrue(t.token(id).startsWith("#"), "${t.name} must resolve $id to a colour")
             }
-            assertTrue(t.chromeText != null && t.chromeTrack != null, "${t.name} sets the full zone")
+            assertTrue(
+                t.chromeText != null && t.chromeTrack != null && t.chromeTextDim != null,
+                "${t.name} sets the full zone",
+            )
         }
     }
 

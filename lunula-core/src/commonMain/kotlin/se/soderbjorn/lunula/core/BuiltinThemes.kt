@@ -30,7 +30,10 @@ const val DEFAULT_LIGHT_THEME: String = "Lunamux Light"
  *
  * The 8 chrome/canvas tokens are trailing and default to `null`, so a theme
  * that doesn't split its chrome from its content simply omits them and gets
- * the base-token fallback.
+ * the base-token fallback. The role-split tokens (`…On` / `…Text`), the
+ * selection style and the two alphas follow them on the same terms — every one
+ * of them trailing, defaulted and optional, so the 73 themes that predate them
+ * keep their exact call shape and their exact appearance.
  */
 private fun theme(
     name: String, group: ThemeGroup, tag: String, desc: String,
@@ -43,6 +46,12 @@ private fun theme(
     chromeBg: String? = null, chromeText: String? = null, chromeTextDim: String? = null,
     chromeTextBright: String? = null, chromeBorder: String? = null,
     chromeAccent: String? = null, chromeTrack: String? = null,
+    accentOn: String? = null, accentText: String? = null,
+    warnOn: String? = null, warnText: String? = null,
+    dangerOn: String? = null, dangerText: String? = null,
+    addOn: String? = null,
+    chromeAccentOn: String? = null, chromeAccentText: String? = null,
+    tintAlpha: Double? = null,
 ): Theme = Theme(
     name = name, group = group, tag = tag, desc = desc,
     bg = bg, surface = surface, surfaceAlt = surfaceAlt, border = border,
@@ -55,6 +64,12 @@ private fun theme(
     chromeBg = chromeBg, chromeText = chromeText, chromeTextDim = chromeTextDim,
     chromeTextBright = chromeTextBright, chromeBorder = chromeBorder,
     chromeAccent = chromeAccent, chromeTrack = chromeTrack,
+    accentOn = accentOn, accentText = accentText,
+    warnOn = warnOn, warnText = warnText,
+    dangerOn = dangerOn, dangerText = dangerText,
+    addOn = addOn,
+    chromeAccentOn = chromeAccentOn, chromeAccentText = chromeAccentText,
+    tintAlpha = tintAlpha,
 )
 
 /**
@@ -265,7 +280,11 @@ val builtinThemes: List<Theme> = listOf(
         "#268bd2", "#b58900", "#dc322f", "#859900", "#5f6f00",
         "#859900", "#2aa198", "#d33682", "#93a1a1", "#268bd2", "#b58900", "#586e75", "#cb4b16",
         canvas = "#002b36",
-        chromeBg = "#002b36", chromeText = "#93a1a1", chromeTextDim = "#586e75",
+        // Solarized's own `base01` (#586e75) would be the faithful choice here
+        // and is 2.79:1 on `base03` — the contrast lint's only pre-existing
+        // failure. Lifted one step to clear the 3:1 floor with margin rather
+        // than by a hair; it stays recognisably Solarized's washed-out slate.
+        chromeBg = "#002b36", chromeText = "#93a1a1", chromeTextDim = "#6b8589",
         chromeTextBright = "#eee8d5", chromeBorder = "#073642",
         chromeAccent = "#2aa198", chromeTrack = "#073642"),
     theme("Sandstone Split", ThemeGroup.Light, "Chrome", "Warm cream and tan workspace under a dark espresso chrome, lit by amber.",

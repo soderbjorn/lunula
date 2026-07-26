@@ -3,16 +3,23 @@
  * appearance / window control the toolkit owns.
  *
  * Sections rendered (in order):
- *  1. Theme & appearance — single button that opens the dedicated theme
- *     manager (the SettingsSidebar does not embed the manager itself; it
- *     just provides a jump link).
- *  2. Sidebar font face + size pill rows.
- *  3. Tab bar font face + size pill rows.
- *  4. Monospaced (main-content) font face + size pill rows.
- *  5. Proportional (main-content) font face + size pill rows.
- *  6. Display (main-content headings) font face + size pill rows.
- *  7. Desktop notifications On/Off.
- *  8. Custom title bar On/Off (Electron only).
+ *  1. Custom title bar On/Off (Electron only).
+ *  2. Corner roundness + Selection + Spacing — the shell's shape, its
+ *     selection language, and its density.
+ *  3. Sidebar font face + size pill rows.
+ *  4. Tab bar font face + size pill rows.
+ *  5. Window title font face + size pill rows.
+ *  6. Monospaced (main-content) font face + size pill rows.
+ *  7. Proportional (main-content) font face + size pill rows.
+ *  8. Display (main-content headings) font face + size pill rows.
+ *
+ * Shape before type, deliberately: roundness and spacing change what the
+ * shell IS shaped like, where every font row changes what it is lettered in.
+ *
+ * Note what is NOT here: colour. Corner roundness and spacing are user
+ * preferences that must survive a theme change — a user who likes square
+ * corners should not have to give up a palette to keep them — so they live
+ * beside the fonts and are persisted per-app, not stored on a [Theme].
  *
  * Mutual exclusion with the [ThemeManagerSidebar]: both occupy the
  * single right-sidebar slot owned by [mountAppShell]. The slot's
@@ -49,6 +56,12 @@ import se.soderbjorn.lunula.web.applyPaneHeaderFontFamily
 import se.soderbjorn.lunula.web.applyPaneHeaderFontSizePx
 import se.soderbjorn.lunula.web.applyDisplayFontFamily
 import se.soderbjorn.lunula.web.applyDisplayFontSizePx
+import se.soderbjorn.lunula.web.applyCornerRadiusPx
+import se.soderbjorn.lunula.web.applyUiDensity
+import se.soderbjorn.lunula.web.applySelectionStyle
+import se.soderbjorn.lunula.core.AppearanceShape
+import se.soderbjorn.lunula.core.SelectionStyle
+import se.soderbjorn.lunula.core.UiDensity
 import se.soderbjorn.lunula.web.shell.SidebarSpec
 import se.soderbjorn.lunula.web.shell.renderRightSidebar
 import se.soderbjorn.lunula.web.themeeditor.FontKind
@@ -101,7 +114,34 @@ data class SettingsSidebarSpec(
     val proseDefaultKey: () -> String? = { null },
     /** Effective display (heading) default key when the user picked none, or null. */
     val displayDefaultKey: () -> String? = { null },
+    /**
+     * Corner-radius pill values, in render order.
+     *
+     * A short, opinionated ladder rather than a range: 0 is square, 18 is the
+     * toolkit default, and the steps between are the ones that read as
+     * distinct at a glance. Offering every integer would present forty
+     * choices to answer a question with about five real answers.
+     */
+    val cornerRadiusPresets: List<Int> = listOf(0, 4, 8, 12, 18, 24),
+    /**
+     * The shape settings the app applies when the user has picked none — a
+     * deployment brand's defaults, resolved the same way [chromeDefaultKey] is.
+     *
+     * Each row highlights this value when the host's own is null, so the ringed
+     * pill matches what is actually painted rather than claiming the toolkit
+     * default while a branded instance shows something else. Fields left null
+     * fall through to the toolkit's own defaults.
+     */
+    val appDefaultShape: () -> AppearanceShape = { AppearanceShape() },
 )
+
+/**
+ * The radius the corner row highlights when the host has stored none.
+ *
+ * Must match `--dt-corner-radius`'s fallback in `lunula.css`, or the ringed
+ * pill claims a value the shell is not actually painting.
+ */
+private const val DEFAULT_CORNER_RADIUS_PX: Int = 18
 
 /** True while the Settings sidebar is considered open. */
 private var sidebarOpen: Boolean = false
@@ -319,6 +359,40 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
         ))
     }
 
+    // ── Shape and spacing ───────────────────────────────────────────
+    // Above the font rows because they are the two coarsest controls in the
+    // panel: they change what the shell *is* shaped like, where every row
+    // below changes what it is lettered in. Both are user settings rather
+    // than theme properties — see ThemeManagerHost.cornerRadiusPx.
+    body.appendChild(buildPxChoiceSection(
+        title = "Corner roundness",
+        sizes = spec.cornerRadiusPresets,
+        defaultSize = spec.appDefaultShape().cornerRadiusPx ?: DEFAULT_CORNER_RADIUS_PX,
+        currentSize = { spec.host.cornerRadiusPx },
+        onPick = { px ->
+            spec.host.setCornerRadiusPx(px)
+            applyCornerRadiusPx(px)
+        },
+    ))
+    body.appendChild(buildSelectionStyleSection(
+        currentValue = {
+            spec.host.selectionStyle ?: spec.appDefaultShape().selectionStyle ?: SelectionStyle.Tint
+        },
+        onPick = { st ->
+            spec.host.setSelectionStyle(st)
+            applySelectionStyle(document.documentElement as HTMLElement, st)
+        },
+    ))
+    body.appendChild(buildDensitySection(
+        currentValue = {
+            spec.host.uiDensity ?: spec.appDefaultShape().uiDensity ?: UiDensity.Compact
+        },
+        onPick = { d ->
+            spec.host.setUiDensity(d)
+            applyUiDensity(d)
+        },
+    ))
+
     // ── Sidebar font ────────────────────────────────────────────────
     body.appendChild(buildFontFaceSection(
         title = "Sidebar font",
@@ -332,7 +406,7 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
             applySidebarFontFamily(key)
         },
     ))
-    body.appendChild(buildFontSizeSection(
+    body.appendChild(buildPxChoiceSection(
         title = "Sidebar size",
         sizes = spec.sidebarSizePresets,
         defaultSize = spec.sidebarSizeDefault,
@@ -356,7 +430,7 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
             applyTabbarFontFamily(key)
         },
     ))
-    body.appendChild(buildFontSizeSection(
+    body.appendChild(buildPxChoiceSection(
         title = "Tab bar size",
         sizes = spec.sidebarSizePresets,
         defaultSize = spec.sidebarSizeDefault,
@@ -380,7 +454,7 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
             applyPaneHeaderFontFamily(key)
         },
     ))
-    body.appendChild(buildFontSizeSection(
+    body.appendChild(buildPxChoiceSection(
         title = "Window title size",
         sizes = spec.sidebarSizePresets,
         defaultSize = spec.sidebarSizeDefault,
@@ -402,7 +476,7 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
             applyMonoFontFamily(key)
         },
     ))
-    body.appendChild(buildFontSizeSection(
+    body.appendChild(buildPxChoiceSection(
         title = "Monospaced size",
         sizes = spec.mainSizePresets,
         defaultSize = spec.mainSizeDefault,
@@ -426,7 +500,7 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
             applyProportionalFontFamily(key)
         },
     ))
-    body.appendChild(buildFontSizeSection(
+    body.appendChild(buildPxChoiceSection(
         title = "Proportional size",
         sizes = spec.mainSizePresets,
         defaultSize = spec.mainSizeDefault,
@@ -450,7 +524,7 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
             applyDisplayFontFamily(key)
         },
     ))
-    body.appendChild(buildFontSizeSection(
+    body.appendChild(buildPxChoiceSection(
         title = "Display size",
         sizes = spec.mainSizePresets,
         defaultSize = spec.mainSizeDefault,
@@ -570,26 +644,27 @@ private fun buildFontFaceSection(
 }
 
 /**
- * Builds one font-size pill row.
+ * Builds one pixel-valued pill row — font sizes, and the corner-radius row.
  *
  * Mirrors [buildFontFaceSection]'s null-fallback behaviour: when the
- * host has no stored size yet ([currentSize] returns null), the pill
+ * host has no stored value yet ([currentSize] returns null), the pill
  * matching [defaultSize] gets `.dt-selected` so the row always shows
  * exactly one ringed entry — even on a fresh install. The actual
- * rendered chrome size in that case comes from CSS defaults
- * (`.dt-app-frame { font-size: 13px }` for sidebar/tabbar), so
- * [defaultSize] should reflect that.
+ * rendered value in that case comes from CSS defaults
+ * (`.dt-app-frame { font-size: 13px }` for sidebar/tabbar,
+ * `--dt-corner-radius`'s 18px fallback for roundness), so [defaultSize]
+ * must be kept in step with those.
  *
  * @param title         section title shown above the row.
  * @param sizes         pill values, in render order.
  * @param defaultSize   value to highlight when [currentSize] is null.
- * @param currentSize   reader for the host's stored size; may be null
- *   when no explicit size has been picked.
- * @param onPick        called with the clicked size; the click handler
+ * @param currentSize   reader for the host's stored value; may be null
+ *   when nothing explicit has been picked.
+ * @param onPick        called with the clicked value; the click handler
  *   also performs an optimistic DOM update so async hosts don't leave
  *   the previous selection lit.
  */
-private fun buildFontSizeSection(
+private fun buildPxChoiceSection(
     title: String,
     sizes: List<Int>,
     defaultSize: Int,
@@ -616,6 +691,86 @@ private fun buildFontSizeSection(
             }
             btn.classList.add("dt-selected")
             onPick(s)
+        })
+        row.appendChild(btn)
+    }
+    return section.element
+}
+
+/**
+ * Builds the chrome-density pill row.
+ *
+ * Its own builder rather than a reuse of [buildToggleSection] because the
+ * choices are named states, not On/Off, and rather than of [buildPxChoiceSection]
+ * because the underlying values are not numbers the user should be reasoning
+ * about — "Comfortable" is one decision, not the six paddings it sets.
+ *
+ * @param currentValue reader for the host's stored density (never null; the
+ *   caller substitutes [UiDensity.Compact]).
+ * @param onPick       called with the clicked density.
+ */
+private fun buildDensitySection(
+    currentValue: () -> UiDensity,
+    onPick: (UiDensity) -> Unit,
+): HTMLElement {
+    val section = makeSection("Spacing", "How much air the chrome puts around panes, tabs and rows.")
+    val row = section.row
+    val current = currentValue()
+    for (density in UiDensity.entries) {
+        val btn = document.createElement("button") as HTMLElement
+        btn.setAttribute("type", "button")
+        btn.className = "dt-settings-choice-btn" + if (density == current) " dt-selected" else ""
+        btn.textContent = density.name
+        btn.addEventListener("click", {
+            // Optimistic selection update — see [buildFontFaceSection].
+            val rowChildren = row.children
+            for (i in 0 until rowChildren.length) {
+                (rowChildren.item(i) as? HTMLElement)?.classList?.remove("dt-selected")
+            }
+            btn.classList.add("dt-selected")
+            onPick(density)
+        })
+        row.appendChild(btn)
+    }
+    return section.element
+}
+
+/**
+ * Builds the selection-style pill row.
+ *
+ * Labelled by what the user sees rather than by the enum: "Tinted" and
+ * "Filled" describe the result, where "Tint"/"Fill" describe the mechanism.
+ *
+ * @param currentValue reader for the host's stored style (never null; the
+ *   caller substitutes [SelectionStyle.Tint]).
+ * @param onPick       called with the clicked style.
+ */
+private fun buildSelectionStyleSection(
+    currentValue: () -> SelectionStyle,
+    onPick: (SelectionStyle) -> Unit,
+): HTMLElement {
+    val section = makeSection(
+        "Selection",
+        "How the focused window, active tab and active sidebar row are marked.",
+    )
+    val row = section.row
+    val current = currentValue()
+    for ((label, value) in listOf(
+        "Tinted" to SelectionStyle.Tint,
+        "Filled" to SelectionStyle.Fill,
+    )) {
+        val btn = document.createElement("button") as HTMLElement
+        btn.setAttribute("type", "button")
+        btn.className = "dt-settings-choice-btn" + if (value == current) " dt-selected" else ""
+        btn.textContent = label
+        btn.addEventListener("click", {
+            // Optimistic selection update — see [buildFontFaceSection].
+            val rowChildren = row.children
+            for (i in 0 until rowChildren.length) {
+                (rowChildren.item(i) as? HTMLElement)?.classList?.remove("dt-selected")
+            }
+            btn.classList.add("dt-selected")
+            onPick(value)
         })
         row.appendChild(btn)
     }

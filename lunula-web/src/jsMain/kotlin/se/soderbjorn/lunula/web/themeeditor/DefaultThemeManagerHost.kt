@@ -25,6 +25,8 @@ import se.soderbjorn.lunula.core.Appearance
 import se.soderbjorn.lunula.core.DEFAULT_DARK_THEME
 import se.soderbjorn.lunula.core.DEFAULT_LIGHT_THEME
 import se.soderbjorn.lunula.core.Theme
+import se.soderbjorn.lunula.core.SelectionStyle
+import se.soderbjorn.lunula.core.UiDensity
 
 /**
  * Mutable in-memory snapshot of every field a [ThemeManagerHost] needs to
@@ -69,6 +71,12 @@ class DefaultThemeManagerState(
     var displayFontFamily: String? = null,
     /** Display (heading) font size override (px). */
     var displayFontSizePx: Int? = null,
+    /** Chrome corner-radius override (px; null → the toolkit's 18). */
+    var cornerRadiusPx: Int? = null,
+    /** Chrome spacing-scale override (null → [UiDensity.Compact]). */
+    var uiDensity: UiDensity? = null,
+    /** Selection-language override (null → [SelectionStyle.Tint]). */
+    var selectionStyle: SelectionStyle? = null,
     /** Per-app custom-titlebar opt-in (Electron `hiddenInset` etc.). */
     var useCustomTitleBar: Boolean = false,
 )
@@ -106,6 +114,9 @@ open class DefaultThemeManagerHost(
     override val tabbarFontSizePx: Int? get() = state.tabbarFontSizePx
     override val displayFontFamily: String? get() = state.displayFontFamily
     override val displayFontSizePx: Int? get() = state.displayFontSizePx
+    override val cornerRadiusPx: Int? get() = state.cornerRadiusPx
+    override val uiDensity: UiDensity? get() = state.uiDensity
+    override val selectionStyle: SelectionStyle? get() = state.selectionStyle
     override val useCustomTitleBar: Boolean get() = state.useCustomTitleBar
 
     override fun setDarkThemeName(name: String) { state.darkThemeName = name; onChange() }
@@ -141,6 +152,9 @@ open class DefaultThemeManagerHost(
     override fun setTabbarFontSizePx(value: Int?) { state.tabbarFontSizePx = value; onChange() }
     override fun setDisplayFontFamily(value: String?) { state.displayFontFamily = value; onChange() }
     override fun setDisplayFontSizePx(value: Int?) { state.displayFontSizePx = value; onChange() }
+    override fun setCornerRadiusPx(value: Int?) { state.cornerRadiusPx = value; onChange() }
+    override fun setUiDensity(value: UiDensity?) { state.uiDensity = value; onChange() }
+    override fun setSelectionStyle(value: SelectionStyle?) { state.selectionStyle = value; onChange() }
     override fun setUseCustomTitleBar(value: Boolean) { state.useCustomTitleBar = value; onChange() }
 }
 

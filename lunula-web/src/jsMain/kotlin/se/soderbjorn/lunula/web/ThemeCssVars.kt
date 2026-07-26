@@ -20,6 +20,8 @@ package se.soderbjorn.lunula.web
 import org.w3c.dom.HTMLElement
 import se.soderbjorn.lunula.core.Appearance
 import se.soderbjorn.lunula.core.ResolvedTheme
+import se.soderbjorn.lunula.core.SelectionStyle
+import se.soderbjorn.lunula.core.UiDensity
 import se.soderbjorn.lunula.core.argbToCss
 import se.soderbjorn.lunula.web.themeeditor.allFontPresets
 import se.soderbjorn.lunula.web.themeeditor.resolveFontFamilyCss
@@ -83,12 +85,22 @@ fun ResolvedTheme.toCssVarMap(): Map<String, String> = buildMap {
     put("--t-text-bright", argbToCss(textBright))
     put("--t-accent", argbToCss(accent))
     put("--t-accent-soft", argbToCss(accentSoft))
+    put("--t-accent-on", argbToCss(accentOn))
+    put("--t-accent-text", argbToCss(accentText))
     put("--t-glow", argbToCss(glow))
     put("--t-warn", argbToCss(warn))
+    put("--t-warn-on", argbToCss(warnOn))
+    put("--t-warn-text", argbToCss(warnText))
     put("--t-danger", argbToCss(danger))
+    put("--t-danger-on", argbToCss(dangerOn))
+    put("--t-danger-text", argbToCss(dangerText))
+    put("--t-remove-bg", argbToCss(removeBgTint))
     put("--t-add", argbToCss(add))
     put("--t-add-bg", argbToCss(addBg))
+    put("--t-add-on", argbToCss(addOn))
     put("--t-add-text", argbToCss(addText))
+    put("--t-chrome-accent-on", argbToCss(chromeAccentOn))
+    put("--t-chrome-accent-text", argbToCss(chromeAccentText))
     put("--t-syn-keyword", argbToCss(synKeyword))
     put("--t-syn-string", argbToCss(synString))
     put("--t-syn-number", argbToCss(synNumber))
@@ -160,6 +172,35 @@ fun applyColorScheme(element: HTMLElement, isDark: Boolean) {
 fun applyTheme(element: HTMLElement, theme: ResolvedTheme, isDark: Boolean) {
     applyCssVars(element, theme.toCssVarMap())
     applyColorScheme(element, isDark)
+}
+
+/**
+ * Stamps the active [SelectionStyle] onto [element] as the `data-dt-selection`
+ * attribute (`"tint"` or `"fill"`). `null` clears it, which is [SelectionStyle.Tint].
+ *
+ * An attribute rather than a CSS variable, and that is the whole design. The
+ * two selection languages are not one rule with a different colour in it: Fill
+ * swaps a wash for a solid field, flips the label to the field's declared
+ * foreground, and drops the pane outline and the focus glow — four rules moving
+ * together. A variable can carry a value into a rule; only a selector can
+ * decide which rules exist. Keeping the switch in the stylesheet also keeps
+ * both languages readable side by side, instead of scattering the difference
+ * across a dozen `var()` fallback chains.
+ *
+ * Deliberately NOT called by [applyTheme]. This is a user setting, not a theme
+ * property: binding it to the palette would mean a user who prefers filled
+ * selection loses it the moment they try a different theme. It rides the same
+ * path as corner radius and density instead — see `applyHostFontVars` in
+ * `AppShellMount`.
+ *
+ * @param element the themed root (e.g. `document.documentElement`).
+ * @param style   the selection language, or `null` for the default.
+ * @see SelectionStyle
+ * @see applyCornerRadiusPx
+ */
+fun applySelectionStyle(element: HTMLElement, style: SelectionStyle?) {
+    if (style == null || style == SelectionStyle.Tint) element.removeAttribute("data-dt-selection")
+    else element.setAttribute("data-dt-selection", style.cssValue)
 }
 
 // ── Per-category font CSS variables ─────────────────────────────────
@@ -310,4 +351,54 @@ fun applyDisplayFontFamily(key: String?) {
 /** Apply [px] as the display (heading) font size. */
 fun applyDisplayFontSizePx(px: Int?) {
     setOrClearVar("--dt-font-display-size", px?.let { "${it}px" })
+}
+
+// ── Shape and density appearance settings ───────────────────────────
+//
+// These are USER settings, not theme properties, and the distinction is worth
+// stating because the first draft had them the other way round. A theme
+// answers "what does this app look like"; corner roundness and spacing answer
+// "how do I like my windows", which is the same kind of question as font size
+// — the answer should survive switching theme, and a user who likes square
+// corners should not have to give up a palette to keep them.
+//
+// So they live beside the font settings: the toolkit owns the values and the
+// CSS wiring, each app owns persistence (see ThemeManagerHost.cornerRadiusPx /
+// uiDensity), and both are applied on boot the same way the fonts are.
+
+/**
+ * Apply [px] as the corner radius of panes, tabs and sidebar rows.
+ *
+ * Writes `--dt-corner-radius`, which `.dt-app-frame` reads when computing
+ * `--dt-frame-radius` (panes) and `--dt-tab-radius` (tabs, sidebar pills, dock
+ * items). Passing `null` clears the override and restores the toolkit default.
+ *
+ * The tab radius is not a second setting: the stylesheet derives it as
+ * `min(--dt-corner-radius, 11px)`, so a square setting squares everything and a
+ * round one rounds the panes further than the pills. Two independent dials
+ * would let a user build a shell whose windows and tabs disagree about what
+ * kind of object they are, which is a worse outcome than the one choice they
+ * actually want to express.
+ *
+ * @param px the radius in pixels, or `null` for the toolkit default.
+ * @see se.soderbjorn.lunula.web.themeeditor.ThemeManagerHost.cornerRadiusPx
+ */
+fun applyCornerRadiusPx(px: Int?) {
+    setOrClearVar("--dt-corner-radius", px?.let { "${it}px" })
+}
+
+/**
+ * Apply [density] as the chrome spacing scale.
+ *
+ * Stamps `data-dt-density` on `documentElement`; `lunula.css` re-declares the
+ * `--dt-*` padding/gap tokens under that attribute. Passing `null` clears it,
+ * which is the same as [UiDensity.Compact] — the toolkit's historical spacing.
+ *
+ * @param density the spacing scale, or `null` for the default.
+ * @see UiDensity
+ */
+fun applyUiDensity(density: UiDensity?) {
+    val root = kotlinx.browser.document.documentElement as? HTMLElement ?: return
+    if (density == null || density == UiDensity.Compact) root.removeAttribute("data-dt-density")
+    else root.setAttribute("data-dt-density", density.cssValue)
 }

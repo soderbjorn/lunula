@@ -39,6 +39,7 @@ enum class ThemeGroup { Dark, Light }
 @Serializable
 enum class Appearance { Auto, Dark, Light }
 
+
 /**
  * A complete theme: identity metadata plus the 20 required literal `#rrggbb`
  * semantic colour tokens taken directly from the source design, plus 8
@@ -107,6 +108,16 @@ enum class Appearance { Auto, Dark, Light }
  * @property chromeBorder     optional — chrome dividers and frame; falls back to [border].
  * @property chromeAccent     optional — chrome section headers and active accent; falls back to [accent].
  * @property chromeTrack      optional — sidebar usage-meter track; falls back to [surfaceAlt].
+ * @property accentOn         optional — type ON a solid [accent] field; falls back to black/white by luminance.
+ * @property accentText       optional — [accent] rendered AS type on an ordinary surface; falls back to [accent].
+ * @property warnOn           optional — type ON a solid [warn] field.
+ * @property warnText         optional — [warn] rendered AS type; falls back to [warn].
+ * @property dangerOn         optional — type ON a solid [danger] field.
+ * @property dangerText       optional — [danger] rendered AS type; falls back to [danger].
+ * @property addOn            optional — type ON a solid [add] field.
+ * @property chromeAccentOn   optional — type ON a solid [chromeAccent] field.
+ * @property chromeAccentText optional — [chromeAccent] rendered AS type; falls back to [chromeAccent].
+ * @property tintAlpha        optional — diff-row tint opacity; falls back to the group default.
  * @property synKeyword  language keywords and markup tags.
  * @property synString   string literals and quoted text.
  * @property synNumber   numeric and boolean literals.
@@ -159,6 +170,36 @@ data class Theme(
     @EncodeDefault(EncodeDefault.Mode.NEVER) val chromeBorder: String? = null,
     @EncodeDefault(EncodeDefault.Mode.NEVER) val chromeAccent: String? = null,
     @EncodeDefault(EncodeDefault.Mode.NEVER) val chromeTrack: String? = null,
+    // ---- Optional role split: fills vs. the type that lands on them ----
+    // Every token above is a *colour*, but each is consumed in two roles with
+    // opposite requirements: as a large field, and as small type. A hue that
+    // sings as a field is illegible at 13px, so a theme with only one token per
+    // concept must pick the value that survives the worse case — and brand
+    // character gets sanded off in service of legibility, everywhere, silently.
+    //
+    // `addText` was already the text-role sibling of `add`; these generalise
+    // that precedent in both directions. `…On` is the type that sits ON the
+    // fill; `…Text` is the concept rendered AS type on an ordinary surface.
+    // Both are nullable with sane fallbacks, so no existing theme moves a pixel.
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val accentOn: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val accentText: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val warnOn: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val warnText: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val dangerOn: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val dangerText: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val addOn: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val chromeAccentOn: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val chromeAccentText: String? = null,
+    // ---- Optional non-colour properties ----
+    /**
+     * Opacity of the diff-add/remove row tints. `null` → the group default
+     * (0.16 light / 0.18 dark).
+     *
+     * A shared constant forces every theme's syntax palette to clear the
+     * *darkest* tint any theme uses; a light-first theme that lightens its own
+     * diff rows can tune its syntax colours for the surface it actually has.
+     */
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val tintAlpha: Double? = null,
 ) {
     // ----- Effective chrome/canvas values (the token, or its fallback) -----
     // Every read of an optional token must go through one of these so the
@@ -170,7 +211,23 @@ data class Theme(
     val effectiveChromeBg: String get() = chromeBg ?: bg
     /** [chromeText] if set, else [text]. */
     val effectiveChromeText: String get() = chromeText ?: text
-    /** [chromeTextDim] if set, else [textDim]. */
+    /**
+     * [chromeTextDim] if set, else [textDim].
+     *
+     * A plain fallback, like every other optional token here — deliberately not
+     * a derivation. An earlier version blended the chrome foreground toward the
+     * chrome background to guarantee legibility on a saturated chrome, which
+     * worked but made this the only token in the model computed rather than
+     * stated, and made its behaviour depend on whether *other* tokens were set.
+     *
+     * What actually guarantees legibility is the lint
+     * (`ThemeContrastTest.chromeDimToneIsLegibleOnItsOwnChrome`), which holds
+     * whether the value is authored or computed — so the derivation was
+     * preventing a bug the test already catches, at the cost of one token
+     * behaving unlike the other 36. An author who has to pick the value also
+     * picks a better one: the blend gave Solarized Split 3.01:1, passing the
+     * floor by 0.01, where a chosen value has real margin.
+     */
     val effectiveChromeTextDim: String get() = chromeTextDim ?: textDim
     /** [chromeTextBright] if set, else [textBright]. */
     val effectiveChromeTextBright: String get() = chromeTextBright ?: textBright
@@ -180,6 +237,50 @@ data class Theme(
     val effectiveChromeAccent: String get() = chromeAccent ?: accent
     /** [chromeTrack] if set, else [surfaceAlt]. */
     val effectiveChromeTrack: String get() = chromeTrack ?: surfaceAlt
+
+    // ----- Effective role-split values -----
+    //
+    // The two families fall back differently, and the asymmetry is the point:
+    //
+    //  - a `…Text` token falls back to its own base token, because using the
+    //    accent as type is what every theme did before the split and must keep
+    //    doing;
+    //  - an `…On` token falls back to black-or-white by luminance, because
+    //    there is no previous behaviour to preserve — nothing painted type on a
+    //    solid accent field until [SelectionStyle.Fill] existed — and a
+    //    *legible* default is the only useful one. A theme that cares declares
+    //    the exact value and wins.
+    //
+    // The `…On` fallback is what lets the contrast lint hold for all built-ins
+    // rather than only the handful that opted in.
+
+    /** [accentText] if set, else [accent] — the accent rendered AS type. */
+    val effectiveAccentText: String get() = accentText ?: accent
+    /** [warnText] if set, else [warn]. */
+    val effectiveWarnText: String get() = warnText ?: warn
+    /** [dangerText] if set, else [danger]. */
+    val effectiveDangerText: String get() = dangerText ?: danger
+    /** [chromeAccentText] if set, else [effectiveChromeAccent]. */
+    val effectiveChromeAccentText: String get() = chromeAccentText ?: effectiveChromeAccent
+
+    /** [accentOn] if set, else black/white by [accent]'s luminance. */
+    val effectiveAccentOn: Long get() = onFill(accentOn, accent)
+    /** [warnOn] if set, else black/white by [warn]'s luminance. */
+    val effectiveWarnOn: Long get() = onFill(warnOn, warn)
+    /** [dangerOn] if set, else black/white by [danger]'s luminance. */
+    val effectiveDangerOn: Long get() = onFill(dangerOn, danger)
+    /** [addOn] if set, else black/white by [add]'s luminance. */
+    val effectiveAddOn: Long get() = onFill(addOn, add)
+    /** [chromeAccentOn] if set, else black/white by the chrome accent's luminance. */
+    val effectiveChromeAccentOn: Long get() = onFill(chromeAccentOn, effectiveChromeAccent)
+
+    /** [tintAlpha] if set, else the group default (0.16 light / 0.18 dark). */
+    val effectiveTintAlpha: Double
+        get() = tintAlpha ?: if (group == ThemeGroup.Light) LIGHT_TINT_ALPHA else DARK_TINT_ALPHA
+
+    /** Shared body of the `…On` getters: the declared hex, or the legible default. */
+    private fun onFill(declared: String?, fill: String): Long =
+        declared?.let(::hexToArgb) ?: onColorFor(hexToArgb(fill))
 
     /**
      * Converts the stored hex tokens into a [ResolvedTheme] of ARGB [Long]s
@@ -204,8 +305,20 @@ data class Theme(
         warn = hexToArgb(warn),
         danger = hexToArgb(danger),
         add = hexToArgb(add),
-        addBg = withAlpha(hexToArgb(add), if (group == ThemeGroup.Light) 0.16 else 0.18),
+        // The diff tints now read the theme's own alpha (default unchanged), so
+        // a light-first theme can lighten its rows without every other theme's
+        // syntax palette having to clear the darker worst case.
+        addBg = withAlpha(hexToArgb(add), effectiveTintAlpha),
+        removeBgTint = withAlpha(hexToArgb(danger), effectiveTintAlpha),
         addText = hexToArgb(addText),
+        // Role split: the type that lands ON each fill, and each concept AS type.
+        accentOn = effectiveAccentOn,
+        accentText = hexToArgb(effectiveAccentText),
+        warnOn = effectiveWarnOn,
+        warnText = hexToArgb(effectiveWarnText),
+        dangerOn = effectiveDangerOn,
+        dangerText = hexToArgb(effectiveDangerText),
+        addOn = effectiveAddOn,
         synKeyword = hexToArgb(synKeyword),
         synString = hexToArgb(synString),
         synNumber = hexToArgb(synNumber),
@@ -220,6 +333,8 @@ data class Theme(
         canvas = hexToArgb(effectiveCanvas),
         chromeBg = hexToArgb(effectiveChromeBg),
         chromeText = hexToArgb(effectiveChromeText),
+        // The one derived text token — see [effectiveChromeTextDim] for why the
+        // derivation is gated on the theme actually splitting its chrome.
         chromeTextDim = hexToArgb(effectiveChromeTextDim),
         chromeTextBright = hexToArgb(effectiveChromeTextBright),
         chromeBorder = hexToArgb(effectiveChromeBorder),
@@ -227,28 +342,45 @@ data class Theme(
         // Same shape as accentSoft, but keyed off the chrome accent and at the
         // design's 16% — the active-item tint inside the chrome.
         chromeAccentSoft = withAlpha(hexToArgb(effectiveChromeAccent), 0.16),
+        chromeAccentOn = effectiveChromeAccentOn,
+        chromeAccentText = hexToArgb(effectiveChromeAccentText),
         chromeTrack = hexToArgb(effectiveChromeTrack),
     )
 
     companion object {
+        /** Default [tintAlpha] for a [ThemeGroup.Light] theme. */
+        const val LIGHT_TINT_ALPHA: Double = 0.16
+
+        /** Default [tintAlpha] for a [ThemeGroup.Dark] theme. */
+        const val DARK_TINT_ALPHA: Double = 0.18
+
         /**
-         * The 28 editable token ids in display order, grouped by role. Used by
-         * the web editor to render one colour input per token. (The four
-         * derived tokens — accentSoft / glow / addBg / chromeAccentSoft — are
-         * not listed; they follow the accent/add/chromeAccent colour
-         * automatically.)
+         * The 37 editable token ids in display order, grouped by role. Used by
+         * the web editor to render one colour input per token. (The five
+         * derived tokens — accentSoft / glow / addBg / removeBgTint /
+         * chromeAccentSoft — are not listed; they follow the
+         * accent/add/danger/chromeAccent colour automatically.)
          *
-         * The 8 chrome/canvas ids are optional on [Theme]; [token] reports
-         * their *effective* value so the editor always shows a real colour,
-         * and [withToken] pins an explicit one.
+         * The optional ids — the 8 chrome/canvas ones and the 9 role-split ones
+         * — report their *effective* value through [token], so the editor
+         * always shows a real colour rather than an empty swatch, and
+         * [withToken] pins an explicit one on edit.
+         *
+         * Each `…On` / `…Text` id follows the fill it belongs to, so the pair
+         * is edited as a pair — which is the whole point of declaring them
+         * together.
          */
         val TOKEN_IDS: List<String> = listOf(
             "bg", "canvas", "surface", "surfaceAlt", "border",
             "text", "textDim", "textBright",
-            "accent",
-            "warn", "danger", "add", "addText",
+            "accent", "accentOn", "accentText",
+            "warn", "warnOn", "warnText",
+            "danger", "dangerOn", "dangerText",
+            "add", "addOn", "addText",
             "chromeBg", "chromeText", "chromeTextDim", "chromeTextBright",
-            "chromeBorder", "chromeAccent", "chromeTrack",
+            "chromeBorder",
+            "chromeAccent", "chromeAccentOn", "chromeAccentText",
+            "chromeTrack",
             "synKeyword", "synString", "synNumber", "synComment",
             "synFunction", "synType", "synOperator", "synConstant",
         )
@@ -273,7 +405,16 @@ data class Theme(
         "chromeTextBright" -> effectiveChromeTextBright
         "chromeBorder" -> effectiveChromeBorder
         "chromeAccent" -> effectiveChromeAccent
+        "chromeAccentOn" -> argbToHex(effectiveChromeAccentOn)
+        "chromeAccentText" -> effectiveChromeAccentText
         "chromeTrack" -> effectiveChromeTrack
+        "accentOn" -> argbToHex(effectiveAccentOn)
+        "accentText" -> effectiveAccentText
+        "warnOn" -> argbToHex(effectiveWarnOn)
+        "warnText" -> effectiveWarnText
+        "dangerOn" -> argbToHex(effectiveDangerOn)
+        "dangerText" -> effectiveDangerText
+        "addOn" -> argbToHex(effectiveAddOn)
         "surface" -> surface
         "surfaceAlt" -> surfaceAlt
         "border" -> border
@@ -316,7 +457,16 @@ data class Theme(
         "chromeTextBright" -> copy(chromeTextBright = hex)
         "chromeBorder" -> copy(chromeBorder = hex)
         "chromeAccent" -> copy(chromeAccent = hex)
+        "chromeAccentOn" -> copy(chromeAccentOn = hex)
+        "chromeAccentText" -> copy(chromeAccentText = hex)
         "chromeTrack" -> copy(chromeTrack = hex)
+        "accentOn" -> copy(accentOn = hex)
+        "accentText" -> copy(accentText = hex)
+        "warnOn" -> copy(warnOn = hex)
+        "warnText" -> copy(warnText = hex)
+        "dangerOn" -> copy(dangerOn = hex)
+        "dangerText" -> copy(dangerText = hex)
+        "addOn" -> copy(addOn = hex)
         "surface" -> copy(surface = hex)
         "surfaceAlt" -> copy(surfaceAlt = hex)
         "border" -> copy(border = hex)

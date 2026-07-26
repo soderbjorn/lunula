@@ -9,6 +9,7 @@
 package se.soderbjorn.lunula.web.shell
 
 import org.w3c.dom.HTMLElement
+import se.soderbjorn.lunula.core.AppearanceShape
 import se.soderbjorn.lunula.core.Persister
 import se.soderbjorn.lunula.core.ThemeSnapshotV2
 import se.soderbjorn.lunula.web.layout.LayoutPreset
@@ -918,6 +919,51 @@ data class AppShellSpec(
      * serif while prose stays sans.
      */
     val defaultDisplayFontFamily: () -> String? = { null },
+    /**
+     * App-supplied fallbacks for the shell's shape settings — corner roundness,
+     * spacing density and selection language — evaluated on every host
+     * application alongside the font seams above.
+     *
+     * The exact counterpart of [defaultChromeFontFamily], and for the same
+     * reason: a deployment should be able to say "this instance looks like
+     * *this*" without that claim outranking a user who has expressed a
+     * preference of their own. Each field is consulted only where the host's
+     * value is `null`, so the ladder is:
+     *
+     *     the user's own pick  >  this app/brand default  >  the toolkit's
+     *
+     * The three fields are independent — leaving one `null` puts that single
+     * setting on the toolkit default while the others still apply, so a brand
+     * that only wants roomier spacing needn't also restate the corner radius.
+     *
+     * Defaults to an empty [AppearanceShape], so an app that never sets it is
+     * unaffected. Lunicle populates it from its brand manifest's
+     * `defaultSelectionStyle` / `defaultUiDensity` / `defaultCornerRadiusPx`.
+     *
+     * @see AppearanceShape
+     */
+    val defaultAppearanceShape: () -> AppearanceShape = { AppearanceShape() },
+    /**
+     * App-supplied default font SIZE (px) for the chrome surfaces — sidebar,
+     * tab bar and window title — or `null` for the toolkit's 13px.
+     *
+     * The size counterpart of [defaultChromeFontFamily], on the same ladder:
+     * the user's own pick wins, then this, then the toolkit. A deployment sets
+     * it when its brand face runs small or large at the stock size, or simply
+     * when the instance should read roomier.
+     */
+    val defaultChromeFontSizePx: () -> Int? = { null },
+    /** App-supplied default monospaced (code/terminal) font size in px, or `null`. */
+    val defaultMonoFontSizePx: () -> Int? = { null },
+    /** App-supplied default proportional (prose) font size in px, or `null`. */
+    val defaultProseFontSizePx: () -> Int? = { null },
+    /**
+     * App-supplied default display (heading) font size in px, or `null`.
+     *
+     * Falls through to [defaultProseFontSizePx] in the apply ladder, mirroring
+     * how the display *family* falls through to prose.
+     */
+    val defaultDisplayFontSizePx: () -> Int? = { null },
     /**
      * Optional factory returning the body element of an app-supplied
      * "App settings" sidebar. When non-null, [mountAppShell] adds a

@@ -47,11 +47,23 @@ html, body {
        new app should rarely need to change any of them; the default
        set encodes the toolkit's single agreed-upon look. */
     --dt-frame-pad: 8px;                /* .dt-app-frame-main padding & gap */
-    --dt-frame-radius: 8px;             /* .dt-pane border-radius */
+    /* Corner roundness is a USER setting, not a theme property — see
+       applyCornerRadiusPx(), which writes `--dt-corner-radius` on :root.
+       Both radii derive from that one value so a shell can't end up with
+       windows and tabs disagreeing about what kind of object they are:
+       panes take it whole, pills cap at 11px (past which a short tab stops
+       being a pill and becomes a lozenge). At 0 both go square together.
+
+       The default is 18px, from the Framna concept: at the 8px this used to
+       be, a pane read as a panel welded into a grid. 18px is what makes it
+       read as a card resting on the canvas — which is the whole reason the
+       canvas zone exists. Apps may still override either token at
+       `.dt-app-frame` scope; their declaration is later in the cascade. */
+    --dt-frame-radius: var(--dt-corner-radius, 18px);   /* .dt-pane border-radius */
+    --dt-tab-radius: min(var(--dt-corner-radius, 18px), 11px); /* .dt-tab, sidebar pills */
     --dt-topbar-h: 48px;                /* .dt-topbar min-height */
     --dt-topbar-pad-x: 20px;            /* .dt-topbar horizontal padding */
     --dt-topbar-pad-y: 8px;             /* .dt-topbar vertical padding (top & bottom) */
-    --dt-tab-radius: 8px;               /* .dt-tab border-radius */
     --dt-tab-pad: 6px 14px;             /* .dt-tab padding */
     /* `.dt-tab` font-size is inherited from `.dt-tabbar`, which reads
        `--dt-font-tabbar-size` (falling through to
@@ -66,6 +78,59 @@ html, body {
        `.dt-pane-root` inner padding, which only spaced the outer edges. */
     --dt-pane-gutter: 4px;              /* .dt-pane-floating inset on all sides */
     --dt-sidebar-row-pad: 4px 12px 4px 22px; /* .dt-sidebar-row padding */
+    /* Window-title casing. Split out of the `.dt-pane-title` rule, where they
+       were hard-coded, so a shell can opt out of ALL-CAPS chrome — the caps
+       are a house style, not a structural requirement, and a theme or app
+       built around sentence-case titles previously had no way to say so. */
+    --dt-pane-title-transform: uppercase;
+    --dt-pane-title-tracking: 0.6px;
+}
+
+/* ── Density (--dt-density) ──────────────────────────────────────
+   The spacing scale, stamped on :root as `data-dt-density` by
+   applyUiDensity(). A USER setting, not a theme property: it should
+   survive a theme change, exactly like font size does.
+
+   Only the tokens that actually change are re-declared, and they are
+   re-declared at `:root[...] .dt-app-frame` — one step more specific than
+   the `.dt-app-frame` baseline above, so the baseline stays the single
+   place the default values are written. Compact has no block at all,
+   because Compact IS that baseline; giving it one would state every
+   default twice and let the two copies drift.
+
+   These retune eight interacting tokens together, which is why the scale
+   is three named steps rather than a slider.
+
+   The pane header's VERTICAL padding scales more gently than everything else
+   here (9→12→15, against the sidebar row's 4→9→12). Not because it grows
+   disproportionately — measured, it grows *less* in relative terms than a
+   sidebar row does. Two other things make it read badly at the same rate:
+
+     - its content height is already pinned at 24px by the action buttons
+       (`.dt-pane-action` is a fixed 24×24), so padding is pure addition on
+       both sides of a floor, where a sidebar row's padding is most of the row;
+     - the title inside is 11px by default, so a tall bar surrounds a small
+       label with dead space, while the sidebar's 13px label in a shorter row
+       still reads as text with breathing room.
+
+   And a header repeats per pane — a four-way split pays its height four
+   times, the sidebar once. Horizontal padding still scales normally, which is
+   most of what reads as "roomier" on that row anyway. */
+:root[data-dt-density="comfortable"] .dt-app-frame {
+    --dt-frame-pad: 14px;
+    --dt-topbar-h: 52px;
+    --dt-tab-pad: 9px 16px;
+    --dt-pane-header-pad: 12px 14px 12px 18px;
+    --dt-pane-gutter: 6px;
+    --dt-sidebar-row-pad: 9px 14px 9px 20px;
+}
+:root[data-dt-density="spacious"] .dt-app-frame {
+    --dt-frame-pad: 20px;
+    --dt-topbar-h: 60px;
+    --dt-tab-pad: 12px 20px;
+    --dt-pane-header-pad: 15px 18px 15px 22px;
+    --dt-pane-gutter: 9px;
+    --dt-sidebar-row-pad: 12px 16px 12px 22px;
 }
 .dt-app-frame-topbar {
     flex: 0 0 auto;
@@ -478,12 +543,36 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     z-index: 1;
 }
 
+/* Fill selection: the active tab becomes a solid chrome-accent pill with the
+   declared foreground on it, and the ring goes away — a border around a filled
+   pill is an outline drawn on a shape that no longer needs outlining. See the
+   block above `.dt-pane.dt-pane-focused .dt-pane-header` for the whole model. */
+:root[data-dt-selection="fill"] .dt-tab.dt-selected {
+    background: var(--t-chrome-accent, #ff8a3d);
+    color: var(--t-chrome-accent-on, #000000);
+    border-color: transparent;
+    box-shadow: none;
+    font-weight: 600;
+}
+/* Hover on an inactive tab veils the chrome rather than tinting with the
+   accent: under Fill the accent now means "this one is selected", and using a
+   weaker version of it for hover makes hovering look like a half-selection. */
+:root[data-dt-selection="fill"] .dt-tab:hover:not(.dt-selected) {
+    background: var(--t-chrome-track, rgba(127, 127, 127, 0.12));
+}
+
 /* A hidden ("unlisted") tab is shown in the strip only while it is the
    active tab (TabBar.kt). The dashed outline hints that it isn't a normal
    listed tab and will drop back out once another tab is activated. Combines
    with `.dt-selected` (the active ring) since it is always active here. */
 .dt-tab.dt-tab-unlisted {
     border-style: dashed;
+}
+/* …and under Fill the pill has no border to dash, so the hint moves to an
+   outline drawn outside the fill, where it stays visible against it. */
+:root[data-dt-selection="fill"] .dt-tab.dt-tab-unlisted {
+    outline: 1px dashed var(--t-chrome-accent, #ff8a3d);
+    outline-offset: 2px;
 }
 
 /* ── App-defined ("fixed") tab strip (TabBarSpec.isFixed) ───────
@@ -1377,6 +1466,21 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     margin-left: 12px;
     padding-left: 14px;
 }
+/* Fill selection: the active row is a solid chrome-accent pill. The ring goes
+   for the same reason as the tab's, and the row's own radius tracks
+   `--dt-tab-radius` so the pill agrees with the tabs above it at every corner
+   setting. See `.dt-pane.dt-pane-focused .dt-pane-header` for the model. */
+:root[data-dt-selection="fill"] .dt-sidebar-row.dt-active {
+    background: var(--t-chrome-accent, #ff8a3d);
+    color: var(--t-chrome-accent-on, #000000);
+    box-shadow: none;
+    border-radius: var(--dt-tab-radius, 8px);
+}
+/* The row's icon and trailing index already `color: inherit` when active, so
+   they follow the fill's foreground with no rule of their own. */
+:root[data-dt-selection="fill"] .dt-sidebar-row:hover:not(.dt-active) {
+    background: var(--t-chrome-track, rgba(127, 127, 127, 0.12));
+}
 /* Minimized pane: parked in the dock, not participating in layout. Dim the
    row (and let it blend toward the sidebar background) so it reads as
    "set aside" without removing it from the list. Hover/active still lift it
@@ -1783,6 +1887,76 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 .dt-pane.dt-pane-focused .dt-pane-title {
     color: var(--t-text-bright, var(--t-text-bright, var(--t-text-dim, #b0b0b0)));
 }
+
+/* ── Selection language: Fill (data-dt-selection="fill") ─────────
+   Everything above paints selection the toolkit's original way — the accent
+   as a 15% wash beneath the item, with a ring around it and the label in its
+   ordinary colour. That is `SelectionStyle.Tint`, and it stays the default.
+
+   A theme can instead ask for `SelectionStyle.Fill`, and the rules below are
+   what that means. The accent stops being a hint behind the content and
+   becomes the surface the content sits on: a solid field, with the label in
+   the foreground that field declares (`--t-accent-on` /
+   `--t-chrome-accent-on`). That pairing is why the `…On` tokens exist — a
+   solid brand colour with no declared type colour is exactly how a palette
+   ends up pre-darkened until it survives being text, everywhere, forever.
+
+   Three surfaces move together, because they are one idea in three places:
+   the focused window's header, the active tab, and the active sidebar row.
+   Letting them disagree is how one app starts reading as two.
+
+   Content vs chrome is not a detail here. The pane header is CONTENT, so it
+   fills with `--t-accent`; the tab and the sidebar row are CHROME, so they
+   fill with `--t-chrome-accent`. On a theme that splits the two — Framna
+   fills windows amber and the sidebar green — that is the whole visual
+   structure, and collapsing both onto one token would erase it. */
+:root[data-dt-selection="fill"] .dt-pane.dt-pane-focused .dt-pane-header {
+    background: var(--t-accent, #4f8cff);
+    color: var(--t-accent-on, #000000);
+}
+/* The header's contents inherit the fill's foreground rather than reaching
+   for `--t-text-bright`, which is chosen against the PANE background and has
+   no relationship to the accent field. Icons and the pane index are included:
+   they sit on the same band, and a strip where the label flipped but the
+   glyphs beside it did not is worse than either treatment alone. */
+:root[data-dt-selection="fill"] .dt-pane.dt-pane-focused .dt-pane-header-icon,
+:root[data-dt-selection="fill"] .dt-pane.dt-pane-focused .dt-pane-title,
+:root[data-dt-selection="fill"] .dt-pane.dt-pane-focused .dt-pane-index,
+:root[data-dt-selection="fill"] .dt-pane.dt-pane-focused .dt-pane-trailing-label,
+:root[data-dt-selection="fill"] .dt-pane.dt-pane-focused .dt-pane-action {
+    color: var(--t-accent-on, #000000);
+}
+/* Action hover on a filled band: the resting `--t-border` backdrop is a
+   pane-zone token and lands invisibly on the accent. Veil the fill instead,
+   which works on any accent because it is derived from the fill itself. */
+:root[data-dt-selection="fill"] .dt-pane.dt-pane-focused .dt-pane-action:hover,
+:root[data-dt-selection="fill"] .dt-pane.dt-pane-focused .dt-pane-action.dt-active {
+    background: rgba(0, 0, 0, 0.12);
+    color: var(--t-accent-on, #000000);
+}
+/* The resting header lifts to the sunken tone. Under Tint an unfocused header
+   shares `--t-surface` with the pane body and the focused one is picked out by
+   its wash; under Fill the focused band is emphatic enough that an invisible
+   resting header would leave the other windows looking headerless. */
+:root[data-dt-selection="fill"] .dt-pane-header {
+    background: var(--t-surface-alt, var(--t-surface, #1e1e1e));
+}
+/* No ring, no halo. With a solid band doing the work, the 2px outline and the
+   22px glow are a third and fourth voice saying the same word — and the ring
+   in particular fights the corner radius it sits inside. The panes separate on
+   the canvas gap alone, which is what the canvas zone is for. Floating panes
+   keep their depth drop shadow: that answers "which pane is in front", a
+   different question from "which pane has focus". */
+:root[data-dt-selection="fill"] .dt-pane {
+    outline: none;
+}
+:root[data-dt-selection="fill"] .dt-pane.dt-pane-focused {
+    box-shadow: none;
+}
+:root[data-dt-selection="fill"] .dt-pane.dt-pane-floating,
+:root[data-dt-selection="fill"] .dt-pane.dt-pane-floating.dt-pane-focused {
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+}
 /* Per-pane content-type icon (file / git / terminal / link) rendered at
    the start of the header. Doubles as the cross-tab drag handle when the
    pane spec opts in via `isDraggable` — the cursor + grab class come
@@ -1827,8 +2001,11 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     font-family: var(--dt-font-pane-header, inherit);
     font-size: var(--dt-font-pane-header-size, var(--dt-pane-title-size, 11px));
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
+    /* Casing via tokens (declared on `.dt-app-frame`) rather than literals,
+       so a shell whose type system is sentence-case can say so. The default
+       values reproduce the previous hard-coded pair exactly. */
+    text-transform: var(--dt-pane-title-transform, uppercase);
+    letter-spacing: var(--dt-pane-title-tracking, 0.6px);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2019,8 +2196,11 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     font-family: var(--dt-font-pane-header, inherit);
     font-size: var(--dt-font-pane-header-size, var(--dt-pane-title-size, 11px));
     font-weight: 400;
-    letter-spacing: 0.6px;
-    text-transform: uppercase;
+    /* Tracks `.dt-pane-title`'s casing tokens — the trailing label sits on the
+       same row as the title and must not be the one element still shouting
+       when a shell opts out of caps. */
+    letter-spacing: var(--dt-pane-title-tracking, 0.6px);
+    text-transform: var(--dt-pane-title-transform, uppercase);
     color: var(--t-text-dim, #7d90ad);
     white-space: nowrap;
     overflow: hidden;

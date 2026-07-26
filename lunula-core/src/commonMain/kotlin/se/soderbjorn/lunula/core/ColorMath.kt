@@ -5,10 +5,21 @@
  * byte. These helpers convert between hex-string and ARGB representations and
  * classify a colour as light/dark by relative luminance.
  *
- * The old colour *calculator* (channel mixing, alpha application, WCAG
- * contrast floors, palette derivation from a seed) has been removed along with
- * the seed-based theme system: themes now define every token explicitly, so no
- * derivation is performed at render time.
+ * The old colour *calculator* (palette derivation from a seed, hue rotation,
+ * automatic contrast repair) is gone along with the seed-based theme system:
+ * themes define every token explicitly, so no palette is invented at render
+ * time.
+ *
+ * What remains here is deliberately narrow — the handful of operations the
+ * token model itself is expressed in:
+ *  - [withAlpha] for the four translucent tokens (accentSoft / glow / addBg /
+ *    chromeAccentSoft), which the design states as "this colour at N%";
+ *  - [contrastRatio] and [onColorFor], which serve the on-fill token pairs and
+ *    the contrast lint that guards them.
+ *
+ * None of these invent a hue. Each one answers a question the theme author has
+ * already framed ("this colour, dimmed against that backdrop"), which is why
+ * they belong here and a seed calculator did not.
  *
  * @see Theme
  * @see ResolvedTheme
@@ -111,4 +122,60 @@ fun isColorLight(color: Long): Boolean = luminance(color) > 0.5
 fun withAlpha(color: Long, alpha: Double): Long {
     val a = (alpha * 255).toLong().coerceIn(0, 255)
     return (a shl 24) or (color and 0x00FFFFFFL)
+}
+
+/**
+ * The WCAG 2.x contrast ratio between two opaque colours, in `[1.0, 21.0]`.
+ *
+ * Order-independent. Alpha is ignored, so callers must pass colours that have
+ * already been composited onto their backdrop.
+ *
+ * Consumed by the theme contrast lint in `commonTest`, which asserts that every
+ * on-fill foreground clears the AA floor of 4.5:1 against the fill it is
+ * declared for.
+ *
+ * @param a one ARGB colour.
+ * @param b the other ARGB colour.
+ * @return the contrast ratio, where 1.0 is identical and 21.0 is black/white.
+ * @see luminance
+ */
+fun contrastRatio(a: Long, b: Long): Double {
+    val la = luminance(a)
+    val lb = luminance(b)
+    val hi = if (la > lb) la else lb
+    val lo = if (la > lb) lb else la
+    return (hi + 0.05) / (lo + 0.05)
+}
+
+/**
+ * Picks the legible foreground for a solid [fill]: whichever of black or white
+ * contrasts with it more.
+ *
+ * This is the fallback for the `…On` tokens — a theme that never declares one
+ * still gets a readable label if a consumer paints its accent as a field. It is
+ * a *legibility floor*, not a design choice: a theme that cares declares the
+ * exact value, and an explicit token always wins (see [Theme.effectiveAccentOn]).
+ *
+ * Note this is NOT [isColorLight]. That asks "does this read as a light
+ * colour?", which crosses over at luminance 0.5; this asks "which extreme is
+ * further away?", which crosses over at ~0.179. The gap between the two is
+ * wide and populated — a mid-bright cyan like `#4dc8f5` sits at 0.49, so the
+ * lightness question answers "dark, use white" and lands on 1.9:1, while the
+ * contrast question answers "black" and lands on 10.9:1.
+ *
+ * Because the two candidates are the extremes of the scale, the worst any fill
+ * can do here is ~4.58:1 — at the crossover, where both are equally far. So
+ * this fallback clears the AA floor for *every* possible fill, which is what
+ * lets the contrast lint assert the on-fill pairing across all built-ins
+ * instead of only the ones that opted in.
+ *
+ * @param fill the ARGB colour of the field the type sits on.
+ * @return `#000000` or `#ffffff` as an ARGB [Long].
+ * @see Theme.accentOn
+ * @see contrastRatio
+ */
+fun onColorFor(fill: Long): Long {
+    val black = 0xFF000000L
+    val white = 0xFFFFFFFFL
+    return if (contrastRatio(black, fill) >= contrastRatio(white, fill)) black else white
 }

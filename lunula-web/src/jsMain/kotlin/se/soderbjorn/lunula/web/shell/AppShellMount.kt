@@ -17,6 +17,7 @@ import org.w3c.dom.HTMLElement
 import org.w3c.dom.MediaQueryList
 import org.w3c.dom.events.Event
 import se.soderbjorn.lunula.core.Appearance
+import se.soderbjorn.lunula.core.AppearanceShape
 import se.soderbjorn.lunula.core.PersistKeys
 import se.soderbjorn.lunula.core.ThemeSnapshotV2
 import se.soderbjorn.lunula.web.applyTheme
@@ -46,6 +47,9 @@ import se.soderbjorn.lunula.web.applyPaneHeaderFontFamily
 import se.soderbjorn.lunula.web.applyPaneHeaderFontSizePx
 import se.soderbjorn.lunula.web.applyDisplayFontFamily
 import se.soderbjorn.lunula.web.applyDisplayFontSizePx
+import se.soderbjorn.lunula.web.applyCornerRadiusPx
+import se.soderbjorn.lunula.web.applyUiDensity
+import se.soderbjorn.lunula.web.applySelectionStyle
 import se.soderbjorn.lunula.web.setDtCustomTitleBarBodyClass
 import se.soderbjorn.lunula.web.settings.AppSettingsSidebarSpec
 import se.soderbjorn.lunula.web.settings.HotkeysSidebarSpec
@@ -453,6 +457,20 @@ fun mountAppShell(
         val customRaw = spec.persister.read(PersistKeys.THEME_V2_CUSTOM)
         val snapshot = ThemeSnapshotV2.fromStrings(selectionRaw, customRaw)
         themeState.applySnapshotV2(snapshot)
+
+        // 1a'. Shape/density preferences, read from their own key. Hydrated
+        //      here — before the first applyTheme below — so the shell's first
+        //      painted frame already has the user's corner radius and spacing,
+        //      rather than snapping from the defaults a frame later.
+        //
+        //      Read unconditionally, even for apps supplying their own
+        //      `settingsHost`: an app whose host overrides these getters simply
+        //      shadows what lands here, and one that doesn't gets working
+        //      persistence for free.
+        val shape = AppearanceShape.fromJson(spec.persister.read(PersistKeys.APPEARANCE_SHAPE))
+        themeState.cornerRadiusPx = shape.cornerRadiusPx
+        themeState.uiDensity = shape.uiDensity
+        themeState.selectionStyle = shape.selectionStyle
 
         // Seed the custom-titlebar flag from the Electron bridge when present
         // so the renderer's state matches the BrowserWindow's actual
@@ -1198,18 +1216,42 @@ private class ShellState(
         // stays sans. Null ⇒ falls through to the prose fallback, so an app that
         // never names a display font is unchanged.
         val displayFallback = spec.defaultDisplayFontFamily() ?: proseFallback
+        // Sizes take the same ladder as the families: user pick, then the
+        // app/brand default, then the toolkit's. The three chrome surfaces
+        // (sidebar, tab bar, window title) share one brand default, matching
+        // how they share `chromeFallback` for the family.
+        val chromeSize = spec.defaultChromeFontSizePx()
+        val proseSize = spec.defaultProseFontSizePx()
+        val displaySize = spec.defaultDisplayFontSizePx() ?: proseSize
         applyMonoFontFamily(host.monoFontFamily)
-        applyMonoFontSizePx(host.monoFontSizePx)
+        applyMonoFontSizePx(host.monoFontSizePx ?: spec.defaultMonoFontSizePx())
         applyProportionalFontFamily(host.proportionalFontFamily ?: proseFallback)
-        applyProportionalFontSizePx(host.proportionalFontSizePx)
+        applyProportionalFontSizePx(host.proportionalFontSizePx ?: proseSize)
         applySidebarFontFamily(host.sidebarFontFamily ?: chromeFallback)
-        applySidebarFontSizePx(host.sidebarFontSizePx)
+        applySidebarFontSizePx(host.sidebarFontSizePx ?: chromeSize)
         applyTabbarFontFamily(host.tabbarFontFamily ?: chromeFallback)
-        applyTabbarFontSizePx(host.tabbarFontSizePx)
+        applyTabbarFontSizePx(host.tabbarFontSizePx ?: chromeSize)
         applyPaneHeaderFontFamily(host.paneHeaderFontFamily ?: chromeFallback)
-        applyPaneHeaderFontSizePx(host.paneHeaderFontSizePx)
+        applyPaneHeaderFontSizePx(host.paneHeaderFontSizePx ?: chromeSize)
         applyDisplayFontFamily(host.displayFontFamily ?: displayFallback)
-        applyDisplayFontSizePx(host.displayFontSizePx)
+        applyDisplayFontSizePx(host.displayFontSizePx ?: displaySize)
+        // Shape and density ride the same reapply path as the fonts, because
+        // they have identical lifecycle needs: restored at boot, re-applied on
+        // every rebuild, and — crucially — NOT reset when the theme changes.
+        // Doing it here means any app backed by DefaultThemeManagerHost gets
+        // both settings working with no app-side code beyond the persistence
+        // its state object already has. Both appliers read null as "toolkit
+        // default", so an app that never surfaces them is unaffected.
+        // Same ladder as the fonts above: the user's own pick wins, then the
+        // app/brand default, then the toolkit's. Each field falls through
+        // independently, so a brand that names only one still gets the others'
+        // defaults.
+        val shapeFallback = spec.defaultAppearanceShape()
+        applyCornerRadiusPx(host.cornerRadiusPx ?: shapeFallback.cornerRadiusPx)
+        applyUiDensity(host.uiDensity ?: shapeFallback.uiDensity)
+        (document.documentElement as? HTMLElement)?.let {
+            applySelectionStyle(it, host.selectionStyle ?: shapeFallback.selectionStyle)
+        }
     }
 
     /** Last value pushed to the Electron main process; lets us skip
@@ -1810,6 +1852,14 @@ private class ShellState(
                             ?: spec.defaultProseFontFamily()
                             ?: spec.defaultChromeFontFamily()
                     },
+                    // …and the same for the shape rows, so a branded instance
+                    // rings the pill it is actually painting rather than the
+                    // toolkit default it is not.
+                    appDefaultShape = { spec.defaultAppearanceShape() },
+                    // Size rows ring the brand's default too, for the same
+                    // reason the family rows do.
+                    sidebarSizeDefault = spec.defaultChromeFontSizePx() ?: 13,
+                    mainSizeDefault = spec.defaultProseFontSizePx() ?: 14,
                 )
             ))
         } else if (isAppSettingsSidebarOpen() && spec.appSettingsContent != null) {
@@ -4160,6 +4210,17 @@ private class ShellState(
                 // whose setters route around DefaultThemeManagerState.
                 spec.persister.write(PersistKeys.THEME_V2_SELECTION, snap.selectionJson())
                 spec.persister.write(PersistKeys.THEME_V2_CUSTOM, snap.customThemesJson())
+                // Shape/density under their own key, so a theme change can
+                // never carry them along or clear them — see
+                // PersistKeys.APPEARANCE_SHAPE.
+                spec.persister.write(
+                    PersistKeys.APPEARANCE_SHAPE,
+                    AppearanceShape(
+                        themeState.cornerRadiusPx,
+                        themeState.uiDensity,
+                        themeState.selectionStyle,
+                    ).toJson(),
+                )
             } catch (t: Throwable) {
                 kotlinx.browser.window.asDynamic().console.error(
                     "[persistUi] threw: ${t.message}"

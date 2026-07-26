@@ -139,19 +139,23 @@ data class PaneMenuSpec(
  */
 object PaneMenuItems {
 
+    // Same 1.8-weight, round-capped, 2.5-radius set as [PaneActions] — a menu
+    // that pops from under the action strip has to be drawn in the strip's own
+    // hand, or the popover reads as belonging to a different application.
+
     /** Vertical bar between two halves — split into left/right. */
     const val ICON_SPLIT_H: String =
         "<svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" " +
-            "stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">" +
-            "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"1.5\"/>" +
-            "<line x1=\"12\" y1=\"5\" x2=\"12\" y2=\"19\"/></svg>"
+            "stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\">" +
+            "<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"2.5\"/>" +
+            "<line x1=\"12\" y1=\"4.5\" x2=\"12\" y2=\"19.5\"/></svg>"
 
     /** Horizontal bar between two halves — split into top/bottom. */
     const val ICON_SPLIT_V: String =
         "<svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" " +
-            "stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">" +
-            "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"1.5\"/>" +
-            "<line x1=\"3\" y1=\"12\" x2=\"21\" y2=\"12\"/></svg>"
+            "stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\">" +
+            "<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"2.5\"/>" +
+            "<line x1=\"3.5\" y1=\"12\" x2=\"20.5\" y2=\"12\"/></svg>"
 
     /**
      * "Split this pane left/right" — calls [handler] when chosen.

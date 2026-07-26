@@ -1,5 +1,5 @@
 /**
- * Flat 20-token colour viewer/editor for a single [Theme].
+ * Flat colour viewer/editor for a single [Theme] — one input per token id.
  *
  * Replaces the old seed-based `ThemeEditor` + `ColorPickerDialog`: the new
  * theme model stores every one of its 20 editable semantic tokens as a literal
@@ -34,7 +34,7 @@ import org.w3c.dom.HTMLInputElement
 import org.w3c.dom.events.Event
 
 /**
- * Human-readable labels for the 28 token ids, keyed by [Theme.TOKEN_IDS].
+ * Human-readable labels for the token ids, keyed by [Theme.TOKEN_IDS].
  * Unknown ids fall back to the raw id.
  *
  * The 8 chrome/canvas ids are optional on a [Theme]; the editor shows their
@@ -50,17 +50,31 @@ private val TOKEN_LABELS: Map<String, String> = mapOf(
     "text" to "Text",
     "textDim" to "Text (dim)",
     "textBright" to "Text (bright)",
+    // Each fill is followed by its two type roles, so the trio is read — and
+    // edited — together. "on" is the type that lands ON the solid fill; "as
+    // text" is the same concept rendered as type on an ordinary surface. They
+    // are different colours for the same reason a road sign and a road name
+    // are: one is legible because of its background, the other in spite of it.
     "accent" to "Accent",
+    "accentOn" to "Accent: text on it",
+    "accentText" to "Accent: as text",
     "warn" to "Warning",
+    "warnOn" to "Warning: text on it",
+    "warnText" to "Warning: as text",
     "danger" to "Danger",
+    "dangerOn" to "Danger: text on it",
+    "dangerText" to "Danger: as text",
     "add" to "Add",
-    "addText" to "Add text",
+    "addOn" to "Add: text on it",
+    "addText" to "Add: as text",
     "chromeBg" to "Chrome: background",
     "chromeText" to "Chrome: text",
     "chromeTextDim" to "Chrome: text (dim)",
     "chromeTextBright" to "Chrome: text (bright)",
     "chromeBorder" to "Chrome: border",
     "chromeAccent" to "Chrome: accent",
+    "chromeAccentOn" to "Chrome: text on accent",
+    "chromeAccentText" to "Chrome: accent as text",
     "chromeTrack" to "Chrome: track",
     "synKeyword" to "Syntax: keyword",
     "synString" to "Syntax: string",

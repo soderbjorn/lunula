@@ -19,6 +19,8 @@ package se.soderbjorn.lunula.web.themeeditor
 
 import se.soderbjorn.lunula.core.Appearance
 import se.soderbjorn.lunula.core.Theme
+import se.soderbjorn.lunula.core.SelectionStyle
+import se.soderbjorn.lunula.core.UiDensity
 
 /**
  * Operations the [showThemeManager] modal needs from its host application.
@@ -133,6 +135,37 @@ interface ThemeManagerHost {
     /** Display (heading) font size in px, or `null` for the app default. */
     val displayFontSizePx: Int? get() = null
 
+    /**
+     * Corner radius in px for panes, tabs and sidebar pills, or `null` for the
+     * toolkit default (18).
+     *
+     * A user setting rather than a theme property on purpose: it should survive
+     * a theme change, the same way font size does. A user who prefers square
+     * corners should not have to give up a palette to keep them.
+     *
+     * @see se.soderbjorn.lunula.web.applyCornerRadiusPx
+     */
+    val cornerRadiusPx: Int? get() = null
+
+    /**
+     * Chrome spacing scale, or `null` for [UiDensity.Compact].
+     *
+     * @see se.soderbjorn.lunula.web.applyUiDensity
+     */
+    val uiDensity: UiDensity? get() = null
+
+    /**
+     * How selection is painted, or `null` for [SelectionStyle.Tint].
+     *
+     * A user setting rather than a theme property: every palette is legible in
+     * either language (Fill reads its foreground from the `…On` tokens all
+     * themes resolve), so binding it to the theme would cost a user their
+     * preferred selection style every time they tried a different palette.
+     *
+     * @see se.soderbjorn.lunula.web.applySelectionStyle
+     */
+    val selectionStyle: SelectionStyle? get() = null
+
     /** When `true`, the host renders an in-window titlebar drag region
      *  (Electron's `titleBarStyle: hiddenInset` pattern) instead of the
      *  OS-native chrome. Default `false`. */
@@ -173,6 +206,15 @@ interface ThemeManagerHost {
 
     /** Persist a new display-font-size preference. `null` clears it. */
     fun setDisplayFontSizePx(value: Int?) {}
+
+    /** Persist a new corner-radius preference. `null` clears it. */
+    fun setCornerRadiusPx(value: Int?) {}
+
+    /** Persist a new chrome-density preference. `null` clears it. */
+    fun setUiDensity(value: UiDensity?) {}
+
+    /** Persist a new selection-style preference. `null` clears it. */
+    fun setSelectionStyle(value: SelectionStyle?) {}
 
     /** Persist the custom-titlebar toggle. */
     fun setUseCustomTitleBar(value: Boolean) {}

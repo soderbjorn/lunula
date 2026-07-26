@@ -78,59 +78,89 @@ data class PaneAction(
  */
 object PaneActions {
 
+    // ── Glyph set ────────────────────────────────────────────────────
+    //
+    // Drawn from the Framna concept: 1.8 stroke on a 24 viewBox, round caps,
+    // rendered at 14×14. The previous set was 2.0-weight with mitred joins,
+    // which at 14px put visibly more ink in the header than the title beside
+    // it — the strip read as heavier than the thing it belonged to.
+    //
+    // Only the paths changed. The action set itself — which buttons exist,
+    // what they do, where the drag handle lives — is untouched.
+
     /** Diagonal arrows pointing outward — the "maximize within tab" affordance. */
     const val ICON_EXPAND: String =
         "<svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" " +
-            "stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">" +
-            "<path d=\"M14 4h6v6\"/><path d=\"M10 20H4v-6\"/>" +
-            "<line x1=\"20\" y1=\"4\" x2=\"14\" y2=\"10\"/>" +
-            "<line x1=\"4\" y1=\"20\" x2=\"10\" y2=\"14\"/></svg>"
+            "stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\">" +
+            "<path d=\"M14 5h5v5M10 19H5v-5\"/>" +
+            "<path d=\"M19 5l-6 6M5 19l6-6\"/></svg>"
 
     /** Diagonal arrows pointing inward — the "restore from expanded" affordance. */
     const val ICON_RESTORE: String =
         "<svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" " +
-            "stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">" +
-            "<path d=\"M4 14h6v6\"/><path d=\"M20 10h-6V4\"/>" +
-            "<line x1=\"10\" y1=\"14\" x2=\"4\" y2=\"20\"/>" +
-            "<line x1=\"14\" y1=\"10\" x2=\"20\" y2=\"4\"/></svg>"
+            "stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\">" +
+            "<path d=\"M19 10h-5V5M5 14h5v5\"/>" +
+            "<path d=\"M13 11l6-6M11 13l-6 6\"/></svg>"
 
     /** Plain × glyph for the close affordance. */
     const val ICON_CLOSE: String =
         "<svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" " +
-            "stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">" +
-            "<line x1=\"6\" y1=\"6\" x2=\"18\" y2=\"18\"/>" +
-            "<line x1=\"18\" y1=\"6\" x2=\"6\" y2=\"18\"/></svg>"
+            "stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\">" +
+            "<path d=\"M6 6l12 12M18 6L6 18\"/></svg>"
+
+    /**
+     * Three dots in a row — the canonical overflow ("kebab") glyph.
+     *
+     * Filled rather than stroked, because three 1.8-weight rings at 14px read
+     * as noise where three solid dots read as three dots.
+     *
+     * The toolkit renders no kebab of its own — the overflow button is the
+     * host's, since only the host knows what belongs in the menu (see
+     * [PaneMenuItem]). This constant exists so that the hosts which do build
+     * one stop each inventing a slightly different glyph for the same control.
+     */
+    const val ICON_MENU: String =
+        "<svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"currentColor\">" +
+            "<circle cx=\"5\" cy=\"12\" r=\"1.7\"/>" +
+            "<circle cx=\"12\" cy=\"12\" r=\"1.7\"/>" +
+            "<circle cx=\"19\" cy=\"12\" r=\"1.7\"/></svg>"
 
     /** Empty rectangle — "make this pane fill the container". */
     const val ICON_MAXIMIZE: String =
         "<svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" " +
-            "stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">" +
-            "<rect x=\"4\" y=\"4\" width=\"16\" height=\"16\" rx=\"1.5\"/></svg>"
+            "stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\">" +
+            "<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"2.5\"/></svg>"
 
     /** Two stacked rectangles — "restore from maximised". */
     const val ICON_UNMAXIMIZE: String =
         "<svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" " +
-            "stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">" +
-            "<rect x=\"7\" y=\"7\" width=\"13\" height=\"13\" rx=\"1.5\"/>" +
-            "<path d=\"M4 14V5a1 1 0 0 1 1-1h9\"/></svg>"
+            "stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\">" +
+            "<rect x=\"7\" y=\"8\" width=\"13.5\" height=\"11.5\" rx=\"2.5\"/>" +
+            "<path d=\"M3.5 15V7a2.5 2.5 0 0 1 2.5-2.5h9\"/></svg>"
 
-    /** Single horizontal line at the bottom — minimise / hide affordance. */
+    /**
+     * Short horizontal line — minimise / hide affordance.
+     *
+     * Deliberately short and inset (6→14 rather than edge to edge): at 14px a
+     * full-width rule is indistinguishable from a divider, and it sat beside a
+     * full-width maximize rectangle that it then appeared to underline.
+     */
     const val ICON_MINIMIZE: String =
         "<svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" " +
-            "stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">" +
-            "<line x1=\"5\" y1=\"19\" x2=\"19\" y2=\"19\"/></svg>"
+            "stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\">" +
+            "<line x1=\"6\" y1=\"17\" x2=\"14\" y2=\"17\"/></svg>"
 
     /** Up-arrow for "navigate one level up" in path/tree-style pane content. */
     const val ICON_UP: String =
         "<svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" " +
-            "stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">" +
+            "stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\">" +
             "<line x1=\"12\" y1=\"19\" x2=\"12\" y2=\"5\"/>" +
             "<polyline points=\"5 12 12 5 19 12\"/></svg>"
 
     /** House glyph for "go to root" navigation. */
     const val ICON_HOME: String =
         "<svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" " +
-            "stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">" +
+            "stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\">" +
             "<path d=\"M3 11l9-8 9 8\"/>" +
             "<path d=\"M5 10v10h14V10\"/></svg>"
 

@@ -1,14 +1,16 @@
 /* ResolvedTheme.kt
- * The flat, ready-to-render form of a [Theme]: the 32 semantic tokens as
- * ARGB [Long]s, plus a handful of structural aliases (cursor, selection,
- * titlebar …) that map directly onto existing tokens — by direct reference,
- * never by colour maths. Every renderer (web CSS vars, Android Compose, iOS
- * SwiftUI) consumes this single struct.
+ * The flat, ready-to-render form of a [Theme]: the semantic tokens as ARGB
+ * [Long]s, plus a handful of structural aliases (cursor, selection, titlebar …)
+ * that map directly onto existing tokens — by direct reference, never by colour
+ * maths. Every renderer (web CSS vars, Android Compose, iOS SwiftUI) consumes
+ * this single struct.
  *
- * The 9 chrome/canvas tokens are NOT nullable here even though they are
- * optional on [Theme]: [Theme.resolve] has already applied each one's
- * fallback, so a renderer reads a concrete colour and never repeats the
- * fallback logic.
+ * NOTHING here is nullable, even though many of the underlying [Theme] fields
+ * are: [Theme.resolve] has already applied every fallback, so a renderer reads
+ * a concrete colour and never repeats — or forgets — the fallback logic. That
+ * includes the role-split tokens (`…On` / `…Text`), which is what lets a
+ * consumer ask for "the type that goes on the accent" without knowing whether
+ * the theme declared one.
  */
 package se.soderbjorn.lunula.core
 
@@ -45,6 +47,22 @@ data class ResolvedTheme(
     val add: Long,
     val addBg: Long,
     val addText: Long,
+    /** Type on a solid [accent] field. Declared, or black/white by luminance. */
+    val accentOn: Long,
+    /** [accent] rendered AS type on an ordinary surface. Falls back to [accent]. */
+    val accentText: Long,
+    /** Type on a solid [warn] field. */
+    val warnOn: Long,
+    /** [warn] rendered AS type. Falls back to [warn]. */
+    val warnText: Long,
+    /** Type on a solid [danger] field. */
+    val dangerOn: Long,
+    /** [danger] rendered AS type. Falls back to [danger]. */
+    val dangerText: Long,
+    /** Type on a solid [add] field. */
+    val addOn: Long,
+    /** Diff-removed row tint — [danger] at the theme's tint alpha. */
+    val removeBgTint: Long,
     val synKeyword: Long,
     val synString: Long,
     val synNumber: Long,
@@ -69,6 +87,10 @@ data class ResolvedTheme(
     val chromeAccent: Long,
     /** Active-item tint in the chrome — [chromeAccent] at 16%. */
     val chromeAccentSoft: Long,
+    /** Type on a solid [chromeAccent] field. Declared, or black/white by luminance. */
+    val chromeAccentOn: Long,
+    /** [chromeAccent] rendered AS type. Falls back to [chromeAccent]. */
+    val chromeAccentText: Long,
     /** Sidebar usage-meter track. Falls back to [surfaceAlt]. */
     val chromeTrack: Long,
 ) {
@@ -84,10 +106,23 @@ data class ResolvedTheme(
     val titlebar: Long get() = chromeBg
     /** Window title text — uses the [chromeTextBright] token. */
     val titleText: Long get() = chromeTextBright
-    /** Diff-removed line foreground — uses the [danger] token. */
-    val removeText: Long get() = danger
-    /** Diff-removed line background — uses the [surfaceAlt] token. */
-    val removeBg: Long get() = surfaceAlt
+    /**
+     * Diff-removed line foreground — uses the [dangerText] token.
+     *
+     * Re-pointed from [danger] when the fill/text roles were split: this is a
+     * glyph colour, so it reads the text-role sibling. [dangerText] falls back
+     * to [danger], so a theme that hasn't declared the pair is unchanged.
+     */
+    val removeText: Long get() = dangerText
+    /**
+     * Diff-removed line background — uses the [removeBgTint] token.
+     *
+     * The mirror of [addBg]: [danger] at the theme's tint alpha, rather than
+     * the [surfaceAlt] well it used to borrow. A removed row is a *marked* row,
+     * and marking it with the sunken-surface tone said "recessed", not
+     * "deleted" — while the added row beside it carried a real colour.
+     */
+    val removeBg: Long get() = removeBgTint
 
     companion object {
         /** Fixed macOS traffic-light close dot (OS-semantic, theme-independent). */
