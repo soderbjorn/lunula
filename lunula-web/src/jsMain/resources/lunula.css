@@ -30,7 +30,20 @@ html, body {
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background: var(--t-bg, #1e1e1e);
+    /* This is the backdrop the whole shell is painted on, and everything that
+       covers it — topbar, sidebars, bottombar — is chrome. So it must be the
+       chrome tone, not the content tone: `.dt-app-frame-main` is rounded by
+       `--dt-frame-radius`, which cuts the canvas away at its four corners
+       precisely so the chrome can show through the arc (see that rule). Read
+       from `--t-bg` this painted the CONTENT background there instead, which
+       on a split theme is a different colour entirely — Lunamux Split's `bg`
+       is #ffffff against a #0a1a2e chrome — so every corner of the canvas
+       rect showed a white nub. Harmless-looking on a non-split theme only
+       because `bg` and `chromeBg` are the same colour there.
+       `--t-chrome-bg` is always emitted (ResolvedTheme has already applied the
+       optional token's fallback to `bg`), so the `var()` fallback here is for
+       hosts that write these vars themselves, not for unsplit themes. */
+    background: var(--t-chrome-bg, var(--t-bg, #1e1e1e));
     color: var(--t-text, #e6e6e6);
     /* Chrome font cascades to every shell element (topbar, tabs, sidebar,
        pane headers, bottom bar). Pane content opts back out via the rule on
