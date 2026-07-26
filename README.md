@@ -1,95 +1,41 @@
-# Lunula Toolkit
+# Lunula UI Toolkit
 
-A shared UI toolkit for the Lunula family of apps (Termtastic, Notegrow, …).
-Provides the visual identity used across the family: theme model, color
-schemes, drop-in DOM/Compose components, and a reusable theme/color-scheme
-editor for web/Electron.
+Lunula is a UI toolkit.
 
-The toolkit is **library-style**: it ships helpers and drop-in components, not
-a framework that takes over an app's architecture. Apps adopt as much or as
-little as they want.
+## Introduction
 
-## Modules
+Lunula is a UI toolkit that I built primarily for web-based applications. It supports flexible layouts with tabs and windows, themes and more. I use it for the following projects:
 
-- `lunula-core` — pure data: `ColorScheme`, `Theme`, `ResolvedPalette`,
-  `ThemeResolver`, color math, ~80 color schemes, ~30 designer themes,
-  `UiSettings` data class with kotlinx.serialization round-trip helpers.
-  Targets: android, jvm, ios (arm64+sim), js.
-- `lunula-store` — standalone filesystem helpers: `defaultSharedThemesPath()`,
-  `readUiSettings(path)`, `writeUiSettings(path, settings)`. JVM/Android/iOS
-  only — browser/Electron filesystem access is the host app's concern (e.g.
-  via Electron IPC to a Node fs call).
-- `lunula-web` — Kotlin/JS DOM components: theme CSS-var helpers, modal
-  dialogs, top bar, left/right sidebars, pane-tree windowing/layout
-  framework, the parameterized theme/color-scheme editor.
-- `lunula-compose` — Compose Multiplatform drop-in widgets: `Modal`,
-  `TopBar`, `Sidebar`, slide transitions, plus an *optional*
-  `LocalLunulaPalette` composition local. No `LunulaTheme { }` wrapper.
+## [Lunamux](https://www.lunamux.dev)
 
-## In-tree demo (`demo/`)
+A macOS terminal built for working alongside AI agents: tabs, windows and a
+built-in multiplexing session server. Sessions can be viewed as a flat 2D layout or
+lifted into a 3D world you fly through. Native Android and iOS apps connect to the same
+server, so you can remotely control your sessions from your phone.
 
-`demo/` holds a reference app — `:demo:client`, `:demo:web`,
-`:demo:electron-main`, `:demo:electron` — that consumes the toolkit through
-direct project deps. It's the boundary regression test: a new app should look
-and feel like the demo with no app-side CSS. The demo modules deliberately
-**do not** apply `maven-publish`, so they never appear in either consumer's
-`libs-repo/`. To run it:
+## [Lunicle](https://www.lunicle.dev)
 
-```sh
-./gradlew :demo:web:jsBrowserDevelopmentRun   # web
-./gradlew :demo:electron:run                  # Electron desktop
-```
+An issue tracker you host yourself. Boards, sprints and epics, plus an MCP server so agents can work on the same issues as everyone else. I use it to steer the development of my hobby projects.
 
-## Repository layout
+This is a fast-moving, agent-first software development project. If I put too much detail here, it would quickly become obsolete. If you want specifics about the features, source code and the architecture, ask your agent!
 
-This repo uses **git worktrees**. The default working directory is `main/`;
-additional branches are checked out as sibling directories at the same level
-(`extract-from-termtastic/`, etc.).
+## Tech stack
 
-## Consumers
+This is mostly written in Kotlin, which i use anywhere I can, because I really like the language, and Kotlin Multiplatform makes it easy to share code (when needed) across Mac, server, web, iOS and Android. I however do **not** use Compose Multiplatform because I want each platform to have a native UI.
 
-Apps consume the toolkit through a **committed file-Maven-repo**
-(`<app>/libs-repo/`) populated from this checkout. A consumer can be cloned
-and built with no `lunula` checkout on disk.
+In projects on multiple platforms, I try to have common view models across all clients that expose a single state object per screen/view, with thin
+wrappers where needed on each platform. I also re-use the Kotlin networking layer across all platforms.
 
-When a sibling `lunula` checkout *is* present, the consumer's
-`settings.gradle.kts` auto-detects it and switches to a Gradle composite
-build (`includeBuild`) so toolkit edits flow through with no extra steps.
+## Author
 
-### Refreshing the libs-repos
+[Robert Söderbjörn](https://www.soderbjorn.se) is the creator and maintainer of this project. If you would like to contribute, you are more than welcome! You can reach out at lunula@soderbjorn.se. 
 
-After changing toolkit code, publish to both consumer libs-repos with a
-single Gradle command (run from this checkout):
+## Development
 
-```sh
-./gradlew publishAllToLibsRepo
-```
-
-Default targets:
-- `../../termtastic/adopt-lunula/libs-repo`
-- `../../treefacts/adopt-lunula/libs-repo`
-
-Override either with `-PtermtasticLibsRepo=…` or `-PtreefactsLibsRepo=…`
-(absolute or relative to this `lunula` checkout). Then commit the
-updated `libs-repo/` tree in each consumer repo.
-
-### Forcing artifact resolution in a consumer
-
-Even when a sibling toolkit checkout is on disk, a consumer build can be
-forced to ignore it and resolve from `libs-repo/` by passing
-`-Plunula.toolkit.useArtifacts=true`. Useful for verifying that the
-published artifacts actually work end-to-end.
-
-### Repo layout
-
-```
-repo-root/
-  lunula/<worktree>/
-  termtastic/<worktree>/
-  notegrow/<worktree>/
-```
+We use the [Lunicle issue tracker](https://issues.lunicle.dev/?projectId=5) for managing development. You can see all issues without signing in. Contact me if you would like edit rights to the board so that you can create, move and comment on tickets and to add pull requests on GitHub. Before embarking on huge re-work (rather than bug fixes or small features), you might want to talk to me first. I'm very open to significant changes as well, I just want us to agree on the UX and make sure it's done in a way that fits the vision.
 
 ## License
 
-MIT — see `LICENSE`. Copyright © 2026 Robert Söderbjörn. Contributions must be
-compatible (no GPL/LGPL).
+Lunicle is released under the [MIT License](LICENSE).
+
+Third-party dependencies are used under their respective licenses.
