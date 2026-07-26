@@ -163,8 +163,9 @@ object LayoutClassNames {
 
     /**
      * Zero-height spacer mounted directly after [PANE_HEADER] inside every
-     * pane. Purely a hover target: its stylesheet `::before` reaches a short
-     * way down over the pane's content, and the toolkit treats hovering it
+     * pane. Purely a hover target: its stylesheet `::before` reaches
+     * `--dt-pane-proximity-reach` (26px by default) down over the pane's
+     * content, and the toolkit treats hovering it
      * as hovering the titlebar — which is what un-hides the (otherwise
      * hidden) `.dt-pane-actions` strip. Carries no gestures of its own, and
      * deliberately sits OUTSIDE the header so it inherits neither the
@@ -196,7 +197,15 @@ object LayoutClassNames {
     const val PANE_FLOATING = "dt-pane-floating"
 
     /** Resize handle CSS class — one per corner so styles can position each
-     *  handle independently and apply per-corner cursors. */
+     *  handle independently and apply per-corner cursors.
+     *
+     *  The two TOP grips carry a second job in the stylesheet: their hit
+     *  boxes overlay the ends of the titlebar (the trailing one lands on
+     *  the Close button), so hovering one also reveals the hidden
+     *  `.dt-pane-actions` strip. Without that the buttons stayed invisible
+     *  exactly where the user was aiming.
+     *
+     *  @see PaneHeaderClassNames.ACTIONS */
     const val CORNER_RESIZE = "dt-pane-corner-resize"
     const val CORNER_RESIZE_TL = "dt-pane-corner-resize-tl"
     const val CORNER_RESIZE_TR = "dt-pane-corner-resize-tr"

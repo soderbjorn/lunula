@@ -93,10 +93,11 @@ object PaneHeaderClassNames {
      * Trailing icon-button strip.
      *
      * Hidden at rest on pointer devices and revealed while the titlebar is
-     * hovered — including the short proximity band below it that
-     * [LayoutRenderer] mounts as
-     * [LayoutClassNames.PANE_HEADER_PROXIMITY] — while focus is inside the
-     * strip, or while a menu opened from one of its buttons is up. Touch
+     * hovered — including the proximity band below it that [LayoutRenderer]
+     * mounts as [LayoutClassNames.PANE_HEADER_PROXIMITY], and the two top
+     * [LayoutClassNames.CORNER_RESIZE] grips, whose hit boxes overlay the
+     * ends of the titlebar — while focus is inside the strip, or while a
+     * menu opened from one of its buttons is up. Touch
      * devices, which produce no hover, keep the buttons visible. The strip
      * keeps its box at `opacity: 0` when hidden, so revealing it never
      * reflows the title, and takes no clicks in that state.

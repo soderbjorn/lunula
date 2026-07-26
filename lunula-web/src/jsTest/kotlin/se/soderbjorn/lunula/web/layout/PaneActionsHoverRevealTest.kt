@@ -9,14 +9,18 @@
  * lost to a stray edit would leave the buttons permanently invisible (or
  * permanently visible) with every other test still green.
  *
- * `:hover` cannot be synthesised, so these assert the three things that can be
+ * `:hover` cannot be synthesised, so these assert the things that can be
  * checked without a real pointer: the resting state is genuinely hidden AND
- * inert, every reveal selector survived parsing, and the two reveal paths that
- * are driven from Kotlin rather than from the pointer — an open pane menu, and
- * the proximity element the renderer mounts — actually work end to end.
+ * inert, every reveal selector survived parsing, the two reveal paths that are
+ * driven from Kotlin rather than from the pointer — an open pane menu, and the
+ * proximity element the renderer mounts — work end to end, and the element that
+ * wins the hit-test over the hidden Close button is one the stylesheet reveals
+ * from. That last one is the closest reachable proxy for "hovering Close brings
+ * the buttons back", and it is where the corner-grip dead zone showed up.
  *
  * @see PaneHeaderClassNames.ACTIONS
  * @see LayoutClassNames.PANE_HEADER_PROXIMITY
+ * @see LayoutClassNames.CORNER_RESIZE
  */
 package se.soderbjorn.lunula.web.layout
 
@@ -109,6 +113,11 @@ class PaneActionsHoverRevealTest {
                         actions = listOf(PaneActions.close { }),
                     )
                 },
+                // Present so the renderer mounts the corner resize grips: they
+                // overlap the titlebar's ends and are part of what the reveal
+                // has to cope with, so a fixture without them would hide the
+                // very hit-testing this file is about.
+                onFloatingResized = { _, _, _ -> },
             ),
         )
         renderer.render(
@@ -165,6 +174,50 @@ class PaneActionsHoverRevealTest {
     }
 
     /**
+     * The reported bug: aiming straight at the Close button did not bring the
+     * buttons back. The strip takes no clicks while hidden, so the topmost
+     * element at the Close button's own centre is whatever else covers those
+     * pixels — in practice `.dt-pane-corner-resize-tr`, a child of `.dt-pane`
+     * rather than of the header, which is why `.dt-pane-header:hover` never
+     * matched there.
+     *
+     * `:hover` can't be synthesised, but the thing that decides which element
+     * hovers can be read directly: assert that whatever wins the hit-test over
+     * the hidden Close button is an element the stylesheet does reveal from.
+     * This stays honest if the overlap later moves or disappears — it asserts
+     * the property (that point is live), not today's stacking accident.
+     */
+    @Test
+    fun theHitTargetOverTheHiddenCloseButtonIsSomethingThatReveals() {
+        if (!hasHoverPointer()) return
+        val pane = renderOnePane()
+        val button = assertNotNull(
+            pane.querySelector(".${PaneHeaderClassNames.ACTION}") as? HTMLElement,
+            "header rendered no action button",
+        )
+        val box = button.getBoundingClientRect()
+        val hit = assertNotNull(
+            document.elementFromPoint(
+                (box.left + box.right) / 2,
+                (box.top + box.bottom) / 2,
+            ) as? HTMLElement,
+            "nothing hit-tested over the action button",
+        )
+        // The reveal paths, in the same order as the stylesheet: inside the
+        // titlebar (covers the strip itself once it is live), or one of the two
+        // top corner grips.
+        val revealsTheStrip = hit.closest(".${LayoutClassNames.PANE_HEADER}") != null ||
+            hit.closest(".${LayoutClassNames.CORNER_RESIZE_TL}") != null ||
+            hit.closest(".${LayoutClassNames.CORNER_RESIZE_TR}") != null
+        assertTrue(
+            revealsTheStrip,
+            "the point where Close paints hit-tests to `${hit.className}`, which no " +
+                "reveal selector covers — hovering the Close button leaves the " +
+                "action strip invisible",
+        )
+    }
+
+    /**
      * The renderer must mount the proximity hover target as a SIBLING of the
      * header, not a child of it: inside the header it would inherit the
      * drag-to-move gesture and the HTML5 pane-drag, so a press-and-drag on the
@@ -191,10 +244,15 @@ class PaneActionsHoverRevealTest {
         // Zero-height in flow, with the hover area supplied by ::before, so it
         // costs the pane no vertical space whatever the density tokens say.
         assertEquals(0.0, proximity.getBoundingClientRect().height)
-        assertEquals(
-            "18px",
-            window.getComputedStyle(proximity, "::before").height,
-            "the ::before hover band did not survive parsing",
+        // Asserted as a floor rather than an exact value: the reach is a tuning
+        // knob (`--dt-pane-proximity-reach`) and hosts may retune it. What must
+        // not regress is the band existing at all with a usable depth — a
+        // dropped rule reports as `auto`/`0px` here.
+        val reach = window.getComputedStyle(proximity, "::before").height
+        val reachPx = reach.removeSuffix("px").toDoubleOrNull() ?: 0.0
+        assertTrue(
+            reachPx >= 18.0,
+            "the ::before hover band did not survive parsing (height was `$reach`)",
         )
     }
 
@@ -253,6 +311,11 @@ class PaneActionsHoverRevealTest {
             ".dt-pane-header:focus-within .dt-pane-actions",
             // the proximity band, which is a sibling of the header
             ".dt-pane-header-proximity:hover",
+            // the top corner resize grips, which overlay the ends of the
+            // titlebar — the trailing one sits on the Close button, so
+            // without these two clauses aiming at Close reveals nothing
+            ".dt-pane-corner-resize-tl:hover",
+            ".dt-pane-corner-resize-tr:hover",
             // a menu still open over the pane
             ".dt-pane-action.dt-open",
         )

@@ -2206,15 +2206,34 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     }
     /* Revealed by, in order: the titlebar itself (which includes its
        proximity band — that band is a sibling of the header, hence the
-       `:has()` hop); keyboard focus landing inside the strip, so the
-       buttons are reachable without a mouse; and a menu opened from one of
-       the buttons still being up. That last one matters because the popover
-       mounts on `<body>`: the header stops being hovered the instant the
-       cursor travels into the menu, and without this the strip would fade
-       out underneath an open menu. */
+       `:has()` hop); either TOP corner resize grip, whose hit box overlays
+       the ends of the titlebar and would otherwise be a dead zone (see
+       below); keyboard focus landing inside the strip, so the buttons are
+       reachable without a mouse; and a menu opened from one of the buttons
+       still being up. That last one matters because the popover mounts on
+       `<body>`: the header stops being hovered the instant the cursor
+       travels into the menu, and without this the strip would fade out
+       underneath an open menu.
+
+       The corner-grip clauses are not a nicety. `.dt-pane-corner-resize-tr`
+       is 14×14 at the pane's top-right PLUS an 18px `::before` proximity
+       zone reaching left and down — a ~32×34 patch sitting squarely over
+       the Close button — and it is a child of `.dt-pane`, not of the
+       header. While the strip is hidden it takes no clicks, so the grip
+       wins the hit-test there and `.dt-pane-header:hover` never matches:
+       aiming straight at Close left the buttons stubbornly invisible. The
+       top-left grip does the same over the pane icon. Only the top pair is
+       listed — hovering a bottom corner says nothing about the titlebar.
+
+       No hover flip-flop: revealing hands the strip `pointer-events: auto`
+       and it outranks the grip (z-index 5 vs 4), so the cursor moves off
+       the grip and onto the strip — which is INSIDE the header, so the
+       first clause takes over and holds it revealed. */
     .dt-pane-header:hover .dt-pane-actions,
     .dt-pane-header:focus-within .dt-pane-actions,
     .dt-pane:has(> .dt-pane-header-proximity:hover) > .dt-pane-header .dt-pane-actions,
+    .dt-pane:has(> .dt-pane-corner-resize-tl:hover) > .dt-pane-header .dt-pane-actions,
+    .dt-pane:has(> .dt-pane-corner-resize-tr:hover) > .dt-pane-header .dt-pane-actions,
     .dt-pane-actions:has(> .dt-pane-action.dt-open) {
         opacity: 1;
         pointer-events: auto;
@@ -2232,12 +2251,17 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    content, so a press-and-drag on the first terminal row would start moving
    the pane. As a sibling it inherits neither.
 
-   It does overlay the content it covers, which is why it is thin: 18px is
-   enough to catch a cursor on its way up to the titlebar without swallowing
-   a meaningful strip of the first row. `z-index: 3` puts it under the
-   corner resize grips (4) and the action strip (5) — both of which must
-   keep winning hit-tests — while still landing above the un-positioned
-   pane content below it. */
+   It does overlay the content it covers, and that is the whole cost of
+   making it deeper: the band eats presses meant for the pane's first row
+   (a click on a link, the start of a terminal selection). `--dt-pane-
+   proximity-reach` is where that trade is priced — 26px, roughly a
+   titlebar's own height of lead-in, which catches a cursor well before it
+   arrives without swallowing a meaningful strip of content. A host that
+   wants more (or none) can retune the var on `:root`.
+
+   `z-index: 3` puts it under the corner resize grips (4) and the action
+   strip (5) — both of which must keep winning hit-tests — while still
+   landing above the un-positioned pane content below it. */
 .dt-pane-header-proximity {
     flex: 0 0 auto;
     height: 0;
@@ -2250,7 +2274,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     top: 0;
     left: 0;
     right: 0;
-    height: 18px;
+    height: var(--dt-pane-proximity-reach, 26px);
 }
 /* Trailing context label (PaneHeaderSpec.trailingLabel) — the owning tab
    name, a branch, a host. Dimmed and normal-weight so it reads as context
