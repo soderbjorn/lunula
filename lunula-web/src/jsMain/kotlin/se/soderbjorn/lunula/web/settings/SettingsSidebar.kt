@@ -713,7 +713,7 @@ private fun buildDensitySection(
     currentValue: () -> UiDensity,
     onPick: (UiDensity) -> Unit,
 ): HTMLElement {
-    val section = makeSection("Spacing", "How much air the chrome puts around panes, tabs and rows.")
+    val section = makeSection("Spacing", "How much air the chrome puts around windows, tabs and rows.")
     val row = section.row
     val current = currentValue()
     for (density in UiDensity.entries) {
