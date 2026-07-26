@@ -161,6 +161,19 @@ object LayoutClassNames {
     /** @see PaneHeaderClassNames.HEADER — kept here for backward source compatibility. */
     const val PANE_HEADER = "dt-pane-header"
 
+    /**
+     * Zero-height spacer mounted directly after [PANE_HEADER] inside every
+     * pane. Purely a hover target: its stylesheet `::before` reaches a short
+     * way down over the pane's content, and the toolkit treats hovering it
+     * as hovering the titlebar — which is what un-hides the (otherwise
+     * hidden) `.dt-pane-actions` strip. Carries no gestures of its own, and
+     * deliberately sits OUTSIDE the header so it inherits neither the
+     * drag-to-move nor the HTML5 pane-drag the header carries.
+     *
+     * @see PaneHeaderClassNames.ACTIONS
+     */
+    const val PANE_HEADER_PROXIMITY = "dt-pane-header-proximity"
+
     /** @see PaneHeaderClassNames.TITLE */
     const val PANE_TITLE = "dt-pane-title"
     const val PANE_CONTENT = "dt-pane-content"
@@ -1223,6 +1236,16 @@ class LayoutRenderer(
 
         val header = buildPaneHeaderForFloating(pane, spec)
         pane.appendChild(header)
+
+        // Hover target extending the titlebar's reach a little way into the
+        // pane, so the hidden action strip comes back before the cursor has
+        // actually landed in the title strip. Takes no layout space (height:
+        // 0) and must stay a sibling of the header — see the class doc and
+        // the `.dt-pane-header-proximity` rules in lunula.css.
+        val proximity = document.createElement("div") as HTMLElement
+        proximity.className = LayoutClassNames.PANE_HEADER_PROXIMITY
+        proximity.setAttribute("aria-hidden", "true")
+        pane.appendChild(proximity)
 
         val content = document.createElement("div") as HTMLElement
         content.className = LayoutClassNames.PANE_CONTENT

@@ -1,0 +1,269 @@
+/*
+ * PaneActionsHoverRevealTest.kt (jsTest)
+ *
+ * Browser tests for the pane titlebar's hidden-until-hover action strip.
+ *
+ * The behaviour is expressed in CSS — `.dt-pane-actions` sits at `opacity: 0`
+ * until something hovers or focuses the titlebar — which is exactly why it
+ * needs a test here: nothing in the Kotlin build reads `lunula.css`, so a rule
+ * lost to a stray edit would leave the buttons permanently invisible (or
+ * permanently visible) with every other test still green.
+ *
+ * `:hover` cannot be synthesised, so these assert the three things that can be
+ * checked without a real pointer: the resting state is genuinely hidden AND
+ * inert, every reveal selector survived parsing, and the two reveal paths that
+ * are driven from Kotlin rather than from the pointer — an open pane menu, and
+ * the proximity element the renderer mounts — actually work end to end.
+ *
+ * @see PaneHeaderClassNames.ACTIONS
+ * @see LayoutClassNames.PANE_HEADER_PROXIMITY
+ */
+package se.soderbjorn.lunula.web.layout
+
+import kotlinx.browser.document
+import kotlinx.browser.window
+import org.w3c.dom.HTMLElement
+import org.w3c.dom.css.CSSStyleSheet
+import se.soderbjorn.lunula.web.injectLunulaStyles
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
+
+/**
+ * Whether this browser reports a hovering pointer. The hide is deliberately
+ * scoped to `@media (hover: hover) and (pointer: fine)` — a touch device that
+ * cannot hover keeps the buttons visible — so the resting-state assertions
+ * only mean anything when the test browser matches.
+ */
+private fun hasHoverPointer(): Boolean =
+    window.matchMedia("(hover: hover) and (pointer: fine)").matches
+
+/**
+ * Every selector the parser accepted, `@media`-nested ones included — the
+ * hide/reveal rules live inside `@media (hover: hover)`, so a flat walk of the
+ * sheet's top level would report every one of them as missing.
+ *
+ * Reads `selectorText` rather than slicing `cssText`: in a browser with CSS
+ * nesting, every style rule also carries a (usually empty) `cssRules`, so
+ * "has children" is no longer a way to tell a group rule from a style rule.
+ */
+private fun parsedSelectors(): List<String> {
+    injectLunulaStyles()
+    val out = mutableListOf<String>()
+    fun collect(rules: dynamic) {
+        val len = (rules.length as? Number)?.toInt() ?: return
+        for (i in 0 until len) {
+            val rule = rules.item(i) ?: continue
+            val selector = rule.selectorText
+            if (selector != null && selector != undefined) out += selector as String
+            val nested = rule.cssRules
+            if (nested != null && nested != undefined) collect(nested)
+        }
+    }
+    val sheets = document.styleSheets
+    for (i in 0 until sheets.length) {
+        val sheet = sheets.item(i) as? CSSStyleSheet ?: continue
+        collect(runCatching { sheet.cssRules }.getOrNull() ?: continue)
+    }
+    return out
+}
+
+class PaneActionsHoverRevealTest {
+
+    private lateinit var container: HTMLElement
+
+    @BeforeTest
+    fun mount() {
+        injectLunulaStyles()
+        container = (document.createElement("div") as HTMLElement).also {
+            // Real size: the renderer reads the container's box when placing
+            // floating panes, and a zero-sized host would collapse the pane.
+            it.style.width = "800px"
+            it.style.height = "600px"
+            it.style.position = "relative"
+            document.body!!.appendChild(it)
+        }
+    }
+
+    @AfterTest
+    fun unmount() {
+        container.parentElement?.removeChild(container)
+    }
+
+    /**
+     * Renders a single floating pane carrying one action, and returns its
+     * `.dt-pane` element.
+     */
+    private fun renderOnePane(): HTMLElement {
+        val renderer = LayoutRenderer(
+            container = container,
+            callbacks = PaneCallbacks(
+                contentRenderer = { _, slot -> slot.textContent = "content" },
+                paneHeader = { id, title ->
+                    PaneHeaderSpec(
+                        title = title ?: id,
+                        actions = listOf(PaneActions.close { }),
+                    )
+                },
+            ),
+        )
+        renderer.render(
+            layout = PaneLayout(
+                floatingPanes = listOf(
+                    FloatingPaneSpec(id = "p1", title = "Pane 1", xPct = 0.1, yPct = 0.1),
+                ),
+            ),
+            suppressSeparators = true,
+        )
+        return assertNotNull(
+            container.querySelector(".${LayoutClassNames.PANE}") as? HTMLElement,
+            "renderer produced no .dt-pane",
+        )
+    }
+
+    /**
+     * The whole point: with nothing hovered and nothing focused, the strip is
+     * invisible *and* takes no clicks.
+     *
+     * The second half is the one worth guarding. An `opacity: 0` button still
+     * hit-tests by default, so dropping `pointer-events: none` would leave an
+     * invisible Close button sitting in the titlebar — and a user who clicks
+     * the titlebar to focus a pane would sometimes close it instead.
+     */
+    @Test
+    fun theActionStripIsHiddenAndInertAtRest() {
+        if (!hasHoverPointer()) return
+        val pane = renderOnePane()
+        val actions = assertNotNull(
+            pane.querySelector(".${PaneHeaderClassNames.ACTIONS}") as? HTMLElement,
+            "header rendered no actions strip",
+        )
+        val style = window.getComputedStyle(actions)
+        assertEquals("0", style.opacity, "action strip should rest at opacity 0")
+        assertEquals("none", style.getPropertyValue("pointer-events").trim())
+    }
+
+    /**
+     * Hiding must be paint-only: the strip keeps its box so revealing it never
+     * reflows the title beside it. A `display: none` regression would show up
+     * here as a zero-width strip.
+     */
+    @Test
+    fun theHiddenStripStillOccupiesItsBox() {
+        val pane = renderOnePane()
+        val actions = assertNotNull(
+            pane.querySelector(".${PaneHeaderClassNames.ACTIONS}") as? HTMLElement,
+        )
+        assertTrue(
+            actions.getBoundingClientRect().width > 0,
+            "hidden strip collapsed its box — revealing it would shift the title",
+        )
+    }
+
+    /**
+     * The renderer must mount the proximity hover target as a SIBLING of the
+     * header, not a child of it: inside the header it would inherit the
+     * drag-to-move gesture and the HTML5 pane-drag, so a press-and-drag on the
+     * pane's first content row would start moving the pane.
+     */
+    @Test
+    fun theProximityBandIsMountedAfterTheHeaderNotInsideIt() {
+        val pane = renderOnePane()
+        val header = assertNotNull(
+            pane.querySelector(".${LayoutClassNames.PANE_HEADER}") as? HTMLElement,
+        )
+        val proximity = assertNotNull(
+            pane.querySelector(".${LayoutClassNames.PANE_HEADER_PROXIMITY}") as? HTMLElement,
+            "no proximity band mounted — the titlebar's hover reach is titlebar-only",
+        )
+        assertTrue(
+            header.nextElementSibling === proximity,
+            "proximity band must directly follow the header",
+        )
+        assertFalse(
+            header.contains(proximity),
+            "proximity band must not live inside the header (it would inherit its drags)",
+        )
+        // Zero-height in flow, with the hover area supplied by ::before, so it
+        // costs the pane no vertical space whatever the density tokens say.
+        assertEquals(0.0, proximity.getBoundingClientRect().height)
+        assertEquals(
+            "18px",
+            window.getComputedStyle(proximity, "::before").height,
+            "the ::before hover band did not survive parsing",
+        )
+    }
+
+    /**
+     * A menu opened from an action button mounts on `<body>`, so the header
+     * stops being hovered the moment the cursor travels into it. [openPaneMenu]
+     * marks the anchor to hold the strip open; without that the buttons fade
+     * out from under a menu the user is still using.
+     */
+    @Test
+    fun anOpenMenuHoldsTheStripRevealed() {
+        val pane = renderOnePane()
+        val actions = assertNotNull(
+            pane.querySelector(".${PaneHeaderClassNames.ACTIONS}") as? HTMLElement,
+        )
+        val button = assertNotNull(
+            actions.querySelector(".${PaneHeaderClassNames.ACTION}") as? HTMLElement,
+        )
+        // Opacity is transitioned, and `getComputedStyle` reports the value
+        // mid-flight — so read the settled state by taking the transition out.
+        actions.style.transition = "none"
+        val close = openPaneMenu(button, PaneMenuSpec(items = listOf(PaneMenuItem(label = "Item"))))
+        try {
+            assertTrue(
+                button.classList.contains(PaneHeaderClassNames.ACTION_MENU_OPEN),
+                "openPaneMenu did not mark its anchor",
+            )
+            if (hasHoverPointer()) {
+                assertEquals("1", window.getComputedStyle(actions).opacity)
+            }
+        } finally {
+            close()
+        }
+        assertFalse(
+            button.classList.contains(PaneHeaderClassNames.ACTION_MENU_OPEN),
+            "closing the menu left the anchor marked, pinning the strip visible",
+        )
+        if (hasHoverPointer()) {
+            assertEquals("0", window.getComputedStyle(actions).opacity)
+        }
+    }
+
+    /**
+     * The reveal selectors are the half of the behaviour no computed style can
+     * reach (they all need a pointer). Assert instead that each one survived
+     * parsing — the failure this guards against is a rule silently dropped by
+     * an edit above it, which would strand the buttons invisible forever.
+     */
+    @Test
+    fun everyRevealSelectorSurvivesParsing() {
+        val selectors = parsedSelectors()
+        val required = listOf(
+            // hover on the titlebar itself
+            ".dt-pane-header:hover .dt-pane-actions",
+            // keyboard users, who never hover at all
+            ".dt-pane-header:focus-within .dt-pane-actions",
+            // the proximity band, which is a sibling of the header
+            ".dt-pane-header-proximity:hover",
+            // a menu still open over the pane
+            ".dt-pane-action.dt-open",
+        )
+        for (needle in required) {
+            assertTrue(
+                selectors.any { it.contains(needle) },
+                "no rule containing `$needle` survived parsing — the action " +
+                    "strip has a reveal path it can no longer take. Survivors " +
+                    "mentioning dt-pane-actions: " +
+                    selectors.filter { it.contains("dt-pane-actions") },
+            )
+        }
+    }
+}

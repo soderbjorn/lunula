@@ -258,11 +258,16 @@ private const val SUBMENU_CLOSE_GRACE_MS = 350
  *    right and gets [PaneMenuClassNames.FLIPPED_LEFT] (so a host
  *    stylesheet can mirror any pointer/triangle decoration).
  *
+ * For as long as the popover is up, [anchor] carries
+ * [PaneHeaderClassNames.ACTION_MENU_OPEN]; the class comes off again when
+ * the menu closes by any route.
+ *
  * @param anchor the element the popover should appear next to (typically
  *   the kebab button in a [PaneHeaderSpec.actions] strip).
  * @param spec   the declarative menu description.
  * @return a function that closes the popover when called. Calling it more
  *   than once is a no-op.
+ * @see PaneHeaderClassNames.ACTION_MENU_OPEN
  */
 fun openPaneMenu(anchor: HTMLElement, spec: PaneMenuSpec): () -> Unit {
     if (spec.items.isEmpty()) return { /* nothing to do */ }
@@ -296,6 +301,10 @@ fun openPaneMenu(anchor: HTMLElement, spec: PaneMenuSpec): () -> Unit {
     close = {
         if (!closed) {
             closed = true
+            // Release the anchor's pressed/revealed state. Safe even if the
+            // host re-rendered the header out from under us — the class then
+            // comes off a detached element and the fresh button never had it.
+            anchor.classList.remove(PaneHeaderClassNames.ACTION_MENU_OPEN)
             // Tear down the flyout state first so a pending grace timer
             // can't fire against elements we're about to remove.
             submenuHost?.closeCurrent()
@@ -310,6 +319,11 @@ fun openPaneMenu(anchor: HTMLElement, spec: PaneMenuSpec): () -> Unit {
     val host = SubmenuHost(menu, close)
     submenuHost = host
     for (item in spec.items) menu.appendChild(buildMenuRow(item, close, host))
+
+    // Mark the anchor as the open menu's source: it paints pressed, and — for
+    // an anchor inside a pane header — it holds the hidden-until-hover action
+    // strip revealed while the cursor is away in the popover.
+    anchor.classList.add(PaneHeaderClassNames.ACTION_MENU_OPEN)
 
     document.body?.appendChild(menu)
     positionMenu(menu, anchor)

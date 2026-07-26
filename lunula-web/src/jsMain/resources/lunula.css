@@ -2179,6 +2179,79 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     position: relative;
     z-index: 5;
 }
+/* ── Hidden until the pointer comes near ─────────────────────────────
+   The strip is chrome, not content: at rest it stays out of the way and a
+   titlebar reads as just its icon, its title, and (when set) its pane
+   index. Moving the cursor into the titlebar — or into the thin proximity
+   band immediately below it, see `.dt-pane-header-proximity` — fades the
+   buttons back in.
+
+   Only paint changes. The strip keeps its box at `opacity: 0` so revealing
+   it never reflows the title beside it; that is the same reasoning as
+   `.dt-tab-menu-button`, which hides the tab kebab the same way.
+
+   `pointer-events: none` while hidden is not tidiness. An invisible Close
+   button that still accepted clicks would close panes for a user who only
+   meant to click the titlebar to focus the pane — the reveal is driven by
+   the same `:hover` that any click on a button must pass through, so the
+   strip is always interactive by the time it can be aimed at.
+
+   Gated on a hovering pointer: a touch device never produces the hover that
+   would bring the strip back, so there the buttons stay visible. */
+@media (hover: hover) and (pointer: fine) {
+    .dt-pane-actions {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 120ms ease-in-out;
+    }
+    /* Revealed by, in order: the titlebar itself (which includes its
+       proximity band — that band is a sibling of the header, hence the
+       `:has()` hop); keyboard focus landing inside the strip, so the
+       buttons are reachable without a mouse; and a menu opened from one of
+       the buttons still being up. That last one matters because the popover
+       mounts on `<body>`: the header stops being hovered the instant the
+       cursor travels into the menu, and without this the strip would fade
+       out underneath an open menu. */
+    .dt-pane-header:hover .dt-pane-actions,
+    .dt-pane-header:focus-within .dt-pane-actions,
+    .dt-pane:has(> .dt-pane-header-proximity:hover) > .dt-pane-header .dt-pane-actions,
+    .dt-pane-actions:has(> .dt-pane-action.dt-open) {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+/* Invisible band just below the titlebar that counts as hovering it.
+   [LayoutRenderer] mounts it as a zero-height flow sibling directly after
+   `.dt-pane-header`, so its absolutely-positioned `::before` lands exactly
+   under the header whatever height the density tokens give it — no
+   measurement, no layout cost, nothing to keep in sync.
+
+   Sibling rather than child for one reason: the header is the pane's
+   drag-to-move handle and, for cross-tab pane drags, an HTML5 drag source.
+   A band inside it would extend both gestures over the top of the pane's
+   content, so a press-and-drag on the first terminal row would start moving
+   the pane. As a sibling it inherits neither.
+
+   It does overlay the content it covers, which is why it is thin: 18px is
+   enough to catch a cursor on its way up to the titlebar without swallowing
+   a meaningful strip of the first row. `z-index: 3` puts it under the
+   corner resize grips (4) and the action strip (5) — both of which must
+   keep winning hit-tests — while still landing above the un-positioned
+   pane content below it. */
+.dt-pane-header-proximity {
+    flex: 0 0 auto;
+    height: 0;
+    position: relative;
+    z-index: 3;
+}
+.dt-pane-header-proximity::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 18px;
+}
 /* Trailing context label (PaneHeaderSpec.trailingLabel) — the owning tab
    name, a branch, a host. Dimmed and normal-weight so it reads as context
    rather than a second title, and capped at 38% of the row so a long tab
@@ -2242,7 +2315,11 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     background: var(--t-border, rgba(255, 255, 255, 0.12));
     color: var(--t-text-bright, var(--t-text, #e6e6e6));
 }
-.dt-pane-action.dt-active {
+/* `.dt-open` is the same pressed paint, applied by [openPaneMenu] to the
+   button a pane menu was opened from (matching `.dt-tab-menu.dt-open`) so
+   the source of an open popover stays obviously pressed while it is up. */
+.dt-pane-action.dt-active,
+.dt-pane-action.dt-open {
     /* The icon stays in the chrome-titleText colour so it remains legible
        against the chrome titlebar even when the main scheme's
        `--t-accent` (which Pass 2 doesn't recolour for chrome) is

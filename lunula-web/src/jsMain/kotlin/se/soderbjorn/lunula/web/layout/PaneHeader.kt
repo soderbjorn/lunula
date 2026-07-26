@@ -89,9 +89,32 @@ object PaneHeaderClassNames {
      * [PaneHeaderSpec.trailingLabel].
      */
     const val TRAILING_LABEL = "dt-pane-trailing-label"
+    /**
+     * Trailing icon-button strip.
+     *
+     * Hidden at rest on pointer devices and revealed while the titlebar is
+     * hovered — including the short proximity band below it that
+     * [LayoutRenderer] mounts as
+     * [LayoutClassNames.PANE_HEADER_PROXIMITY] — while focus is inside the
+     * strip, or while a menu opened from one of its buttons is up. Touch
+     * devices, which produce no hover, keep the buttons visible. The strip
+     * keeps its box at `opacity: 0` when hidden, so revealing it never
+     * reflows the title, and takes no clicks in that state.
+     */
     const val ACTIONS = "dt-pane-actions"
     const val ACTION = "dt-pane-action"
     const val ACTION_ACTIVE = "dt-active"
+    /**
+     * Applied by [openPaneMenu] to the action button a pane menu was opened
+     * from, and removed when that menu closes. Mirrors `.dt-tab-menu.dt-open`
+     * in the tab strip.
+     *
+     * Two things depend on it: the button paints pressed for as long as its
+     * popover is up, and — because the popover mounts on `<body>`, so moving
+     * the cursor into it un-hovers the header — the whole [ACTIONS] strip
+     * stays revealed instead of fading out from under an open menu.
+     */
+    const val ACTION_MENU_OPEN = "dt-open"
     const val PANE_DRAGGING = "dt-pane-dragging"
     const val PANE_DROP_TARGET = "dt-pane-drop-target"
     /**
