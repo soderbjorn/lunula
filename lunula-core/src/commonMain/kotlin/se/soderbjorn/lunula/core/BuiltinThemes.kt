@@ -10,15 +10,21 @@
  * design's alpha to the accent/add/chromeAccent colour, so nothing else is
  * computed.
  *
- * The thirteen "… Split" themes additionally set the 8 optional chrome/canvas
- * tokens, painting the title bar / tab bar / sidebar and the pane canvas
- * independently of the pane content. Every other theme leaves them unset and
- * so falls back to the base tokens exactly as before.
+ * Thirteen themes additionally set the 8 optional chrome/canvas tokens,
+ * painting the title bar / tab bar / sidebar and the pane canvas independently
+ * of the pane content. Every other theme leaves them unset and so falls back to
+ * the base tokens exactly as before.
  *
  * Nine of them (tagged "Chrome") split by *value* — white or near-white
  * content in a near-black shell. The four tagged "Bright" split by *hue*
  * instead: the shell stays as white as the content, and the two zones are told
  * apart only by `accent` against `chromeAccent`.
+ *
+ * Which of those a theme is is NOT readable off its name. A "… Dark" / "…
+ * Light" / "… Split" suffix means only that a sibling would otherwise share the
+ * name — "Gruvbox Dark" needs the word because "Gruvbox Light" exists — so a
+ * theme with no sibling carries no suffix however it is built. What a theme
+ * actually does is measured from its palette; see [paletteCategoryOf].
  */
 package se.soderbjorn.lunula.core
 
@@ -307,7 +313,7 @@ val builtinThemes: List<Theme> = listOf(
         chromeBg = "#140a06", chromeText = "#e8b48f", chromeTextDim = "#8a5a3e",
         chromeTextBright = "#ffd9b8", chromeBorder = "#452414",
         chromeAccent = "#ff7a2e", chromeTrack = "#26140a"),
-    theme("Nord Split", "Chrome", "Frost-white workspace under a deep Polar-Night chrome shell. Calm and arctic.",
+    theme("Nord", "Chrome", "Frost-white workspace under a deep Polar-Night chrome shell. Calm and arctic.",
         "#ffffff", "#ffffff", "#eceff4", "#d8dee9", "#3b4252", "#7b8494", "#2e3440",
         "#5e81ac", "#b0782e", "#bf616a", "#5a8a5e", "#3f6b43",
         "#5e81ac", "#4c8a86", "#b0782e", "#9aa4b2", "#8a6daf", "#4c8a86", "#3b4252", "#b0782e",
@@ -327,7 +333,7 @@ val builtinThemes: List<Theme> = listOf(
         chromeBg = "#002b36", chromeText = "#93a1a1", chromeTextDim = "#6b8589",
         chromeTextBright = "#eee8d5", chromeBorder = "#073642",
         chromeAccent = "#2aa198", chromeTrack = "#073642"),
-    theme("Sandstone Split", "Chrome", "Warm cream and tan workspace under a dark espresso chrome, lit by amber.",
+    theme("Sandstone", "Chrome", "Warm cream and tan workspace under a dark espresso chrome, lit by amber.",
         "#f7f1e6", "#fcf7ee", "#ede3d0", "#dbccb2", "#4e4230", "#8f7f64", "#2e2414",
         "#c07c2e", "#c48a2e", "#bf4a3a", "#7a8a3a", "#5a6820",
         "#b06a2e", "#7a8a3a", "#a06a2e", "#a8967a", "#c07c2e", "#3a8a7a", "#4e4230", "#a06a2e",
@@ -335,8 +341,8 @@ val builtinThemes: List<Theme> = listOf(
         chromeBg = "#241a12", chromeText = "#cbb79c", chromeTextDim = "#8a745c",
         chromeTextBright = "#f5e9d8", chromeBorder = "#45341f",
         chromeAccent = "#e0a24b", chromeTrack = "#33261a"),
-    // The four light-chrome splits, tagged "Bright". Every "… Split" above
-    // wraps white content in a near-black shell; these leave the shell white
+    // The four light-chrome splits, tagged "Bright". Every chrome-zone theme
+    // above wraps white content in a near-black shell; these leave the shell white
     // too and let the two accents carry the whole theme — the pane title bar
     // takes `accent`, the sidebar and tab rail take `chromeAccent`, and the
     // only other non-white token is `canvas`, the gutter the panes float on.
@@ -347,7 +353,7 @@ val builtinThemes: List<Theme> = listOf(
     // [SelectionStyle.Fill] — it is the style that paints those two bars solid.
     // Under Edge they still work, but the accents thin to a line and the
     // two-colour idea largely goes with them.
-    theme("Harbour Split", "Bright", "Sea-blue windows over a coral rail, on white. Nothing else is coloured.",
+    theme("Harbour", "Bright", "Sea-blue windows over a coral rail, on white. Nothing else is coloured.",
         "#ffffff", "#ffffff", "#eef3f7", "#dde6ee", "#0e1418", "#68706f", "#000000",
         "#35b0e8", "#f0a63c", "#e5544d", "#3ac2a0", "#0a6b5c",
         "#0b6389", "#0e1418", "#96580b", "#68706f", "#0b6389", "#0e1418", "#0e1418", "#96580b",
@@ -361,7 +367,7 @@ val builtinThemes: List<Theme> = listOf(
         addOn = "#000000",
         chromeAccentOn = "#000000", chromeAccentText = "#a9401c",
         tintAlpha = 0.1),
-    theme("Orchid Split", "Bright", "Lilac windows over a mint rail, on white. Cool, soft and quiet.",
+    theme("Orchid", "Bright", "Lilac windows over a mint rail, on white. Cool, soft and quiet.",
         "#ffffff", "#ffffff", "#f2eff7", "#e4dfee", "#141018", "#6d6873", "#000000",
         "#b98cf5", "#f0a63c", "#e5544d", "#3ac2a0", "#0a6b5c",
         "#6b34b8", "#141018", "#96580b", "#6d6873", "#6b34b8", "#141018", "#141018", "#96580b",
@@ -375,7 +381,7 @@ val builtinThemes: List<Theme> = listOf(
         addOn = "#000000",
         chromeAccentOn = "#000000", chromeAccentText = "#0a6b5c",
         tintAlpha = 0.1),
-    theme("Marmalade Split", "Bright", "Amber windows over a powder-blue rail, on warm white. The warm/cool pair.",
+    theme("Marmalade", "Bright", "Amber windows over a powder-blue rail, on warm white. The warm/cool pair.",
         "#ffffff", "#ffffff", "#f5f1ec", "#e8e0d6", "#181310", "#726b64", "#000000",
         "#f5a03c", "#f0c33c", "#e5544d", "#5ac26a", "#0f6b2e",
         "#96580b", "#181310", "#7a4a0b", "#726b64", "#96580b", "#181310", "#181310", "#7a4a0b",
@@ -389,7 +395,7 @@ val builtinThemes: List<Theme> = listOf(
         addOn = "#000000",
         chromeAccentOn = "#000000", chromeAccentText = "#2a5a96",
         tintAlpha = 0.1),
-    theme("Cerise Split", "Bright", "Rose windows over a gold rail, on white. The loudest of the four.",
+    theme("Cerise", "Bright", "Rose windows over a gold rail, on white. The loudest of the four.",
         "#ffffff", "#ffffff", "#f7eff2", "#eddfe4", "#180f13", "#736569", "#000000",
         "#ff7aa8", "#f0a63c", "#e5544d", "#3ac2a0", "#0a6b5c",
         "#b0245c", "#180f13", "#96580b", "#736569", "#b0245c", "#180f13", "#180f13", "#96580b",
@@ -550,6 +556,12 @@ private val legacyBuiltinNames: Map<String, String> = mapOf(
     "Termtastic Split" to "Lunamux Classic Split",
     "Obsidian Split" to "Obsidian",
     "Graphite Split" to "Graphite",
+    "Harbour Split" to "Harbour",
+    "Orchid Split" to "Orchid",
+    "Marmalade Split" to "Marmalade",
+    "Cerise Split" to "Cerise",
+    "Nord Split" to "Nord",
+    "Sandstone Split" to "Sandstone",
 )
 
 /**
@@ -624,7 +636,7 @@ private val houseThemeRank: Map<String, Int> =
  *
  * Alphabetical is the only order a stranger to the catalog can predict. The
  * list is 77 entries and growing; hand-maintained ordering meant the position
- * of "Sandstone Split" was a fact you could only learn by scrolling, and it
+ * of "Sandstone" was a fact you could only learn by scrolling, and it
  * silently decided which themes got seen. Sorting by name makes a theme
  * findable by the name it is displayed under, which is also the thing the
  * filter box searches.

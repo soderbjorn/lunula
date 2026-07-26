@@ -108,8 +108,8 @@ class ThemeChromeZoneTest {
                 // see `builtinThemes`. The section splits follow in their own order.
                 "Lunamux Split", "Lunamux Classic Split",
                 "Obsidian", "Graphite",
-                "Crimson Split", "Ember Split", "Nord Split", "Solarized Split", "Sandstone Split",
-                "Harbour Split", "Orchid Split", "Marmalade Split", "Cerise Split",
+                "Crimson Split", "Ember Split", "Nord", "Solarized Split", "Sandstone",
+                "Harbour", "Orchid", "Marmalade", "Cerise",
             ),
             withChrome,
         )

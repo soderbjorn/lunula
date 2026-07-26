@@ -60,7 +60,7 @@ class ThemeCategoriesTest {
         assertEquals(Theme.DARK_TINT_ALPHA, builtinTheme("Lunamux Dark")!!.effectiveTintAlpha)
         assertEquals(Theme.LIGHT_TINT_ALPHA, builtinTheme("Lunamux Light")!!.effectiveTintAlpha)
         // A theme that states its own alpha still wins over the tone default.
-        assertEquals(0.1, builtinTheme("Harbour Split")!!.effectiveTintAlpha)
+        assertEquals(0.1, builtinTheme("Harbour")!!.effectiveTintAlpha)
     }
 
     // ── The four palette categories partition the catalog ──
@@ -89,7 +89,7 @@ class ThemeCategoriesTest {
             .filter { paletteCategoryOf(it) == ThemeCategory.WhiteTwoTone }
             .map { it.name }
         assertEquals(
-            listOf("Harbour Split", "Orchid Split", "Marmalade Split", "Cerise Split"),
+            listOf("Harbour", "Orchid", "Marmalade", "Cerise"),
             found,
         )
     }
@@ -102,7 +102,7 @@ class ThemeCategoriesTest {
         assertEquals(
             listOf(
                 "Lunamux Split", "Lunamux Classic Split", "Crimson Split", "Ember Split",
-                "Nord Split", "Solarized Split", "Sandstone Split",
+                "Nord", "Solarized Split", "Sandstone",
             ),
             found,
         )
@@ -143,7 +143,7 @@ class ThemeCategoriesTest {
 
     @Test
     fun searchMatchesNameTagAndDescriptionCaseInsensitively() {
-        val t = builtinTheme("Harbour Split")!!
+        val t = builtinTheme("Harbour")!!
         assertTrue(matchesThemeQuery(t, "harbour"), "name")
         assertTrue(matchesThemeQuery(t, "BRIGHT"), "tag")
         assertTrue(matchesThemeQuery(t, "coral"), "description")
@@ -213,13 +213,62 @@ class ThemeCategoriesTest {
 
     @Test
     fun theCategoryAndTheSearchBothApply() {
-        // "Split" appears in the name of all thirteen chrome-zone themes, but
-        // only the light-chrome four are White two-tone.
-        val found = filterThemesForPicker(
-            builtinThemes, emptySet(), ThemeCategory.WhiteTwoTone, "split",
+        // The tag "Bright" is on exactly the four White two-tone themes, but
+        // the word also appears in other themes' descriptions — so the search
+        // alone over-matches and the category has to narrow it.
+        val searchOnly = filterThemesForPicker(builtinThemes, emptySet(), query = "bright")
+        val both = filterThemesForPicker(
+            builtinThemes, emptySet(), ThemeCategory.WhiteTwoTone, "bright",
         )
-        assertEquals(4, found.size)
-        assertTrue(found.all { paletteCategoryOf(it) == ThemeCategory.WhiteTwoTone })
+        assertTrue(searchOnly.size > both.size, "the search alone must match more")
+        assertEquals(listOf("Harbour", "Orchid", "Marmalade", "Cerise").sorted(), both.map { it.name }.sorted())
+        assertTrue(both.all { paletteCategoryOf(it) == ThemeCategory.WhiteTwoTone })
+    }
+
+    // ── The naming rule ──
+
+    @Test
+    fun aModeSuffixOnlyAppearsWhereItTellsTwoThemesApart() {
+        // "Dark" / "Light" / "Split" earn their place in a name only by
+        // distinguishing themes that would otherwise collide — "Gruvbox Dark"
+        // needs the word because "Gruvbox Light" exists. A lone theme carrying
+        // one is describing itself, which is the categories' job, and it
+        // describes itself wrongly as often as not: "Nord Split" and "Sandstone
+        // Split" had no sibling, and "Obsidian Split" was not even a split.
+        val names = builtinThemes.map { it.name }
+        val suffixes = setOf("Dark", "Light", "Split")
+
+        /** Every theme called `base`, or `base` plus one of the mode suffixes. */
+        fun family(base: String): List<String> = names.filter { candidate ->
+            candidate == base ||
+                (candidate.startsWith("$base ") &&
+                    candidate.removePrefix("$base ") in suffixes)
+        }
+
+        for (name in names) {
+            val words = name.split(" ")
+            val suffix = words.last()
+            if (suffix !in suffixes) continue
+            val base = words.dropLast(1).joinToString(" ")
+            val members = family(base)
+            assertTrue(
+                members.size > 1,
+                "\"$name\" is the only theme in the \"$base\" family, so the " +
+                    "\"$suffix\" in its name distinguishes it from nothing",
+            )
+        }
+    }
+
+    @Test
+    fun everyThemeStillNamedSplitReallyIsOne() {
+        // The converse of the rule above: where the word survives, it must mean
+        // what the Dark/Light Split category means.
+        for (t in builtinThemes.filter { it.name.split(" ").last() == "Split" }) {
+            assertEquals(
+                ThemeCategory.DarkLightSplit, paletteCategoryOf(t),
+                "${t.name} is named Split but is categorised ${paletteCategoryOf(t)}",
+            )
+        }
     }
 
     // ── Renamed built-ins keep resolving under their old names ──

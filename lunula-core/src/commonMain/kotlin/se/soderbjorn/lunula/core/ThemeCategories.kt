@@ -69,7 +69,7 @@ enum class ThemeCategory(val label: String) {
 
     /**
      * The two zones disagree in tone: the classic dark title bar / tab bar /
-     * sidebar wrapped around a light workspace ("Lunamux Split", "Nord Split",
+     * sidebar wrapped around a light workspace ("Lunamux Split", "Nord",
      * "Solarized Split", …).
      *
      * Defined as tone *disagreement* rather than literally "dark chrome, light
@@ -81,8 +81,8 @@ enum class ThemeCategory(val label: String) {
 
     /**
      * Light in both zones, but still split into two: the shell is as white as
-     * the content, and the zones are told apart by hue alone ("Harbour Split",
-     * "Orchid Split", "Marmalade Split", "Cerise Split").
+     * the content, and the zones are told apart by hue alone ("Harbour",
+     * "Orchid", "Marmalade", "Cerise").
      *
      * The distinction from [Light] is that the theme actually declares a chrome
      * zone *and* paints something differently in it — see
