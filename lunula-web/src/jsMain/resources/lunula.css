@@ -1119,14 +1119,24 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 .dt-sidebar.dt-hidden {
     display: none;
 }
+/* Sidebar edges — the slot owns every hairline, so all sidebars are outlined
+   identically no matter what is mounted inside them.
+   `.dt-theme-manager` used to paint its own left border, which is why the
+   theme sidebar was the only one with a visible edge; that border now lives
+   here (and the panel's is transparent) so the notifications sidebar, the
+   left sidebar and the theme sidebar all read the same. Panels mounted in a
+   slot must not add their own top/side borders or the line doubles to 2px. */
+.dt-sidebar {
+    /* Top: the sidebar and the topbar/tabbar above it are both
+       chrome-coloured, so without this the sidebar reads as a continuation of
+       the tab bar rather than a panel hanging below it. */
+    border-top: 1px solid var(--t-chrome-border, var(--t-border, #333));
+}
 .dt-sidebar-left {
-    /* No separator line — the sidebar surface and the frame-main
-       surface differ enough on their own to read as distinct regions,
-       and a hairline against the flat chrome reads as visual noise. */
-    border-right: 1px solid transparent;
+    border-right: 1px solid var(--t-chrome-border, var(--t-border, #333));
 }
 .dt-sidebar-right {
-    border-left: 1px solid transparent;
+    border-left: 1px solid var(--t-chrome-border, var(--t-border, #333));
 }
 .dt-sidebar-header {
     padding: 8px 12px;
@@ -1245,6 +1255,12 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
        edge. */
     position: relative;
     z-index: 20;
+    /* Drop the slot's edge hairlines while collapsed. At 0 content width the
+       top border degenerates into a stray dot and the side border sits
+       directly against the resize handle's own always-painted hairline (see
+       above), reading as a 2px-thick line at the window edge. The handle
+       hairline is the intended cue in this state. */
+    border-color: transparent;
 }
 /* When the sidebar is fully collapsed the bar itself is 0 px wide, so a
    handle that hangs only 3 px past its inside edge ends up overlapping
@@ -2945,7 +2961,13 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     min-height: 0;
     overflow: hidden;
     background: var(--t-surface, #252526);
-    border-left: 1px solid var(--t-border, #333);
+    /* Edge hairlines belong to the host slot (`.dt-sidebar-right`), not to
+       this panel — painting one here too stacked a second line against the
+       slot's and made the theme sidebar's edge read thicker than every other
+       sidebar's. Kept as a transparent 1px so the panel's box geometry is
+       unchanged, and so a host that mounts the manager outside a sidebar slot
+       can colour it back in. */
+    border-left: 1px solid transparent;
     display: flex;
     flex-direction: column;
     position: relative;
@@ -3194,10 +3216,13 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 .dt-theme-list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-    /* Tight row-gap: each card reserves two name lines, so single-line names
-       (the common case) leave a blank line above the name that already acts as
-       inter-row spacing. Column-gap stays comfortable. */
-    gap: 3px 12px;
+    /* Row-gap has to work for the worst case, not the common one: a card whose
+       name wraps to two lines fills its whole reserved name area, so the only
+       thing separating its title from the thumbnail of the row above is this
+       gap. At the old 3px those rows read as one crowded block. 14px keeps a
+       wrapped title clearly grouped with its own thumbnail (6px below it)
+       rather than the one above. Column-gap stays as it was. */
+    gap: 14px 12px;
     align-items: start;
 }
 .dt-theme-card {
@@ -5174,6 +5199,10 @@ body.appearance-light .settings-section-select {
     flex-shrink: 0;
     background: var(--t-surface, var(--t-surface, #252526));
     border-left: 1px solid var(--t-border, var(--t-border, #333));
+    /* Same top hairline as `.dt-sidebar` — hosts that mount the theme manager
+       in this legacy wrapper (Lunamux) sit it directly under the tab bar, and
+       without the line the panel reads as part of that chrome row. */
+    border-top: 1px solid var(--t-border, var(--t-border, #333));
     display: flex;
     flex-direction: column;
     position: relative;
