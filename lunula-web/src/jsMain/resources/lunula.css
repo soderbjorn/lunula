@@ -160,6 +160,16 @@ html, body {
     background: var(--t-canvas, var(--t-bg, #1e1e1e));
     padding: var(--dt-frame-pad, 8px);
     gap: var(--dt-frame-pad, 8px);
+    /* This element IS the canvas rectangle — the chrome (topbar, sidebars)
+       surrounds it and `.dt-app-frame` paints `--t-chrome-bg` behind it. So
+       rounding it cuts the canvas away at the corners and lets the chrome
+       show through, which is what makes the canvas read as a surface resting
+       ON the chrome rather than a square hole punched in it. Same radius as
+       `.dt-pane`, from the same user setting: the panes rest on the canvas
+       exactly as the canvas rests on the chrome, and one setting keeps all
+       three layers agreeing about how round things are. At 0 it squares off
+       with everything else. */
+    border-radius: var(--dt-frame-radius, 18px);
 }
 .dt-app-frame-bottombar {
     flex: 0 0 auto;
@@ -1624,6 +1634,16 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
        the canvas token existed. */
     background: var(--t-canvas, var(--t-bg, #1e1e1e));
     position: relative;
+    /* Inset from `.dt-app-frame-main`'s rounded corner by the frame padding,
+       so this element's own corner tracks the one the user actually sees
+       instead of squaring off inside it. Invisible at the shipped values —
+       both elements paint the same canvas tone, and at `--dt-frame-pad: 8px`
+       a square corner here still falls inside an 18px or 24px outer arc — but
+       it stops the two from being silently coupled, so an app that retunes
+       either token cannot end up with a canvas-coloured nub poking out of the
+       curve. Clamped at 0 because a pad larger than the radius would
+       otherwise compute negative. */
+    border-radius: max(0px, calc(var(--dt-frame-radius, 18px) - var(--dt-frame-pad, 8px)));
 }
 
 /* Inner positioning context the renderer mounts panes + resize separators
