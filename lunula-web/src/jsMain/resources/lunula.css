@@ -1940,10 +1940,17 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 /* ── Selection language: Fill (data-dt-selection="fill") ─────────
    Everything above paints selection the toolkit's original way — the accent
    as a 15% wash beneath the item, with a ring around it and the label in its
-   ordinary colour. That is `SelectionStyle.Tint`, and it stays the default.
+   ordinary colour. That is `SelectionStyle.Tint`.
 
-   A theme can instead ask for `SelectionStyle.Fill`, and the rules below are
-   what that means. The accent stops being a hint behind the content and
+   Tint sits in the BASE rules even though Fill is now the toolkit default
+   (`SelectionStyle.Default`), and the two facts don't conflict: the default is
+   decided in Kotlin and resolved by `applySelectionStyle` before the attribute
+   is stamped, so an unconfigured shell reaches this stylesheet already
+   carrying `data-dt-selection="fill"`. Leaving tint unselectored is what lets
+   the default move again without every rule below growing a `:not()`.
+
+   The rules below are what `SelectionStyle.Fill` means. The accent stops
+   being a hint behind the content and
    becomes the surface the content sits on: a solid field, with the label in
    the foreground that field declares (`--t-accent-on` /
    `--t-chrome-accent-on`). That pairing is why the `…On` tokens exist — a

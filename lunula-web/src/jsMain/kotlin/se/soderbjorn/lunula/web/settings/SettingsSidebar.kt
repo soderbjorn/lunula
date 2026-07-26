@@ -376,7 +376,9 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
     ))
     body.appendChild(buildSelectionStyleSection(
         currentValue = {
-            spec.host.selectionStyle ?: spec.appDefaultShape().selectionStyle ?: SelectionStyle.Tint
+            spec.host.selectionStyle
+                ?: spec.appDefaultShape().selectionStyle
+                ?: SelectionStyle.Default
         },
         onPick = { st ->
             spec.host.setSelectionStyle(st)
@@ -742,7 +744,7 @@ private fun buildDensitySection(
  * "Filled" describe the result, where "Tint"/"Fill" describe the mechanism.
  *
  * @param currentValue reader for the host's stored style (never null; the
- *   caller substitutes [SelectionStyle.Tint]).
+ *   caller walks the user → app → [SelectionStyle.Default] ladder).
  * @param onPick       called with the clicked style.
  */
 private fun buildSelectionStyleSection(

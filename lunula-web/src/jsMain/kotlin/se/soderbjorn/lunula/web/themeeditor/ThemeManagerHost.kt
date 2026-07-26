@@ -155,7 +155,7 @@ interface ThemeManagerHost {
     val uiDensity: UiDensity? get() = null
 
     /**
-     * How selection is painted, or `null` for [SelectionStyle.Tint].
+     * How selection is painted, or `null` for [SelectionStyle.Default].
      *
      * A user setting rather than a theme property: every palette is legible in
      * either language (Fill reads its foreground from the `…On` tokens all

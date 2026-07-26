@@ -176,7 +176,15 @@ fun applyTheme(element: HTMLElement, theme: ResolvedTheme, isDark: Boolean) {
 
 /**
  * Stamps the active [SelectionStyle] onto [element] as the `data-dt-selection`
- * attribute (`"tint"` or `"fill"`). `null` clears it, which is [SelectionStyle.Tint].
+ * attribute. `null` means "nobody has chosen", and resolves to
+ * [SelectionStyle.Default].
+ *
+ * Only Fill is written; [SelectionStyle.Tint] *removes* the attribute, because
+ * the stylesheet paints tint in its base rules and keys only the fill overrides
+ * off the selector. The asymmetry is deliberate — it keeps the default
+ * expressible in one Kotlin constant instead of forcing the whole selection
+ * section of `lunula.css` to be rewritten as `:not([data-dt-selection="tint"])`
+ * every time the default moves.
  *
  * An attribute rather than a CSS variable, and that is the whole design. The
  * two selection languages are not one rule with a different colour in it: Fill
@@ -194,13 +202,14 @@ fun applyTheme(element: HTMLElement, theme: ResolvedTheme, isDark: Boolean) {
  * `AppShellMount`.
  *
  * @param element the themed root (e.g. `document.documentElement`).
- * @param style   the selection language, or `null` for the default.
+ * @param style   the selection language, or `null` for [SelectionStyle.Default].
  * @see SelectionStyle
  * @see applyCornerRadiusPx
  */
 fun applySelectionStyle(element: HTMLElement, style: SelectionStyle?) {
-    if (style == null || style == SelectionStyle.Tint) element.removeAttribute("data-dt-selection")
-    else element.setAttribute("data-dt-selection", style.cssValue)
+    val effective = style ?: SelectionStyle.Default
+    if (effective == SelectionStyle.Tint) element.removeAttribute("data-dt-selection")
+    else element.setAttribute("data-dt-selection", effective.cssValue)
 }
 
 // ── Per-category font CSS variables ─────────────────────────────────

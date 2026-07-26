@@ -16,9 +16,9 @@
  * different palette, which is the same mistake as making font size a property
  * of the typeface.
  *
- * A deployment can still make Fill its default without owning a theme — see
+ * A deployment can still name its own default without owning a theme — see
  * `defaultSelectionStyle` in a brand manifest, which seeds the setting beneath
- * the user's own choice.
+ * the user's own choice and above the toolkit's [SelectionStyle.Default].
  */
 package se.soderbjorn.lunula.core
 
@@ -31,12 +31,13 @@ import kotlinx.serialization.Serializable
  * sides of the figure/ground relationship, which is why this is an enum and not
  * a strength dial:
  *
- *  - [Tint] — the historical treatment, and the default. The accent is a 15%
- *    wash under the item plus a 1px ring around it, and the label keeps its
- *    ordinary text colour. The accent sits *behind* the content.
+ *  - [Tint] — the historical treatment. The accent is a 15% wash under the item
+ *    plus a 1px ring around it, and the label keeps its ordinary text colour.
+ *    The accent sits *behind* the content.
  *  - [Fill] — the accent becomes a solid field and the label flips to that
  *    field's declared foreground ([Theme.accentOn] / [Theme.chromeAccentOn]).
- *    The accent *is* the surface, and the content sits on it.
+ *    The accent *is* the surface, and the content sits on it. This is
+ *    [Default] — see the companion for why the toolkit changed its mind.
  *
  * The choice lands in three places at once — the focused pane header, the
  * active tab, and the active sidebar row — because they are one idea wearing
@@ -55,14 +56,36 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 enum class SelectionStyle(val cssValue: String) {
-    /** Accent as a 15% wash + ring, ordinary label colour. The default. */
+    /** Accent as a 15% wash + ring, ordinary label colour. */
     Tint("tint"),
 
-    /** Accent as a solid field, label in the fill's `…On` foreground. */
+    /** Accent as a solid field, label in the fill's `…On` foreground. The default. */
     Fill("fill"),
     ;
 
     companion object {
+        /**
+         * The style used when neither the user nor the app has chosen one.
+         *
+         * [Tint] held this position first, because it was the only treatment
+         * that existed and every palette had already been drawn against it.
+         * [Fill] takes it now on the strength of what the setting is actually
+         * for: selection has to answer "where am I" at a glance, and a 15%
+         * wash under a row is a signal you have to look for, while a solid
+         * accent field is one you cannot miss. The wash reads as hover on any
+         * surface that also hovers — which is all three of them.
+         *
+         * Read as a FALLBACK, never written: it is consulted only where the
+         * host's value and the app's [AppearanceShape] default are both null,
+         * so a user who has picked either style keeps it, and an app that
+         * prefers the old language says so through
+         * `AppShellSpec.defaultAppearanceShape` without its users' own picks
+         * being touched. Changing this constant is what reaches everyone who
+         * never expressed an opinion — which is the whole reason the setting
+         * is stored as a nullable rather than as a defaulted value.
+         */
+        val Default: SelectionStyle = Fill
+
         /**
          * Parses a persisted [cssValue] or enum name, tolerating anything
          * unrecognised.

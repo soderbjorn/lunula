@@ -37,7 +37,7 @@ private val shapeJson = Json { ignoreUnknownKeys = true }
  * @property cornerRadiusPx  radius for panes, tabs and sidebar pills; `null` →
  *   the stylesheet's 18px.
  * @property uiDensity       chrome spacing scale; `null` → [UiDensity.Compact].
- * @property selectionStyle  how selection is painted; `null` → [SelectionStyle.Tint].
+ * @property selectionStyle  how selection is painted; `null` → [SelectionStyle.Default].
  * @see PersistKeys.APPEARANCE_SHAPE
  */
 data class AppearanceShape(

@@ -75,7 +75,7 @@ class DefaultThemeManagerState(
     var cornerRadiusPx: Int? = null,
     /** Chrome spacing-scale override (null → [UiDensity.Compact]). */
     var uiDensity: UiDensity? = null,
-    /** Selection-language override (null → [SelectionStyle.Tint]). */
+    /** Selection-language override (null → [SelectionStyle.Default]). */
     var selectionStyle: SelectionStyle? = null,
     /** Per-app custom-titlebar opt-in (Electron `hiddenInset` etc.). */
     var useCustomTitleBar: Boolean = false,
