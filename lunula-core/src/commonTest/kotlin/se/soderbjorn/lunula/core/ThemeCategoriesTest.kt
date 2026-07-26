@@ -157,6 +157,35 @@ class ThemeCategoriesTest {
     }
 
     @Test
+    fun theHouseThemesListCurrentFirstThenClassic() {
+        // The picker used to sort every dark theme ahead of every light one —
+        // the last remnant of the removed `group` field — which forced
+        // "Lunamux Classic Dark" between "Lunamux Dark" and "Lunamux Light" and
+        // split the family in two. Ordering is starred-first then catalog order
+        // now, so the block in `builtinThemes` is what the user sees.
+        assertEquals(
+            listOf(
+                "Lunamux Dark", "Lunamux Light", "Lunamux Split",
+                "Lunamux Classic Dark", "Lunamux Classic Light", "Lunamux Classic Split",
+            ),
+            filterThemesForPicker(builtinThemes, emptySet(), query = "lunamux").map { it.name },
+        )
+    }
+
+    @Test
+    fun orderingSortsOnStarsAndNothingElse() {
+        // Tone must not re-enter the sort by the back door: a light theme that
+        // is starred outranks an unstarred dark one, and the rest hold catalog
+        // order regardless of how dark they are.
+        val ordered = orderThemesForPicker(builtinThemes, setOf("Paper"))
+        assertEquals("Paper", ordered.first().name)
+        assertEquals(
+            builtinThemes.filter { it.name != "Paper" }.map { it.name },
+            ordered.drop(1).map { it.name },
+        )
+    }
+
+    @Test
     fun filteringPreservesPickerOrder() {
         val stars = setOf("Paper")
         val ordered = orderThemesForPicker(builtinThemes, stars)

@@ -10,7 +10,7 @@
  * This file owns the panel chrome (header, filter controls, Escape handling)
  * and the shared module state, then renders all themes as a single reflowing
  * thumbnail grid — no "Dark"/"Light" section headings (issue #107). The list is
- * ordered starred dark → starred light → unstarred dark → unstarred light (see
+ * ordered starred-first, then catalog order (see
  * [se.soderbjorn.lunula.core.orderThemesForPicker]).
  *
  * The header carries two filters over that list: a free-text box matching name,
@@ -433,9 +433,9 @@ internal fun pokeManager() {
 /**
  * Renders the theme catalog into [container] as a single reflowing thumbnail
  * grid — one flat list with no "Dark"/"Light" section headings (issue #107).
- * The themes are ordered starred dark → starred light → unstarred dark →
- * unstarred light, then narrowed by the header's category dropdown and filter
- * box, all by [filterThemesForPicker]; each card is built by [renderThemeCard].
+ * The themes are ordered starred-first then catalog order, and narrowed by the
+ * header's category dropdown and filter box, all by [filterThemesForPicker];
+ * each card is built by [renderThemeCard].
  * The grid packs as many thumbnails per row as the (resizable) sidebar width
  * allows. The appearance (Auto/Dark/Light) is chosen from the app's toolbar,
  * not here.

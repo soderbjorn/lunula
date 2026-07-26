@@ -83,34 +83,78 @@ private fun theme(
 )
 
 /**
- * The 77 built-in themes in display order: 33 dark, then 42 light, then the
- * two retro-computer palettes (dark) last. "Lunamux Dark" leads the dark
- * section and "Lunamux Light" leads the light section, so the first entry of
- * each is that slot's default — but the slot defaults are bound by name via
- * [DEFAULT_DARK_THEME] / [DEFAULT_LIGHT_THEME], not by list position.
+ * The 77 built-in themes in display order: the six house themes, then the dark
+ * section, the light section, and the two retro-computer palettes last.
  *
- * The nine dark-chrome "… Split" themes (tagged "Chrome") follow their
- * section's default theme, and the four light-chrome ones (tagged "Bright")
- * follow those, so every theme that opens the chrome zone sits together. The
- * design's RAW array orders the light splits *ahead* of "Lunamux Light"; they
- * are placed after it here so that the "default leads its section" rule above
- * holds for both sections, as it already does for the dark splits.
+ * The house block leads and spans both tones — the three current Lunamux
+ * palettes followed by the three "Classic" ones they replaced. That is only
+ * possible because the picker no longer forces every dark theme ahead of every
+ * light one ([orderThemesForPicker]); under the old sort a family covering both
+ * tones was split apart wherever it sat in this list.
+ *
+ * Both slot defaults live in that block, but they are bound by name via
+ * [DEFAULT_DARK_THEME] / [DEFAULT_LIGHT_THEME], never by list position.
+ *
+ * Within the two sections, the dark-chrome "… Split" themes (tagged "Chrome")
+ * come first and the four light-chrome ones (tagged "Bright") follow, so every
+ * theme that opens the chrome zone sits together.
  *
  * The "dark section" / "light section" split is now only a convention of this
- * list's ordering — no theme declares which one it is in. What the picker
- * groups and filters by is measured from the palette instead; see
- * [paletteCategoryOf].
+ * list's ordering — no theme declares which one it is in, and the picker no
+ * longer sorts by it. What the picker filters by is measured from the palette
+ * instead; see [paletteCategoryOf].
  *
  * @see Theme
  * @see allThemes
  * @see paletteCategoryOf
+ * @see orderThemesForPicker
  */
 val builtinThemes: List<Theme> = listOf(
-    // ---------------------------------- Dark ----------------------------------
+    // ── The house themes ──────────────────────────────────────────────
+    // Lead the catalog as one block: the three current Lunamux palettes,
+    // then the three "Classic" ones they replaced. Kept contiguous now that
+    // the picker no longer forces every dark theme ahead of every light one
+    // (see orderThemesForPicker) — under that sort a family spanning both
+    // tones could not stay together at any position in this list.
     theme("Lunamux Dark", "Signature", "The house look — near-black navy with a cyan glow and a mint-white lift.",
         "#04090f", "#070f1a", "#0b1626", "#1b2b3f", "#a9c4dd", "#5f7590", "#eaf3fb",
         "#4dc8f5", "#f0b24b", "#ef5f6b", "#4dd6c0", "#a7f0e4",
         "#7ab8ff", "#6fd3c0", "#a5d8ff", "#52708a", "#4dc8f5", "#5fe0d8", "#b8d0e0", "#c0e0ff"),
+    theme("Lunamux Light", "Daybreak", "Crisp white and cyan. Bright, on-brand daylight.",
+        "#eef5fb", "#ffffff", "#e2ecf6", "#ccdcec", "#29455c", "#6b869e", "#0d2436",
+        "#0e97c8", "#c47a1e", "#d0453f", "#10998a", "#0c7266",
+        "#0e7d9a", "#2a8a5a", "#b06a1e", "#8aa5b8", "#0e97c8", "#2f7aa8", "#29455c", "#b06a1e"),
+    theme("Lunamux Split", "Chrome", "Dark navy chrome with white text, over a clean white workspace. The split-shell look.",
+        "#ffffff", "#ffffff", "#eef4fa", "#d7e2ec", "#28455c", "#6b869e", "#0d2436",
+        "#0e97c8", "#c47a1e", "#d0453f", "#10998a", "#0c7266",
+        "#0e7d9a", "#2a8a5a", "#b06a1e", "#8aa5b8", "#0e97c8", "#2f7aa8", "#28455c", "#b06a1e",
+        canvas = "#0a1a2e",
+        chromeBg = "#0a1a2e", chromeText = "#c6d6e6", chromeTextDim = "#6e88a2",
+        chromeTextBright = "#ffffff", chromeBorder = "#1b3251",
+        chromeAccent = "#4dc8f5", chromeTrack = "#16273e"),
+    // Renamed from "Termtastic Dark". "The house look" is now Lunamux Dark's
+    // line, so this pair reads as what it is — the look the house used to have.
+    // Old selections still resolve; see [legacyBuiltinNames].
+    theme("Lunamux Classic Dark", "Classic", "The original house look — green-dominant glow, a faint mint-white lift.",
+        "#08110c", "#0c1611", "#112019", "#20392b", "#7fd0a0", "#557e63", "#dff7e8",
+        "#6ee7a0", "#f0b24b", "#ef5f57", "#6ee7a0", "#a7f0c4",
+        "#86efac", "#73c596", "#aef0b8", "#4f7a60", "#6ee7a0", "#5fe6c2", "#9fe0b8", "#d6f5b0"),
+    // Renamed from "Termtastic Light" — see "Lunamux Classic Dark" above.
+    theme("Lunamux Classic Light", "Classic", "The original house green, daylight edition.",
+        "#edf3ee", "#fbfdfb", "#e1ebe3", "#c9dfce", "#29382e", "#6c8975", "#0f2b17",
+        "#1f9d57", "#c47a1e", "#c0392b", "#1f9d57", "#147a40",
+        "#0f7d6e", "#5a8a2e", "#b06a1e", "#8aa593", "#1f9d57", "#0f7d8e", "#29382e", "#b06a1e"),
+    // Renamed from "Termtastic Split", completing the pair's move to "Lunamux
+    // Classic". Old selections still resolve; see [legacyBuiltinNames].
+    theme("Lunamux Classic Split", "Chrome", "The original house green on a clean white workspace, with a deep forest chrome shell.",
+        "#ffffff", "#ffffff", "#edf4ee", "#d5e6d9", "#2a4636", "#6b8a76", "#12291c",
+        "#159a5b", "#c47a1e", "#d0453f", "#159a5b", "#0c6640",
+        "#0e8a6a", "#3a7a2a", "#b06a1e", "#8aab97", "#159a5b", "#2f8a7a", "#2a4636", "#b06a1e",
+        canvas = "#0c1f16",
+        chromeBg = "#0c1f16", chromeText = "#c2dccb", chromeTextDim = "#6e9080",
+        chromeTextBright = "#ffffff", chromeBorder = "#1c3b2b",
+        chromeAccent = "#46e08a", chromeTrack = "#16301f"),
+    // ---------------------------------- Dark ----------------------------------
     theme("Obsidian Split", "Chrome", "Graphite content panes wrapped in a pure-black chrome, lit by violet. Chrome darker than the content.",
         "#14171d", "#191d24", "#1f242c", "#2c3340", "#c2c8d2", "#6b7484", "#eef1f6",
         "#a06cf0", "#e0af68", "#f7768e", "#7fd6a0", "#b0ecd0",
@@ -127,13 +171,6 @@ val builtinThemes: List<Theme> = listOf(
         chromeBg = "#242832", chromeText = "#c8ced8", chromeTextDim = "#7a8494",
         chromeTextBright = "#ffffff", chromeBorder = "#363c48",
         chromeAccent = "#6fb0e8", chromeTrack = "#2e3440"),
-    // Renamed from "Termtastic Dark". "The house look" is now Lunamux Dark's
-    // line, so this pair reads as what it is — the look the house used to have.
-    // Old selections still resolve; see [legacyBuiltinNames].
-    theme("Lunamux Classic Dark", "Classic", "The original house look — green-dominant glow, a faint mint-white lift.",
-        "#08110c", "#0c1611", "#112019", "#20392b", "#7fd0a0", "#557e63", "#dff7e8",
-        "#6ee7a0", "#f0b24b", "#ef5f57", "#6ee7a0", "#a7f0c4",
-        "#86efac", "#73c596", "#aef0b8", "#4f7a60", "#6ee7a0", "#5fe6c2", "#9fe0b8", "#d6f5b0"),
     theme("Phosphor", "CRT", "Maximum-contrast hacker green. The original glow.",
         "#03120a", "#081a0f", "#0c2114", "#184028", "#46e08a", "#3a7857", "#74ffb0",
         "#2fe57f", "#f0a64b", "#ef5350", "#2fe57f", "#8bf5b8",
@@ -251,28 +288,6 @@ val builtinThemes: List<Theme> = listOf(
         "#b0a8ff", "#d9b26a", "#f0728a", "#8ad0a8", "#c0e8d0",
         "#b0a8ff", "#a8b0c8", "#c8c8d4", "#5a5a62", "#cfc8ff", "#a8c8d8", "#d6d6db", "#c8c8d4"),
     // ---------------------------------- Light ---------------------------------
-    theme("Lunamux Light", "Daybreak", "Crisp white and cyan. Bright, on-brand daylight.",
-        "#eef5fb", "#ffffff", "#e2ecf6", "#ccdcec", "#29455c", "#6b869e", "#0d2436",
-        "#0e97c8", "#c47a1e", "#d0453f", "#10998a", "#0c7266",
-        "#0e7d9a", "#2a8a5a", "#b06a1e", "#8aa5b8", "#0e97c8", "#2f7aa8", "#29455c", "#b06a1e"),
-    theme("Lunamux Split", "Chrome", "Dark navy chrome with white text, over a clean white workspace. The split-shell look.",
-        "#ffffff", "#ffffff", "#eef4fa", "#d7e2ec", "#28455c", "#6b869e", "#0d2436",
-        "#0e97c8", "#c47a1e", "#d0453f", "#10998a", "#0c7266",
-        "#0e7d9a", "#2a8a5a", "#b06a1e", "#8aa5b8", "#0e97c8", "#2f7aa8", "#28455c", "#b06a1e",
-        canvas = "#0a1a2e",
-        chromeBg = "#0a1a2e", chromeText = "#c6d6e6", chromeTextDim = "#6e88a2",
-        chromeTextBright = "#ffffff", chromeBorder = "#1b3251",
-        chromeAccent = "#4dc8f5", chromeTrack = "#16273e"),
-    // Renamed from "Termtastic Split", completing the pair's move to "Lunamux
-    // Classic". Old selections still resolve; see [legacyBuiltinNames].
-    theme("Lunamux Classic Split", "Chrome", "The original house green on a clean white workspace, with a deep forest chrome shell.",
-        "#ffffff", "#ffffff", "#edf4ee", "#d5e6d9", "#2a4636", "#6b8a76", "#12291c",
-        "#159a5b", "#c47a1e", "#d0453f", "#159a5b", "#0c6640",
-        "#0e8a6a", "#3a7a2a", "#b06a1e", "#8aab97", "#159a5b", "#2f8a7a", "#2a4636", "#b06a1e",
-        canvas = "#0c1f16",
-        chromeBg = "#0c1f16", chromeText = "#c2dccb", chromeTextDim = "#6e9080",
-        chromeTextBright = "#ffffff", chromeBorder = "#1c3b2b",
-        chromeAccent = "#46e08a", chromeTrack = "#16301f"),
     theme("Crimson Split", "Chrome", "Hot crimson on white, wrapped in a deep burgundy chrome shell.",
         "#ffffff", "#ffffff", "#fbedf0", "#f0d3da", "#47262d", "#9a6e78", "#2c1016",
         "#d23b52", "#c47a1e", "#d0453f", "#b0842e", "#8a5414",
@@ -385,11 +400,6 @@ val builtinThemes: List<Theme> = listOf(
         addOn = "#000000",
         chromeAccentOn = "#000000", chromeAccentText = "#7a5c05",
         tintAlpha = 0.1),
-    // Renamed from "Termtastic Light" — see "Lunamux Classic Dark" above.
-    theme("Lunamux Classic Light", "Classic", "The original house green, daylight edition.",
-        "#edf3ee", "#fbfdfb", "#e1ebe3", "#c9dfce", "#29382e", "#6c8975", "#0f2b17",
-        "#1f9d57", "#c47a1e", "#c0392b", "#1f9d57", "#147a40",
-        "#0f7d6e", "#5a8a2e", "#b06a1e", "#8aa593", "#1f9d57", "#0f7d8e", "#29382e", "#b06a1e"),
     theme("Paper", "Ink", "Warm paper & ink. Quiet, focused, minimal.",
         "#f3efe5", "#faf7ef", "#eae5d8", "#dbd3c2", "#44423a", "#8d877a", "#211f1a",
         "#2f7d6b", "#b9742a", "#b23f2e", "#2f7d6b", "#1c5a4c",
@@ -580,16 +590,27 @@ fun allThemes(custom: List<Theme>): List<Theme> {
 
 /**
  * Orders a theme catalog for the single-list theme picker (post issue #107,
- * which dropped the separate "Dark" / "Light" section headings). The result is
- * one flat list bucketed in this order:
+ * which dropped the separate "Dark" / "Light" section headings): starred themes
+ * first, then everything else, each half in catalog order.
  *
- *   1. starred dark themes
- *   2. starred light themes
- *   3. unstarred dark themes
- *   4. unstarred light themes
+ * The sort used to have four buckets, splitting each half again by tone —
+ * starred dark, starred light, unstarred dark, unstarred light. That was a
+ * shadow of the `group` field every theme once declared, and it outlived it:
+ * once tone was derived from the palette rather than stated, the sort was
+ * computing a property nothing else claimed, purely to keep the old order. It
+ * also broke up families — the six house themes could not sit together, because
+ * every dark theme was forced ahead of every light one, so "Lunamux Classic
+ * Dark" landed between "Lunamux Dark" and "Lunamux Light" no matter how the
+ * catalog was written.
  *
- * Within each bucket the input order is preserved (the sort is stable), so the
- * built-in display order and any custom-theme append order carry through.
+ * Tone is now a *filter* ([ThemeCategory.Dark] / [ThemeCategory.Light]), which
+ * is the honest place for it: a user who wants only dark themes asks for them,
+ * rather than having every list silently pre-sorted on the assumption that they
+ * might. What is left here is the one thing ordering should express — the user's
+ * own stars — over the order the catalog is written in.
+ *
+ * The sort is stable, so the built-in display order and any custom-theme append
+ * order carry through within each half.
  *
  * ### Callers
  * Shared by every platform's picker so they agree on ordering: the web/Mac
@@ -601,19 +622,5 @@ fun allThemes(custom: List<Theme>): List<Theme> {
  * @return the themes in single-list picker order.
  * @see allThemes
  */
-fun orderThemesForPicker(themes: List<Theme>, favorites: Set<String>): List<Theme> {
-    fun bucket(t: Theme): Int {
-        val starred = t.name in favorites
-        // Tone is measured, not declared — see [Theme.isDarkToned]. Across all
-        // built-ins this reproduces the old `group == Dark` test exactly, so
-        // the resulting order is unchanged.
-        val dark = t.isDarkToned
-        return when {
-            starred && dark -> 0
-            starred && !dark -> 1
-            !starred && dark -> 2
-            else -> 3
-        }
-    }
-    return themes.sortedBy { bucket(it) }
-}
+fun orderThemesForPicker(themes: List<Theme>, favorites: Set<String>): List<Theme> =
+    themes.sortedBy { if (it.name in favorites) 0 else 1 }

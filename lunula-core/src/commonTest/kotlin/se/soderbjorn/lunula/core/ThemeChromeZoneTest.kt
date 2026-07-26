@@ -104,7 +104,10 @@ class ThemeChromeZoneTest {
         val withChrome = builtinThemes.filter { it.chromeBg != null }.map { it.name }
         assertEquals(
             listOf(
-                "Obsidian Split", "Graphite Split", "Lunamux Split", "Lunamux Classic Split",
+                // The two house splits lead, with the rest of the house block —
+                // see `builtinThemes`. The section splits follow in their own order.
+                "Lunamux Split", "Lunamux Classic Split",
+                "Obsidian Split", "Graphite Split",
                 "Crimson Split", "Ember Split", "Nord Split", "Solarized Split", "Sandstone Split",
                 "Harbour Split", "Orchid Split", "Marmalade Split", "Cerise Split",
             ),
