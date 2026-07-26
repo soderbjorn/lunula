@@ -58,6 +58,12 @@ data class ThemeSnapshotV2(
      * named theme is looked up across built-ins ∪ [customThemes], falling back
      * to the slot default if the name is unknown.
      *
+     * A stored name that a built-in has since been renamed away from is
+     * retried under its current name ([canonicalThemeName]), so a rename does
+     * not silently drop the user back onto the default. The exact-name pass
+     * runs first, so a custom theme that happens to reuse a retired built-in
+     * name still wins.
+     *
      * @param systemIsDark whether the OS is currently in dark mode.
      * @return the resolved palette for the active slot.
      */
@@ -71,6 +77,7 @@ data class ThemeSnapshotV2(
         val fallback = if (useDark) DEFAULT_DARK_THEME else DEFAULT_LIGHT_THEME
         val all = allThemes(customThemes)
         val theme = all.firstOrNull { it.name == name }
+            ?: all.firstOrNull { it.name == canonicalThemeName(name) }
             ?: all.first { it.name == fallback }
         return theme.resolve()
     }

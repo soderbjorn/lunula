@@ -19,13 +19,22 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
 /**
- * Whether a [Theme] is designed for the dark or the light appearance slot.
+ * **Legacy.** Whether a [Theme] declared itself for the dark or the light
+ * appearance slot.
  *
- * The theme editor groups built-ins under these two headings, and each user
- * binds one theme to the dark slot and one to the light slot.
+ * No theme declares this any more. A theme's tone is a property of its
+ * *colours*, not of a hand-written label, so it is now read off the palette —
+ * see [Theme.isDarkToned] and [ThemeCategory]. Binding a theme to a slot is
+ * unaffected: any theme can go in either slot, exactly as before, because the
+ * slot was never chosen from this value ([ThemeSnapshotV2] stores two names and
+ * the picker fills whichever slot the active appearance points at).
+ *
+ * The enum survives only so a `themes.json` written before the removal — where
+ * every custom theme carries a `"group"` key — still decodes, and so that any
+ * out-of-tree caller still compiles.
  *
  * @see Theme.group
- * @see ThemeSnapshotV2
+ * @see Theme.isDarkToned
  */
 @Serializable
 enum class ThemeGroup { Dark, Light }
@@ -85,7 +94,6 @@ enum class Appearance { Auto, Dark, Light }
  * platform resolves the selected theme via [ThemeSnapshotV2.resolve].
  *
  * @property name        unique display name; the identity key used everywhere.
- * @property group       which appearance slot this theme is designed for.
  * @property tag         short one-word label shown in the editor (e.g. "CRT").
  * @property desc        one-line description shown in the editor.
  * @property bg          app canvas — window and outermost background, the lowest layer.
@@ -117,7 +125,9 @@ enum class Appearance { Auto, Dark, Light }
  * @property addOn            optional — type ON a solid [add] field.
  * @property chromeAccentOn   optional — type ON a solid [chromeAccent] field.
  * @property chromeAccentText optional — [chromeAccent] rendered AS type; falls back to [chromeAccent].
- * @property tintAlpha        optional — diff-row tint opacity; falls back to the group default.
+ * @property tintAlpha        optional — diff-row tint opacity; falls back to the tone default.
+ * @property group            **legacy, ignored** — the removed dark/light declaration. Kept
+ *   so a `themes.json` written before the removal still decodes; see [ThemeGroup].
  * @property synKeyword  language keywords and markup tags.
  * @property synString   string literals and quoted text.
  * @property synNumber   numeric and boolean literals.
@@ -133,7 +143,6 @@ enum class Appearance { Auto, Dark, Light }
 @Serializable
 data class Theme(
     val name: String,
-    val group: ThemeGroup,
     val tag: String,
     val desc: String,
     val bg: String,
@@ -192,15 +201,58 @@ data class Theme(
     @EncodeDefault(EncodeDefault.Mode.NEVER) val chromeAccentText: String? = null,
     // ---- Optional non-colour properties ----
     /**
-     * Opacity of the diff-add/remove row tints. `null` → the group default
-     * (0.16 light / 0.18 dark).
+     * Opacity of the diff-add/remove row tints. `null` → the tone default
+     * (0.16 light / 0.18 dark, chosen by [isDarkToned]).
      *
      * A shared constant forces every theme's syntax palette to clear the
      * *darkest* tint any theme uses; a light-first theme that lightens its own
      * diff rows can tune its syntax colours for the surface it actually has.
      */
     @EncodeDefault(EncodeDefault.Mode.NEVER) val tintAlpha: Double? = null,
+    // ---- Legacy, ignored ----
+    /**
+     * The removed dark/light declaration. Nothing reads it: tone comes from
+     * [isDarkToned], which measures the palette instead of trusting a label.
+     *
+     * Retained as a trailing, defaulted, never-encoded field purely for
+     * compatibility — a `themes.json` written before the removal carries
+     * `"group": "Dark"` on every custom theme, and this is what lets those files
+     * decode unchanged. It is last in the parameter list so that dropping it
+     * from the 77 built-in definitions did not have to renumber every
+     * positional argument.
+     *
+     * @see ThemeGroup
+     */
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val group: ThemeGroup? = null,
 ) {
+    // ----- Tone, measured rather than declared -----
+
+    /**
+     * Whether this theme's *content* is dark — the property the removed
+     * `group` field used to assert. Read off [bg]'s relative luminance, so a
+     * theme is dark because it looks dark, not because someone typed it.
+     *
+     * Verified equivalent: across all 77 built-ins this reproduces the old
+     * declared group exactly, and with no near misses — every light theme's
+     * `bg` sits at ≥ 0.79 luminance and every dark one at ≤ 0.21, against a 0.5
+     * boundary. So the two values it feeds ([effectiveTintAlpha] and the picker
+     * ordering in [orderThemesForPicker]) are byte-identical to before.
+     *
+     * @see isChromeDarkToned
+     * @see ThemeCategory
+     */
+    val isDarkToned: Boolean get() = !isColorLight(hexToArgb(bg))
+
+    /**
+     * Whether this theme's *chrome* (title bar / tab bar / sidebar) is dark.
+     *
+     * Reads [effectiveChromeBg], so a theme that leaves the chrome zone unset
+     * simply reports its content tone — which is correct, since it paints the
+     * chrome in the content colour. A theme where this disagrees with
+     * [isDarkToned] is a two-zone theme, and that disagreement is exactly what
+     * [ThemeCategory.DarkLightSplit] detects.
+     */
+    val isChromeDarkToned: Boolean get() = !isColorLight(hexToArgb(effectiveChromeBg))
     // ----- Effective chrome/canvas values (the token, or its fallback) -----
     // Every read of an optional token must go through one of these so the
     // fallback is applied exactly once, in one place.
@@ -274,9 +326,9 @@ data class Theme(
     /** [chromeAccentOn] if set, else black/white by the chrome accent's luminance. */
     val effectiveChromeAccentOn: Long get() = onFill(chromeAccentOn, effectiveChromeAccent)
 
-    /** [tintAlpha] if set, else the group default (0.16 light / 0.18 dark). */
+    /** [tintAlpha] if set, else the tone default (0.16 light / 0.18 dark). */
     val effectiveTintAlpha: Double
-        get() = tintAlpha ?: if (group == ThemeGroup.Light) LIGHT_TINT_ALPHA else DARK_TINT_ALPHA
+        get() = tintAlpha ?: if (isDarkToned) DARK_TINT_ALPHA else LIGHT_TINT_ALPHA
 
     /** Shared body of the `…On` getters: the declared hex, or the legible default. */
     private fun onFill(declared: String?, fill: String): Long =
@@ -348,10 +400,10 @@ data class Theme(
     )
 
     companion object {
-        /** Default [tintAlpha] for a [ThemeGroup.Light] theme. */
+        /** Default [tintAlpha] for a light-toned theme (see [isDarkToned]). */
         const val LIGHT_TINT_ALPHA: Double = 0.16
 
-        /** Default [tintAlpha] for a [ThemeGroup.Dark] theme. */
+        /** Default [tintAlpha] for a dark-toned theme (see [isDarkToned]). */
         const val DARK_TINT_ALPHA: Double = 0.18
 
         /**

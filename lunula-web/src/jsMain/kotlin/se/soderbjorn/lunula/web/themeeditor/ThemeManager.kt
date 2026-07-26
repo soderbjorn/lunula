@@ -7,11 +7,20 @@
  *  - [closeThemeManager] — slide-out and detach.
  *  - [refreshThemeManager] — repaint when upstream state changes.
  *
- * This file owns the panel chrome (header, Escape handling) and the shared
- * module state, then renders all themes as a single reflowing thumbnail grid —
- * no "Dark"/"Light" section headings (issue #107). The list is ordered starred
- * dark → starred light → unstarred dark → unstarred light (see
- * [se.soderbjorn.lunula.core.orderThemesForPicker]). Each card shows the theme
+ * This file owns the panel chrome (header, filter controls, Escape handling)
+ * and the shared module state, then renders all themes as a single reflowing
+ * thumbnail grid — no "Dark"/"Light" section headings (issue #107). The list is
+ * ordered starred dark → starred light → unstarred dark → unstarred light (see
+ * [se.soderbjorn.lunula.core.orderThemesForPicker]).
+ *
+ * The header carries two filters over that list: a free-text box matching name,
+ * tag and description, and a category dropdown. The categories are *derived
+ * from each palette* rather than from a label the theme carries — see
+ * [se.soderbjorn.lunula.core.ThemeCategory] — so "Dark/Light Split" finds the
+ * dark-chrome-over-light-content themes, and "White two-tone" the ones that are
+ * light throughout but still split into two zones, including any the user
+ * clones. Both filters live in the header so a list repaint never disturbs the
+ * caret; see [themeFilterQuery]. Each card shows the theme
  * name above its thumbnail; clicking the card assigns the theme to the active
  * slot. On hover the card reveals two controls in its top-right corner: a star
  * (favorite / unfavorite, synced via the host) and, to its right, a small arrow
@@ -24,15 +33,18 @@
 package se.soderbjorn.lunula.web.themeeditor
 
 import se.soderbjorn.lunula.core.Theme
+import se.soderbjorn.lunula.core.ThemeCategory
 import se.soderbjorn.lunula.core.allThemes
 import se.soderbjorn.lunula.core.argbToCss
 import se.soderbjorn.lunula.core.builtinTheme
-import se.soderbjorn.lunula.core.orderThemesForPicker
+import se.soderbjorn.lunula.core.filterThemesForPicker
 import se.soderbjorn.lunula.web.isDarkActive
 
 import kotlinx.browser.document
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.HTMLInputElement
+import org.w3c.dom.HTMLOptionElement
+import org.w3c.dom.HTMLSelectElement
 import org.w3c.dom.events.Event
 import org.w3c.dom.events.KeyboardEvent
 
@@ -76,6 +88,22 @@ private var themeManagerRerender: (() -> Unit)? = null
  * the laid-out document.
  */
 private var themeManagerBodyScrollTop: Double = 0.0
+
+/**
+ * Current contents of the list's free-text filter box.
+ *
+ * Module-level for the same reason as [themeManagerBodyScrollTop]: the panel is
+ * torn down and rebuilt by unrelated shell rerenders. The input element itself
+ * lives in the *header*, which [renderAll] never touches, so within one open
+ * session the caret and selection survive a list repaint for free — this
+ * mirror exists so the filter also survives the panel being detached and
+ * re-appended. Reset when the panel is built fresh, so opening the picker
+ * always starts from the whole catalog.
+ */
+private var themeFilterQuery: String = ""
+
+/** Currently-selected category filter. Reset alongside [themeFilterQuery]. */
+private var themeFilterCategory: ThemeCategory = ThemeCategory.All
 
 /** Drill-down view state for the manager. */
 private enum class ManagerView { List, Editor }
@@ -189,6 +217,47 @@ fun showThemeManager(
     title.textContent = "Themes"
     header.appendChild(title)
 
+    // ── Filter row: free-text box + category dropdown ──
+    //
+    // Deliberately in the header rather than the body. `renderAll` clears the
+    // body on every repaint — including the ones driven by unrelated app state
+    // (in termtastic, every chunk of terminal output) — so an input mounted
+    // there would lose its caret mid-word. Here it is built once and simply
+    // outlives the list it filters.
+    //
+    // Both controls start from module state so a panel rebuilt underneath the
+    // user comes back showing the filter they had applied.
+    themeFilterQuery = ""
+    themeFilterCategory = ThemeCategory.All
+
+    val filterRow = document.createElement("div") as HTMLElement
+    filterRow.className = "dt-theme-filter"
+
+    val filterInput = document.createElement("input") as HTMLInputElement
+    filterInput.className = "dt-theme-filter-input"
+    // `search` rather than `text` for the browser's built-in clear affordance.
+    filterInput.type = "search"
+    filterInput.placeholder = "Filter themes…"
+    filterInput.value = themeFilterQuery
+    filterInput.setAttribute("autocomplete", "off")
+    filterInput.setAttribute("spellcheck", "false")
+    filterInput.setAttribute("aria-label", "Filter themes by name")
+    filterRow.appendChild(filterInput)
+
+    val filterSelect = document.createElement("select") as HTMLSelectElement
+    filterSelect.className = "dt-theme-filter-select"
+    filterSelect.setAttribute("aria-label", "Filter themes by category")
+    for (category in ThemeCategory.entries) {
+        val opt = document.createElement("option") as HTMLOptionElement
+        opt.value = category.name
+        opt.text = category.label
+        if (category == themeFilterCategory) opt.selected = true
+        filterSelect.appendChild(opt)
+    }
+    filterRow.appendChild(filterSelect)
+
+    header.appendChild(filterRow)
+
     panel.appendChild(header)
 
     // ── Body (single column: list or editor) ──
@@ -238,6 +307,8 @@ fun showThemeManager(
         body.innerHTML = ""
         body.classList.toggle("view-editor", view == ManagerView.Editor)
         body.classList.toggle("view-list", view == ManagerView.List)
+        // The filter belongs to the list; the editor view has nothing to filter.
+        filterRow.style.display = if (view == ManagerView.List) "" else "none"
         if (view == ManagerView.List) {
             renderThemeList(
                 container = body,
@@ -260,6 +331,30 @@ fun showThemeManager(
             )
         }
     }
+
+    // Typing or changing the category repaints the list only — the controls
+    // themselves are in the header and are not rebuilt, so focus and caret
+    // position are untouched and filtering feels continuous.
+    filterInput.addEventListener("input", {
+        themeFilterQuery = filterInput.value
+        renderAll()
+    })
+    // Escape inside a non-empty filter box clears the filter instead of closing
+    // the whole panel — the document-level handler below would otherwise take
+    // the keystroke, which reads as the panel slamming shut over a typo.
+    filterInput.addEventListener("keydown", { ev: Event ->
+        if ((ev as? KeyboardEvent)?.key == "Escape" && filterInput.value.isNotEmpty()) {
+            ev.stopPropagation()
+            filterInput.value = ""
+            themeFilterQuery = ""
+            renderAll()
+        }
+    })
+    filterSelect.addEventListener("change", {
+        themeFilterCategory = ThemeCategory.entries
+            .firstOrNull { it.name == filterSelect.value } ?: ThemeCategory.All
+        renderAll()
+    })
 
     renderAll()
 
@@ -339,10 +434,15 @@ internal fun pokeManager() {
  * Renders the theme catalog into [container] as a single reflowing thumbnail
  * grid — one flat list with no "Dark"/"Light" section headings (issue #107).
  * The themes are ordered starred dark → starred light → unstarred dark →
- * unstarred light by [orderThemesForPicker]; each card is built by
- * [renderThemeCard]. The grid packs as many thumbnails per row as the
- * (resizable) sidebar width allows. The appearance (Auto/Dark/Light) is chosen
- * from the app's toolbar, not here.
+ * unstarred light, then narrowed by the header's category dropdown and filter
+ * box, all by [filterThemesForPicker]; each card is built by [renderThemeCard].
+ * The grid packs as many thumbnails per row as the (resizable) sidebar width
+ * allows. The appearance (Auto/Dark/Light) is chosen from the app's toolbar,
+ * not here.
+ *
+ * When the filters exclude everything, an explanatory row is rendered in place
+ * of an empty grid — a blank panel reads as a broken picker rather than as a
+ * search with no hits.
  *
  * @param container the body element to fill.
  * @param onOpen    invoked with a theme's name and a read-only flag when its
@@ -350,11 +450,43 @@ internal fun pokeManager() {
  *   the caller switches to the editor view.
  */
 private fun renderThemeList(container: HTMLElement, onOpen: (String, Boolean) -> Unit) {
-    val ordered = orderThemesForPicker(allThemes(host.customThemes), host.favoriteThemeNames)
+    val matching = filterThemesForPicker(
+        themes = allThemes(host.customThemes),
+        favorites = host.favoriteThemeNames,
+        category = themeFilterCategory,
+        query = themeFilterQuery,
+    )
+    if (matching.isEmpty()) {
+        container.appendChild(buildNoThemesMatchRow())
+        return
+    }
     val list = document.createElement("div") as HTMLElement
     list.className = "dt-theme-list"
-    for (theme in ordered) list.appendChild(renderThemeCard(theme, onOpen))
+    for (theme in matching) list.appendChild(renderThemeCard(theme, onOpen))
     container.appendChild(list)
+}
+
+/**
+ * The row shown when the category dropdown and filter box between them match no
+ * theme. Names both active filters, so the user can see which one to relax
+ * rather than guessing why the panel is empty.
+ *
+ * @return the message element.
+ * @see renderThemeList
+ */
+private fun buildNoThemesMatchRow(): HTMLElement {
+    val empty = document.createElement("div") as HTMLElement
+    empty.className = "dt-theme-list-empty"
+    val query = themeFilterQuery.trim()
+    empty.textContent = when {
+        query.isNotEmpty() && themeFilterCategory != ThemeCategory.All ->
+            "No ${themeFilterCategory.label} theme matches “$query”."
+        query.isNotEmpty() -> "No theme matches “$query”."
+        themeFilterCategory == ThemeCategory.Starred ->
+            "No starred themes yet — use the ☆ on a theme card."
+        else -> "No ${themeFilterCategory.label} themes."
+    }
+    return empty
 }
 
 /**

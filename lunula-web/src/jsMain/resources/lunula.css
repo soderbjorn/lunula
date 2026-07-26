@@ -3086,6 +3086,67 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    thumbnail, which keeps the cards compact so they can pack side by side. All
    colours read the toolkit's own --t-* tokens so the editor is themed by the
    active selection. */
+/* ── Theme list filters ────────────────────────────────────────────────
+   A text box and a category dropdown, side by side under the panel title.
+   They sit in the header (not the scrolling body) so the list can repaint
+   under them without the input losing its caret. The box takes the slack;
+   the select is sized to its longest label ("Dark/Light Split"). */
+.dt-theme-filter {
+    display: flex;
+    gap: 6px;
+    align-items: stretch;
+}
+.dt-theme-filter-input,
+.dt-theme-filter-select {
+    appearance: none;
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
+    color: var(--t-text, #d4d4d4);
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: inherit;
+    padding: 6px 9px;
+    min-width: 0;
+    transition: border-color 0.12s, background 0.12s;
+}
+.dt-theme-filter-input {
+    flex: 1 1 auto;
+}
+.dt-theme-filter-input::placeholder {
+    color: var(--t-text-dim, #9aa0a8);
+}
+.dt-theme-filter-input:focus,
+.dt-theme-filter-select:focus {
+    outline: none;
+    border-color: var(--t-accent, #4f8cff);
+}
+.dt-theme-filter-select {
+    flex: 0 0 auto;
+    cursor: pointer;
+    /* Room for the caret drawn below. */
+    padding-right: 24px;
+    background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+        linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position: right 11px top 52%, right 7px top 52%;
+    background-size: 4px 4px, 4px 4px;
+    background-repeat: no-repeat;
+}
+/* The dropdown's popup is drawn by the OS and does not inherit the panel's
+   colours, so state them on the options too — otherwise a light theme can end
+   up with dark-on-dark text in the open list. */
+.dt-theme-filter-select option {
+    background: var(--t-surface, #252526);
+    color: var(--t-text, #d4d4d4);
+}
+/* Shown in place of the grid when the two filters between them match nothing.
+   An empty panel reads as a broken picker; this says which filter to relax. */
+.dt-theme-list-empty {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--t-text-dim, #9aa0a8);
+    padding: 18px 2px;
+    text-align: center;
+}
 .dt-theme-group-heading {
     font-size: 11px;
     letter-spacing: 0.16em;
@@ -4706,7 +4767,7 @@ body.appearance-light .confirm-cancel {
     font-size: 18px;
     font-weight: 600;
     /* Modal headings use the brightest text token so the title reads as a
-       crisp heading against the dialog body (white-ish on Termtastic Dark;
+       crisp heading against the dialog body (white-ish on Lunamux Dark;
        the theme-appropriate brightest tone on other themes). */
     color: var(--t-text-bright, var(--t-text, #f5f5f5));
 }

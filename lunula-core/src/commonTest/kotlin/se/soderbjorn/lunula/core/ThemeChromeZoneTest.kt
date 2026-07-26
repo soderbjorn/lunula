@@ -104,7 +104,7 @@ class ThemeChromeZoneTest {
         val withChrome = builtinThemes.filter { it.chromeBg != null }.map { it.name }
         assertEquals(
             listOf(
-                "Obsidian Split", "Graphite Split", "Lunamux Split", "Termtastic Split",
+                "Obsidian Split", "Graphite Split", "Lunamux Split", "Lunamux Classic Split",
                 "Crimson Split", "Ember Split", "Nord Split", "Solarized Split", "Sandstone Split",
                 "Harbour Split", "Orchid Split", "Marmalade Split", "Cerise Split",
             ),
