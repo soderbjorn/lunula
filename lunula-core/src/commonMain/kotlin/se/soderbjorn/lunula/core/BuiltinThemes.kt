@@ -1,18 +1,24 @@
 /* BuiltinThemes.kt
- * The 73 built-in themes (35 dark, 38 light): 71 transcribed verbatim from
+ * The 77 built-in themes (35 dark, 42 light): 71 transcribed verbatim from
  * the "Termtastic Theme Studio" design's RAW array, plus two hand-tuned
  * retro-computer palettes ("Workbench", "C64") appended at the
- * end of the list. Each theme
+ * end of the list and four hand-tuned light-chrome splits in the light
+ * section ("Harbour", "Orchid", "Marmalade", "Cerise"). Each theme
  * defines all 20 literal tokens (including 8 dedicated syntax slots); the
  * four the design computes by formula (accentSoft, glow, addBg,
  * chromeAccentSoft) are derived at render time by [Theme.resolve] applying the
  * design's alpha to the accent/add/chromeAccent colour, so nothing else is
  * computed.
  *
- * The nine "… Split" themes additionally set the 8 optional chrome/canvas
+ * The thirteen "… Split" themes additionally set the 8 optional chrome/canvas
  * tokens, painting the title bar / tab bar / sidebar and the pane canvas
  * independently of the pane content. Every other theme leaves them unset and
  * so falls back to the base tokens exactly as before.
+ *
+ * Nine of them (tagged "Chrome") split by *value* — white or near-white
+ * content in a near-black shell. The four tagged "Bright" split by *hue*
+ * instead: the shell stays as white as the content, and the two zones are told
+ * apart only by `accent` against `chromeAccent`.
  */
 package se.soderbjorn.lunula.core
 
@@ -73,17 +79,18 @@ private fun theme(
 )
 
 /**
- * The 73 built-in themes in display order: 33 dark, then 38 light, then the
+ * The 77 built-in themes in display order: 33 dark, then 42 light, then the
  * two retro-computer palettes (dark) last. "Lunamux Dark" leads the dark
  * section and "Lunamux Light" leads the light section, so the first entry of
  * each is that slot's default — but the slot defaults are bound by name via
  * [DEFAULT_DARK_THEME] / [DEFAULT_LIGHT_THEME], not by list position.
  *
- * The nine "… Split" themes (tagged "Chrome") follow their section's default
- * theme. The design's RAW array orders the light splits *ahead* of "Lunamux
- * Light"; they are placed after it here so that the "default leads its
- * section" rule above holds for both sections, as it already does for the
- * dark splits.
+ * The nine dark-chrome "… Split" themes (tagged "Chrome") follow their
+ * section's default theme, and the four light-chrome ones (tagged "Bright")
+ * follow those, so every theme that opens the chrome zone sits together. The
+ * design's RAW array orders the light splits *ahead* of "Lunamux Light"; they
+ * are placed after it here so that the "default leads its section" rule above
+ * holds for both sections, as it already does for the dark splits.
  *
  * @see Theme
  * @see allThemes
@@ -295,6 +302,74 @@ val builtinThemes: List<Theme> = listOf(
         chromeBg = "#241a12", chromeText = "#cbb79c", chromeTextDim = "#8a745c",
         chromeTextBright = "#f5e9d8", chromeBorder = "#45341f",
         chromeAccent = "#e0a24b", chromeTrack = "#33261a"),
+    // The four light-chrome splits, tagged "Bright". Every "… Split" above
+    // wraps white content in a near-black shell; these leave the shell white
+    // too and let the two accents carry the whole theme — the pane title bar
+    // takes `accent`, the sidebar and tab rail take `chromeAccent`, and the
+    // only other non-white token is `canvas`, the gutter the panes float on.
+    // Both fills are chosen bright enough to hold black type, which is what
+    // keeps the pair reading as two flat colours rather than two dark bars.
+    //
+    // They are drawn the way they are meant to be seen under
+    // [SelectionStyle.Fill] — it is the style that paints those two bars solid.
+    // Under Edge they still work, but the accents thin to a line and the
+    // two-colour idea largely goes with them.
+    theme("Harbour Split", ThemeGroup.Light, "Bright", "Sea-blue windows over a coral rail, on white. Nothing else is coloured.",
+        "#ffffff", "#ffffff", "#eef3f7", "#dde6ee", "#0e1418", "#68706f", "#000000",
+        "#35b0e8", "#f0a63c", "#e5544d", "#3ac2a0", "#0a6b5c",
+        "#0b6389", "#0e1418", "#96580b", "#68706f", "#0b6389", "#0e1418", "#0e1418", "#96580b",
+        canvas = "#e8eef4",
+        chromeBg = "#ffffff", chromeText = "#0e1418", chromeTextDim = "#68706f",
+        chromeTextBright = "#000000", chromeBorder = "#dde6ee",
+        chromeAccent = "#ff8a63", chromeTrack = "#e8eef4",
+        accentOn = "#000000", accentText = "#0b6389",
+        warnOn = "#000000", warnText = "#96580b",
+        dangerOn = "#000000", dangerText = "#b3332d",
+        addOn = "#000000",
+        chromeAccentOn = "#000000", chromeAccentText = "#a9401c",
+        tintAlpha = 0.1),
+    theme("Orchid Split", ThemeGroup.Light, "Bright", "Lilac windows over a mint rail, on white. Cool, soft and quiet.",
+        "#ffffff", "#ffffff", "#f2eff7", "#e4dfee", "#141018", "#6d6873", "#000000",
+        "#b98cf5", "#f0a63c", "#e5544d", "#3ac2a0", "#0a6b5c",
+        "#6b34b8", "#141018", "#96580b", "#6d6873", "#6b34b8", "#141018", "#141018", "#96580b",
+        canvas = "#ece7f4",
+        chromeBg = "#ffffff", chromeText = "#141018", chromeTextDim = "#6d6873",
+        chromeTextBright = "#000000", chromeBorder = "#e4dfee",
+        chromeAccent = "#3fd6b0", chromeTrack = "#ece7f4",
+        accentOn = "#000000", accentText = "#6b34b8",
+        warnOn = "#000000", warnText = "#96580b",
+        dangerOn = "#000000", dangerText = "#b3332d",
+        addOn = "#000000",
+        chromeAccentOn = "#000000", chromeAccentText = "#0a6b5c",
+        tintAlpha = 0.1),
+    theme("Marmalade Split", ThemeGroup.Light, "Bright", "Amber windows over a powder-blue rail, on warm white. The warm/cool pair.",
+        "#ffffff", "#ffffff", "#f5f1ec", "#e8e0d6", "#181310", "#726b64", "#000000",
+        "#f5a03c", "#f0c33c", "#e5544d", "#5ac26a", "#0f6b2e",
+        "#96580b", "#181310", "#7a4a0b", "#726b64", "#96580b", "#181310", "#181310", "#7a4a0b",
+        canvas = "#efe9e2",
+        chromeBg = "#ffffff", chromeText = "#181310", chromeTextDim = "#726b64",
+        chromeTextBright = "#000000", chromeBorder = "#e8e0d6",
+        chromeAccent = "#7fa8e0", chromeTrack = "#efe9e2",
+        accentOn = "#000000", accentText = "#96580b",
+        warnOn = "#000000", warnText = "#7a6008",
+        dangerOn = "#000000", dangerText = "#b3332d",
+        addOn = "#000000",
+        chromeAccentOn = "#000000", chromeAccentText = "#2a5a96",
+        tintAlpha = 0.1),
+    theme("Cerise Split", ThemeGroup.Light, "Bright", "Rose windows over a gold rail, on white. The loudest of the four.",
+        "#ffffff", "#ffffff", "#f7eff2", "#eddfe4", "#180f13", "#736569", "#000000",
+        "#ff7aa8", "#f0a63c", "#e5544d", "#3ac2a0", "#0a6b5c",
+        "#b0245c", "#180f13", "#96580b", "#736569", "#b0245c", "#180f13", "#180f13", "#96580b",
+        canvas = "#f2e7eb",
+        chromeBg = "#ffffff", chromeText = "#180f13", chromeTextDim = "#736569",
+        chromeTextBright = "#000000", chromeBorder = "#eddfe4",
+        chromeAccent = "#f5c542", chromeTrack = "#f2e7eb",
+        accentOn = "#000000", accentText = "#b0245c",
+        warnOn = "#000000", warnText = "#96580b",
+        dangerOn = "#000000", dangerText = "#b3332d",
+        addOn = "#000000",
+        chromeAccentOn = "#000000", chromeAccentText = "#7a5c05",
+        tintAlpha = 0.1),
     theme("Termtastic Light", ThemeGroup.Light, "Brand", "On-brand green, daylight edition.",
         "#edf3ee", "#fbfdfb", "#e1ebe3", "#c9dfce", "#29382e", "#6c8975", "#0f2b17",
         "#1f9d57", "#c47a1e", "#c0392b", "#1f9d57", "#147a40",
