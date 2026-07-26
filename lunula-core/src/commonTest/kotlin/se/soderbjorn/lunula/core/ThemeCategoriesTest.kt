@@ -110,11 +110,11 @@ class ThemeCategoriesTest {
 
     @Test
     fun aDarkThemeWithADarkChromeZoneStaysUnderDark() {
-        // "Obsidian Split" and "Graphite Split" split their chrome from their
+        // "Obsidian" and "Graphite" split their chrome from their
         // content, but both zones are dark — someone filtering for Dark wants
         // them, and "Dark/Light Split" would be a lie.
-        assertEquals(ThemeCategory.Dark, paletteCategoryOf(builtinTheme("Obsidian Split")!!))
-        assertEquals(ThemeCategory.Dark, paletteCategoryOf(builtinTheme("Graphite Split")!!))
+        assertEquals(ThemeCategory.Dark, paletteCategoryOf(builtinTheme("Obsidian")!!))
+        assertEquals(ThemeCategory.Dark, paletteCategoryOf(builtinTheme("Graphite")!!))
     }
 
     @Test
@@ -156,33 +156,49 @@ class ThemeCategoriesTest {
         assertTrue(builtinThemes.all { matchesThemeQuery(it, "   ") })
     }
 
+    // ── Ordering: stars, then the house block, then the alphabet ──
+
     @Test
-    fun theHouseThemesListCurrentFirstThenClassic() {
-        // The picker used to sort every dark theme ahead of every light one —
-        // the last remnant of the removed `group` field — which forced
-        // "Lunamux Classic Dark" between "Lunamux Dark" and "Lunamux Light" and
-        // split the family in two. Ordering is starred-first then catalog order
-        // now, so the block in `builtinThemes` is what the user sees.
+    fun theHouseThemesLeadAndListCurrentBeforeClassic() {
+        // The house block is the one exception to alphabetical order, and the
+        // reason for it: sorted by name, all three Classic themes would come
+        // first, inverting "current palette, then the one it replaced".
         assertEquals(
             listOf(
                 "Lunamux Dark", "Lunamux Light", "Lunamux Split",
                 "Lunamux Classic Dark", "Lunamux Classic Light", "Lunamux Classic Split",
             ),
-            filterThemesForPicker(builtinThemes, emptySet(), query = "lunamux").map { it.name },
+            orderThemesForPicker(builtinThemes, emptySet()).take(6).map { it.name },
         )
+        assertEquals(HOUSE_THEME_NAMES, orderThemesForPicker(builtinThemes, emptySet()).take(6).map { it.name })
     }
 
     @Test
-    fun orderingSortsOnStarsAndNothingElse() {
-        // Tone must not re-enter the sort by the back door: a light theme that
-        // is starred outranks an unstarred dark one, and the rest hold catalog
-        // order regardless of how dark they are.
-        val ordered = orderThemesForPicker(builtinThemes, setOf("Paper"))
-        assertEquals("Paper", ordered.first().name)
-        assertEquals(
-            builtinThemes.filter { it.name != "Paper" }.map { it.name },
-            ordered.drop(1).map { it.name },
-        )
+    fun everythingBelowTheHouseBlockIsAlphabetical() {
+        val rest = orderThemesForPicker(builtinThemes, emptySet()).drop(6).map { it.name }
+        assertEquals(rest.sortedBy { it.lowercase() }, rest)
+        // And it really is the whole remainder, not a sorted prefix.
+        assertEquals(builtinThemes.size - HOUSE_THEME_NAMES.size, rest.size)
+    }
+
+    @Test
+    fun starsOutrankBothTheHouseBlockAndTheAlphabet() {
+        // A starred theme leads even though it is neither a house theme nor
+        // first alphabetically — stars are the only user-owned ordering signal.
+        val ordered = orderThemesForPicker(builtinThemes, setOf("Paper", "Dracula"))
+        assertEquals(listOf("Dracula", "Paper"), ordered.take(2).map { it.name })
+        assertEquals("Lunamux Dark", ordered[2].name, "the house block follows the stars")
+    }
+
+    @Test
+    fun toneDoesNotReEnterTheSort() {
+        // The old sort put every dark theme ahead of every light one. Nothing
+        // should reintroduce that: below the house block, a light theme sorts
+        // above a dark one whenever its name does.
+        val rest = orderThemesForPicker(builtinThemes, emptySet()).drop(6)
+        val paper = rest.indexOfFirst { it.name == "Paper" }        // light
+        val phosphor = rest.indexOfFirst { it.name == "Phosphor" }  // dark
+        assertTrue(paper < phosphor, "Paper (light) must precede Phosphor (dark) by name")
     }
 
     @Test
@@ -213,6 +229,10 @@ class ThemeCategoriesTest {
         assertEquals("Lunamux Classic Dark", builtinTheme("Termtastic Dark")?.name)
         assertEquals("Lunamux Classic Light", builtinTheme("Termtastic Light")?.name)
         assertEquals("Lunamux Classic Split", builtinTheme("Termtastic Split")?.name)
+        // "Split" promised dark chrome over light content; these are dark in
+        // both zones, so the word was dropped rather than left misdescribing them.
+        assertEquals("Obsidian", builtinTheme("Obsidian Split")?.name)
+        assertEquals("Graphite", builtinTheme("Graphite Split")?.name)
         assertEquals("Lunamux Classic Dark", canonicalThemeName("Termtastic Dark"))
         // A name that was never renamed passes straight through.
         assertEquals("Lunamux Dark", canonicalThemeName("Lunamux Dark"))

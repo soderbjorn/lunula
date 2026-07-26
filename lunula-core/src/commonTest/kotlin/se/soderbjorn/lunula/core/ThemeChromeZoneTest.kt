@@ -21,7 +21,7 @@ import kotlin.test.assertTrue
 private val plain: Theme = builtinTheme("Lunamux Dark")!!
 
 /** A theme that sets all 8 chrome/canvas tokens. */
-private val split: Theme = builtinTheme("Obsidian Split")!!
+private val split: Theme = builtinTheme("Obsidian")!!
 
 class ThemeChromeZoneTest {
 
@@ -107,7 +107,7 @@ class ThemeChromeZoneTest {
                 // The two house splits lead, with the rest of the house block —
                 // see `builtinThemes`. The section splits follow in their own order.
                 "Lunamux Split", "Lunamux Classic Split",
-                "Obsidian Split", "Graphite Split",
+                "Obsidian", "Graphite",
                 "Crimson Split", "Ember Split", "Nord Split", "Solarized Split", "Sandstone Split",
                 "Harbour Split", "Orchid Split", "Marmalade Split", "Cerise Split",
             ),

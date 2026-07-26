@@ -58,7 +58,7 @@ enum class ThemeCategory(val label: String) {
 
     /**
      * Dark throughout: dark content in dark chrome. Includes the two-zone dark
-     * themes ("Obsidian Split", "Graphite Split") whose chrome differs from
+     * themes ("Obsidian", "Graphite") whose chrome differs from
      * their content in *value* but is still dark — a user reaching for "Dark"
      * wants those in the results.
      */

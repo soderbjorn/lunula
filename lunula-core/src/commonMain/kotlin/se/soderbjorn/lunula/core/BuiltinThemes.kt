@@ -83,26 +83,23 @@ private fun theme(
 )
 
 /**
- * The 77 built-in themes in display order: the six house themes, then the dark
- * section, the light section, and the two retro-computer palettes last.
+ * The 77 built-in themes.
  *
- * The house block leads and spans both tones — the three current Lunamux
- * palettes followed by the three "Classic" ones they replaced. That is only
- * possible because the picker no longer forces every dark theme ahead of every
- * light one ([orderThemesForPicker]); under the old sort a family covering both
- * tones was split apart wherever it sat in this list.
+ * **This list's order is not the display order.** The picker sorts by name
+ * ([orderThemesForPicker]), so the grouping below — house block, dark section,
+ * light section, retro palettes last — exists for whoever is *editing* this
+ * file: related palettes sit together, and a new theme has an obvious place to
+ * go. Nothing reads the position of an entry.
+ *
+ * The one part of this order that does survive into the UI is the house block
+ * at the top, and only because [HOUSE_THEME_NAMES] names those six explicitly.
  *
  * Both slot defaults live in that block, but they are bound by name via
  * [DEFAULT_DARK_THEME] / [DEFAULT_LIGHT_THEME], never by list position.
  *
- * Within the two sections, the dark-chrome "… Split" themes (tagged "Chrome")
- * come first and the four light-chrome ones (tagged "Bright") follow, so every
- * theme that opens the chrome zone sits together.
- *
- * The "dark section" / "light section" split is now only a convention of this
- * list's ordering — no theme declares which one it is in, and the picker no
- * longer sorts by it. What the picker filters by is measured from the palette
- * instead; see [paletteCategoryOf].
+ * The "dark section" / "light section" headings are likewise only a convention
+ * for editing — no theme declares which one it is in. What the picker filters
+ * by is measured from the palette; see [paletteCategoryOf].
  *
  * @see Theme
  * @see allThemes
@@ -155,7 +152,12 @@ val builtinThemes: List<Theme> = listOf(
         chromeTextBright = "#ffffff", chromeBorder = "#1c3b2b",
         chromeAccent = "#46e08a", chromeTrack = "#16301f"),
     // ---------------------------------- Dark ----------------------------------
-    theme("Obsidian Split", "Chrome", "Graphite content panes wrapped in a pure-black chrome, lit by violet. Chrome darker than the content.",
+    // Renamed from "Obsidian Split". These two open the chrome zone, but both
+    // their zones are dark — the split is in value, not between dark chrome and
+    // light content — so "Split" in the name promised a kind of theme they are
+    // not, and the White two-tone / Dark-Light Split categories now say what a
+    // theme actually does. Old selections still resolve; see [legacyBuiltinNames].
+    theme("Obsidian", "Chrome", "Graphite content panes wrapped in a pure-black chrome, lit by violet. Chrome darker than the content.",
         "#14171d", "#191d24", "#1f242c", "#2c3340", "#c2c8d2", "#6b7484", "#eef1f6",
         "#a06cf0", "#e0af68", "#f7768e", "#7fd6a0", "#b0ecd0",
         "#a06cf0", "#7fd6a0", "#d0a0ff", "#5a6374", "#8c9dff", "#5fd0d0", "#c2c8d2", "#c0a0ff",
@@ -163,7 +165,8 @@ val builtinThemes: List<Theme> = listOf(
         chromeBg = "#000000", chromeText = "#b8bec8", chromeTextDim = "#5f6774",
         chromeTextBright = "#ffffff", chromeBorder = "#1c2029",
         chromeAccent = "#b98cff", chromeTrack = "#14171d"),
-    theme("Graphite Split", "Chrome", "Dark editor content under a slightly lighter cool-gray shell. Chrome lighter than the content — the JetBrains case.",
+    // Renamed from "Graphite Split" — see "Obsidian" above.
+    theme("Graphite", "Chrome", "Dark editor content under a slightly lighter cool-gray shell. Chrome lighter than the content — the JetBrains case.",
         "#1a1d23", "#20242b", "#262b33", "#333945", "#c4cad4", "#6f7886", "#eef1f6",
         "#5b9bd5", "#e0af68", "#e06c75", "#7fc0a0", "#bfe8d4",
         "#6fa8dc", "#7fc0a0", "#9db4ff", "#616a78", "#5b9bd5", "#5fc9d0", "#c4cad4", "#9db4ff",
@@ -545,6 +548,8 @@ private val legacyBuiltinNames: Map<String, String> = mapOf(
     "Termtastic Dark" to "Lunamux Classic Dark",
     "Termtastic Light" to "Lunamux Classic Light",
     "Termtastic Split" to "Lunamux Classic Split",
+    "Obsidian Split" to "Obsidian",
+    "Graphite Split" to "Graphite",
 )
 
 /**
@@ -589,28 +594,54 @@ fun allThemes(custom: List<Theme>): List<Theme> {
 }
 
 /**
+ * The house themes, in the order they lead the picker: the three current
+ * Lunamux palettes, then the three "Classic" ones they replaced.
+ *
+ * Spelled out rather than matched on a `"Lunamux"` name prefix, for two
+ * reasons. The order is editorial — current before classic — and alphabetical
+ * order would invert it, putting all three Classic themes first. And a prefix
+ * test would promote anything a user happened to name "Lunamux …", including
+ * their own clone of one of these, to the head of the list.
+ *
+ * @see orderThemesForPicker
+ */
+val HOUSE_THEME_NAMES: List<String> = listOf(
+    "Lunamux Dark", "Lunamux Light", "Lunamux Split",
+    "Lunamux Classic Dark", "Lunamux Classic Light", "Lunamux Classic Split",
+)
+
+/** [HOUSE_THEME_NAMES] as name → position, for O(1) lookup while sorting. */
+private val houseThemeRank: Map<String, Int> =
+    HOUSE_THEME_NAMES.withIndex().associate { (i, name) -> name to i }
+
+/**
  * Orders a theme catalog for the single-list theme picker (post issue #107,
- * which dropped the separate "Dark" / "Light" section headings): starred themes
- * first, then everything else, each half in catalog order.
+ * which dropped the separate "Dark" / "Light" section headings):
  *
- * The sort used to have four buckets, splitting each half again by tone —
- * starred dark, starred light, unstarred dark, unstarred light. That was a
- * shadow of the `group` field every theme once declared, and it outlived it:
- * once tone was derived from the palette rather than stated, the sort was
- * computing a property nothing else claimed, purely to keep the old order. It
- * also broke up families — the six house themes could not sit together, because
- * every dark theme was forced ahead of every light one, so "Lunamux Classic
- * Dark" landed between "Lunamux Dark" and "Lunamux Light" no matter how the
- * catalog was written.
+ *   1. starred themes
+ *   2. the house themes, in [HOUSE_THEME_NAMES] order
+ *   3. everything else, alphabetically by name
  *
- * Tone is now a *filter* ([ThemeCategory.Dark] / [ThemeCategory.Light]), which
- * is the honest place for it: a user who wants only dark themes asks for them,
- * rather than having every list silently pre-sorted on the assumption that they
- * might. What is left here is the one thing ordering should express — the user's
- * own stars — over the order the catalog is written in.
+ * Alphabetical is the only order a stranger to the catalog can predict. The
+ * list is 77 entries and growing; hand-maintained ordering meant the position
+ * of "Sandstone Split" was a fact you could only learn by scrolling, and it
+ * silently decided which themes got seen. Sorting by name makes a theme
+ * findable by the name it is displayed under, which is also the thing the
+ * filter box searches.
  *
- * The sort is stable, so the built-in display order and any custom-theme append
- * order carry through within each half.
+ * The house block is the one exception, because its order carries information
+ * alphabetical order would destroy: current palettes before the "Classic" ones
+ * they replaced. Sorted by name, all three Classic themes would come first.
+ *
+ * The sort key deliberately excludes tone. It used to lead — starred dark,
+ * starred light, unstarred dark, unstarred light — which was a shadow of the
+ * `group` field every theme once declared. Tone is a *filter* now
+ * ([ThemeCategory.Dark] / [ThemeCategory.Light]), which is the honest place for
+ * it: a user who wants dark themes asks for them, rather than every list being
+ * pre-sorted on the chance that they might.
+ *
+ * Custom themes sort into the alphabet alongside the built-ins rather than
+ * landing in an append-ordered tail, so a clone is where its name says it is.
  *
  * ### Callers
  * Shared by every platform's picker so they agree on ordering: the web/Mac
@@ -621,6 +652,15 @@ fun allThemes(custom: List<Theme>): List<Theme> {
  * @param favorites the set of starred theme names (see [ThemeSnapshotV2.favorites]).
  * @return the themes in single-list picker order.
  * @see allThemes
+ * @see HOUSE_THEME_NAMES
  */
 fun orderThemesForPicker(themes: List<Theme>, favorites: Set<String>): List<Theme> =
-    themes.sortedBy { if (it.name in favorites) 0 else 1 }
+    themes.sortedWith(
+        compareBy<Theme> { if (it.name in favorites) 0 else 1 }
+            // Non-house themes all share the same rank here, so the name
+            // comparison below is what actually orders them.
+            .thenBy { houseThemeRank[it.name] ?: Int.MAX_VALUE }
+            // Lowercased so case never decides: "iA Writer" belongs next to
+            // "Ice", not hoisted above every capitalised name.
+            .thenBy { it.name.lowercase() },
+    )
