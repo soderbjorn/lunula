@@ -80,7 +80,17 @@ html, body {
     --dt-tab-pad: 6px 14px;             /* .dt-tab padding */
     /* `.dt-tab` font-size is inherited from `.dt-tabbar`, which reads
        `--dt-font-tabbar-size` (falling through to
-       `--dt-font-sidebar-size`). No tab-specific size token. */
+       `--dt-font-sidebar-size`). No tab-specific size token.
+
+       A tab's HEIGHT, though, is stated here rather than inherited. It used
+       to be whatever `line-height: normal` came to for the chrome font, which
+       meant a host stylesheet's prose line-height leaked into the chrome and
+       decided how tall the tab strip was: Lunicle's `body { line-height: 1.6 }`
+       made its tabs 36.5px against lunamux's 29.5px, out of the same
+       primitive. Tab geometry is the toolkit's to own, so the pill now
+       measures the same everywhere: font-size × this, plus `--dt-tab-pad`
+       and the border. */
+    --dt-tab-line-height: 1.2;          /* .dt-tab line box */
     --dt-tab-gap: 14px;                 /* .dt-tabbar-strip gap */
     --dt-pane-header-pad: 9px 8px 9px 10px; /* .dt-pane-header padding */
     --dt-pane-title-size: 11px;         /* .dt-pane-title font-size */
@@ -160,6 +170,34 @@ html, body {
     display: flex;
     flex-direction: column;
     min-height: 0;
+}
+
+/* ── Chrome line box ────────────────────────────────────────────
+   The chrome's density is the toolkit's to decide, exactly as its font is
+   (see the `font-family` note on `.dt-app-frame`) — but line-height was left
+   inheriting, and a host stylesheet that sets a prose one on `body` walks
+   straight into the shell and inflates every row in it. Lunicle's
+   `line-height: 1.6`, written for issue descriptions, is why the same
+   `.dt-tab` primitive stood 36.5px tall there and 29.5px in lunamux, and why
+   its 11px window titles sat in a 17.6px line box.
+
+   `normal` rather than a number: this is a RESET back to what a host that
+   loads no stylesheet of its own already gets, not a new design value, so no
+   existing consumer moves. Surfaces that want a specific line box still state
+   one (`--dt-tab-line-height`, `.dt-pane-title`).
+
+   Named per chrome container rather than declared once on `.dt-app-frame`,
+   because the frame also contains `.dt-pane-content` — host territory, where
+   a Lunicle issue description SHOULD keep reading at the host's prose
+   line-height. Resetting at the top would break that inheritance and there is
+   no value the toolkit could put back that would be the host's. */
+.dt-topbar,
+.dt-bottombar,
+.dt-app-frame-sidebar-left,
+.dt-app-frame-sidebar-right,
+.dt-sidebar,
+.dt-pane-header {
+    line-height: normal;
 }
 .dt-app-frame-main {
     flex: 1 1 auto;
@@ -532,7 +570,9 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     /* font-size inherits from `.dt-tabbar`, which reads
        `--dt-font-tabbar-size` (with fall-through to
        `--dt-font-sidebar-size`) — set by the Settings panel
-       "Tab bar size" / "Sidebar size" pickers. */
+       "Tab bar size" / "Sidebar size" pickers. The line box is NOT
+       inherited: see `--dt-tab-line-height` for why the toolkit states it. */
+    line-height: var(--dt-tab-line-height, 1.2);
     font-weight: 500;
     user-select: none;
     white-space: nowrap;
@@ -2020,9 +2060,20 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    in particular fights the corner radius it sits inside. The panes separate on
    the canvas gap alone, which is what the canvas zone is for. Floating panes
    keep their depth drop shadow: that answers "which pane is in front", a
-   different question from "which pane has focus". */
+   different question from "which pane has focus".
+
+   The outline is kept declared-but-transparent rather than set to `none`, so
+   the transient frame further down has a colour to animate from. A transparent
+   outline paints nothing, and outlines never take part in layout, so this is
+   visually and geometrically identical to `none`. */
 :root[data-dt-selection="fill"] .dt-pane {
-    outline: none;
+    outline: 1px solid transparent;
+    outline-offset: -1px;
+    /* Slow out, for the same reason `.dt-pane-actions` fades out slowly: the
+       frame leaves on an idle timer nobody asked for, and a quick fade there
+       reads as a flicker and pulls the eye back. Coming in is overridden to be
+       fast at the reveal rule. */
+    transition: outline-color 320ms ease-in-out, box-shadow 120ms ease-in-out;
 }
 :root[data-dt-selection="fill"] .dt-pane.dt-pane-focused {
     box-shadow: none;
@@ -2341,6 +2392,35 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
        Live `pointer-events` follows visibility here as it does everywhere
        else in this block: while the strip is painted it is aimable, and
        while it is invisible it takes no clicks. */
+
+    /* ── Transient pane frame under Fill ──────────────────────────────
+       Fill deliberately strips the pane ring (see the "No ring, no halo"
+       rule above), which works as long as the canvas gutter reads as a
+       gap. On a dark theme whose `--t-surface` sits a hair off `--t-bg`
+       it does not, and the pane edges genuinely disappear.
+
+       So the frame comes back for exactly as long as the pointer is
+       moving, riding the same `dt-pointer-active` body class that reveals
+       the action strips: reach for the mouse and the panes are outlined;
+       hold still and they dissolve back to the flat look Fill is for.
+       Nothing new to install or keep in sync — one mechanism, two things
+       hanging off it.
+
+       A hairline in `--t-chrome-border` — the line the sidebars are edged
+       with — rather than Tint's 2px `--t-border` ring or the accent: this
+       is the app saying "here are the edges", not a second selection state
+       arguing with the filled header about which pane is focused. Focused
+       and resting panes get the same line for that reason.
+
+       Hover/focus-within are not mirrored from the strip rules above. The
+       strip needs them because a parked cursor must keep the button it is
+       aimed at; a frame that came back under one pane only would read as
+       selection, which is the one thing it must not say. */
+    :root[data-dt-selection="fill"] body.dt-pointer-active .dt-pane {
+        outline-color: var(--t-chrome-border, var(--t-border, #333));
+        /* Fast in — see the rest state for why the two directions differ. */
+        transition: outline-color 110ms ease-in-out, box-shadow 120ms ease-in-out;
+    }
 }
 /* Invisible band just below the titlebar that counts as hovering it.
    [LayoutRenderer] mounts it as a zero-height flow sibling directly after

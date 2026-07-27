@@ -13,6 +13,9 @@
  * invisible buttons, and a dropped listener leaves a rule nothing ever
  * matches.
  *
+ * The same class also lends filled panes a temporary frame, so the CSS half is
+ * asserted twice — once per consumer.
+ *
  * Timing is real — the idle countdown is a live interval — so these run at a
  * deliberately short idle delay and return Promises.
  *
@@ -256,22 +259,7 @@ class PointerActivityTest {
     @Test
     fun theRevealRuleSurvivesParsing() {
         injectLunulaStyles()
-        val selectors = mutableListOf<String>()
-        fun collect(rules: dynamic) {
-            val len = (rules.length as? Number)?.toInt() ?: return
-            for (i in 0 until len) {
-                val rule = rules.item(i) ?: continue
-                val selector = rule.selectorText
-                if (selector != null && selector != undefined) selectors += selector as String
-                val nested = rule.cssRules
-                if (nested != null && nested != undefined) collect(nested)
-            }
-        }
-        val sheets = document.styleSheets
-        for (i in 0 until sheets.length) {
-            val sheet = sheets.item(i).asDynamic()
-            collect(runCatching { sheet.cssRules }.getOrNull() ?: continue)
-        }
+        val selectors = parsedSelectors()
         assertNotNull(
             selectors.firstOrNull {
                 it.contains("body.$POINTER_ACTIVE_BODY_CLASS") && it.contains("dt-pane-actions")
@@ -281,4 +269,64 @@ class PointerActivityTest {
                 "mentioning dt-pane-actions: ${selectors.filter { it.contains("dt-pane-actions") }}",
         )
     }
+
+    /**
+     * The other consumer of the class: under `SelectionStyle.Fill` the panes
+     * have no frame of their own, and this rule lends them one for as long as
+     * the pointer is moving. Same silent failure mode as the strip — the class
+     * would keep flipping over panes that never gain an edge — and the same
+     * shape of assertion.
+     *
+     * The rule must stay keyed on Fill. Under Tint the pane already carries a
+     * permanent 2px ring, and a hairline appearing inside it on every mouse
+     * move would be a second frame, not a rescue.
+     */
+    @Test
+    fun theTransientPaneFrameRuleSurvivesParsing() {
+        injectLunulaStyles()
+        val selectors = parsedSelectors()
+        assertNotNull(
+            selectors.firstOrNull {
+                it.contains("body.$POINTER_ACTIVE_BODY_CLASS") &&
+                    it.contains("data-dt-selection=\"fill\"") &&
+                    it.contains(".dt-pane")
+            },
+            "no rule frames `.dt-pane` from `body.$POINTER_ACTIVE_BODY_CLASS` under " +
+                "Fill — filled panes on a dark theme are back to having no visible " +
+                "edge. Survivors mentioning the class: " +
+                "${selectors.filter { it.contains(POINTER_ACTIVE_BODY_CLASS) }}",
+        )
+    }
+}
+
+/**
+ * Every selector the browser actually parsed out of the injected stylesheet,
+ * media queries included (hence the recursion into nested rule lists — the
+ * reveal rules all live inside `@media (hover: hover)`).
+ *
+ * Shared by the two CSS-contract tests above. Asserting on parsed selectors
+ * rather than on the source text is the point: a stray comment terminator
+ * upstream silently drops the rules that follow it, and a text search would
+ * still find them.
+ *
+ * @return the selector text of every rule in every reachable stylesheet.
+ */
+private fun parsedSelectors(): List<String> {
+    val selectors = mutableListOf<String>()
+    fun collect(rules: dynamic) {
+        val len = (rules.length as? Number)?.toInt() ?: return
+        for (i in 0 until len) {
+            val rule = rules.item(i) ?: continue
+            val selector = rule.selectorText
+            if (selector != null && selector != undefined) selectors += selector as String
+            val nested = rule.cssRules
+            if (nested != null && nested != undefined) collect(nested)
+        }
+    }
+    val sheets = document.styleSheets
+    for (i in 0 until sheets.length) {
+        val sheet = sheets.item(i).asDynamic()
+        collect(runCatching { sheet.cssRules }.getOrNull() ?: continue)
+    }
+    return selectors
 }

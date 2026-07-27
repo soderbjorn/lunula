@@ -13,6 +13,13 @@
  * there when the user starts reaching for them, and the panes go back to
  * reading as just title + content when nobody is driving.
  *
+ * A second thing now rides the same signal. Under `SelectionStyle.Fill` panes
+ * carry no frame at all — the canvas gutter is meant to separate them — and on
+ * a dark theme whose surface sits close to the canvas it does not, leaving the
+ * pane edges hard to find. While the class is present each pane also gets a
+ * hairline `--t-chrome-border` outline, so the edges are there whenever the
+ * user is driving and gone again when the screen settles.
+ *
  * Scope is the app window, deliberately. A renderer gets no pointer events
  * outside its own viewport, so "anywhere on screen" is not reachable from
  * here at all: it would take main-process cursor polling (Electron's
@@ -37,7 +44,9 @@ import kotlin.js.Date
 /**
  * Class the tracker keeps on `<body>` while the pointer is considered
  * active. The stylesheet reveals every pane's action strip while it is
- * present; see the `body.dt-pointer-active .dt-pane-actions` rule in
+ * present, and — under `SelectionStyle.Fill` only — paints a hairline frame
+ * around every pane; see the `body.dt-pointer-active .dt-pane-actions` and
+ * `[data-dt-selection="fill"] body.dt-pointer-active .dt-pane` rules in
  * `lunula.css`.
  */
 const val POINTER_ACTIVE_BODY_CLASS: String = "dt-pointer-active"
