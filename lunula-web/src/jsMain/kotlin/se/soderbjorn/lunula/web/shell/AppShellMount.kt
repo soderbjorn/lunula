@@ -2654,10 +2654,11 @@ private class ShellState(
         // (appended just below), so the layout dropdown's append is deferred.
         // The trailing "+" button is the general "New" menu (issue #65).
         // It is always a split-button: clicking the icon adds a pane to the
-        // active tab, while the hover dropdown leads with "New tab" and then
-        // lists whatever pane flavours the host supplies via
-        // [TabSource.paneAddMenuItems] (termtastic: Terminal / Terminal link
-        // / File Browser / Git — i.e. "New terminal window", etc.). Painted
+        // active tab, while the hover dropdown leads with whatever pane
+        // flavours the host supplies via [TabSource.paneAddMenuItems]
+        // (termtastic: Terminal / Terminal link / File Browser / Git — i.e.
+        // "New terminal window", etc.) and closes with "New tab" and
+        // "New workspace", the two wider scopes. Painted
         // with the plain-plus [ICON_NEW_TAB] glyph so it reads like the
         // Android/iOS overview `+`, not the old window-with-`+` mark. Hosts
         // with no pane flavours still get the plus + a "New tab" dropdown.
@@ -2692,7 +2693,7 @@ private class ShellState(
             tooltip = "New",
             iconHtml = ICON_NEW_TAB,
             items = {
-                // "New tab" first, then the active tab's pane flavours,
+                // The active tab's pane flavours first, then "New tab",
                 // then a "New world" entry when a world source with an
                 // onAdd callback is wired (issue: Worlds).
                 val newTabRow = callbacks.onAdd?.let { onAdd ->
@@ -2735,18 +2736,21 @@ private class ShellState(
                 } else {
                     emptyList()
                 }
-                // Group the menu with dividers: "New tab" | pane creators |
-                // "New workspace". A single separator sits under "New tab" and
-                // above "New workspace"; when there are pane rows between them,
-                // each boundary gets its own separator. Empty groups add none,
-                // so we never render a leading/trailing/doubled divider.
+                // Group the menu with dividers: pane creators | "New tab" |
+                // "New workspace". The rows are ordered by widening scope —
+                // the host's pane flavours first (one of them is what the
+                // button's own click already does, so they sit closest to
+                // it), then the tab that holds panes, then the workspace
+                // that holds tabs. Each boundary between two non-empty
+                // groups gets its own separator; empty groups add none, so
+                // we never render a leading/trailing/doubled divider.
                 buildList {
-                    addAll(newTabRow)
-                    if (newTabRow.isNotEmpty() && (paneRows.isNotEmpty() || newWorldRow.isNotEmpty())) {
-                        add(hoverMenuSeparator("sep-after-new-tab"))
-                    }
                     addAll(paneRows)
-                    if (newWorldRow.isNotEmpty() && paneRows.isNotEmpty()) {
+                    if (newTabRow.isNotEmpty() && paneRows.isNotEmpty()) {
+                        add(hoverMenuSeparator("sep-before-new-tab"))
+                    }
+                    addAll(newTabRow)
+                    if (newWorldRow.isNotEmpty() && (paneRows.isNotEmpty() || newTabRow.isNotEmpty())) {
                         add(hoverMenuSeparator("sep-before-new-world"))
                     }
                     addAll(newWorldRow)
