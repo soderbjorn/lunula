@@ -439,6 +439,16 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     background: var(--t-chrome-track, rgba(255, 255, 255, 0.08));
     color: var(--t-chrome-text, #e6e6e6);
 }
+/* Pressed for as long as its menu is up — the "+" and anything else
+   [attachHoverMenu] is wired to, which stamps `aria-expanded` on the anchor.
+   Hover already paints this fill, and that is the point rather than a
+   redundancy: the anchor stops being hovered the instant the cursor travels
+   into the menu, and without this the button it came out of goes flat while
+   the panel is still hanging off it. */
+.dt-topbar-icon-button[aria-expanded="true"] {
+    background: var(--t-chrome-track, rgba(255, 255, 255, 0.08));
+    color: var(--t-chrome-text, #e6e6e6);
+}
 /* Active state — corresponding pane is currently open. Earlier attempts
    used `color: --t-accent` (sometimes plus `bg: accent-primarySoft`),
    but on light themes whose tabs-section accent lands near the cream/white
@@ -1982,12 +1992,20 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 :root[data-dt-selection="fill"] .dt-pane.dt-pane-focused .dt-pane-action {
     color: var(--t-accent-on, #000000);
 }
-/* Action hover on a filled band: the resting `--t-border` backdrop is a
-   pane-zone token and lands invisibly on the accent. Veil the fill instead,
-   which works on any accent because it is derived from the fill itself. */
+/* Action hover — and the pressed state of the kebab whose menu is up — on a
+   filled band. The resting `--t-border` backdrop is a pane-zone token chosen
+   against the pane surface, and on the accent it lands invisibly: opening the
+   menu left the button it came out of looking untouched, on the one band where
+   saying "this pane" matters most.
+   A scrim of `--t-accent-on` is the answer rather than a second hue. It is the
+   foreground the theme has already declared legible on this exact fill, so it
+   reads on any accent, light or dark, without anybody choosing a colour.
+   `.dt-open` is listed with `.dt-active` because they are the same statement:
+   this control is currently doing something. */
 :root[data-dt-selection="fill"] .dt-pane.dt-pane-focused .dt-pane-action:hover,
-:root[data-dt-selection="fill"] .dt-pane.dt-pane-focused .dt-pane-action.dt-active {
-    background: rgba(0, 0, 0, 0.12);
+:root[data-dt-selection="fill"] .dt-pane.dt-pane-focused .dt-pane-action.dt-active,
+:root[data-dt-selection="fill"] .dt-pane.dt-pane-focused .dt-pane-action.dt-open {
+    background: color-mix(in srgb, var(--t-accent-on, #000000) 13%, transparent);
     color: var(--t-accent-on, #000000);
 }
 /* The resting header lifts to the sunken tone. Under Tint an unfocused header
@@ -2715,10 +2733,44 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     opacity: 0.7;
 }
 
-/* ── Pane kebab popover ───────────────────────────────────────
-   Rendered by `openPaneMenu(anchor, spec)` and appended to <body>; the
-   helper sets `position: fixed` and the inline `left`/`top` itself, so
-   the rules here only style the surface and rows. */
+/* ══ Menu surface — one panel, wherever it was opened from ═════════
+   Every menu in the toolkit is the same object: the pane kebab's popover
+   (`.dt-pane-menu`, openPaneMenu), the topbar "+" dropdown and the world
+   switcher (`.dt-hover-menu`, attachHoverMenu), and a host's own value
+   pickers, which mount `.dt-hover-menu` directly rather than restyling a
+   copy of it. They were two components with two geometries, two row
+   heights and two hover fills, which reads as two apps the moment both are
+   on screen. So the geometry lives here once, over both class families, and
+   the blocks further down keep only what is genuinely theirs: anchoring,
+   scrolling, and flyout stacking.
+
+   The panel is `--t-bg` and never `--t-surface-alt`, and that is not a
+   shade preference. `--t-surface-alt` is the one fill a menu has to spend
+   on its HOVERED ROW; a panel already wearing it leaves hover nowhere to
+   go — which is precisely why the pane menu used to mix 10% of the text
+   colour into its own surface to find a hover it could see. Give the fill
+   back to the row and the mix is not needed.
+
+   One hairline and one soft shadow. The shadow is the only one the toolkit
+   allows itself, because a menu is the only thing here that genuinely
+   floats. */
+.dt-pane-menu,
+.dt-hover-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 180px;
+    padding: 6px;
+    background: var(--t-bg, #1b1b1b);
+    color: var(--t-text, #e6e6e6);
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
+    border-radius: 9px;
+    box-shadow: 0 14px 34px -12px rgba(0, 0, 0, 0.55);
+    user-select: none;
+    -webkit-user-select: none;
+    font-family: inherit;
+    font-size: 12.5px;
+}
 .dt-pane-menu {
     /* Historically 1001 to clear `.dt-maximized`'s old `z-index: 1000`. That
        clamp is gone, and the comparison was moot anyway: this popover is
@@ -2729,79 +2781,136 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
        10), below modal/overlay layers (10000+) so confirm dialogs and the
        theme manager still cover it. */
     z-index: 1001;
-    min-width: 184px;
-    padding: 4px;
-    background: var(--t-surface-alt, #2a2a2a);
-    color: var(--t-text, #e6e6e6);
-    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
-    border-radius: 6px;
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
-    user-select: none;
-    -webkit-user-select: none;
-    font-family: inherit;
-    font-size: 12px;
 }
-.dt-pane-menu-item {
+
+/* A row, at the same 30px the trigger that opens the menu is drawn at, so a
+   menu reads as that control continuing downward rather than as a second
+   object arriving. `flex: 0 0 auto` because the panel scrolls: without it a
+   long list squashes its rows to fit instead of overflowing. */
+.dt-pane-menu-item,
+.dt-hover-menu-item {
+    appearance: none;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 9px;
+    flex: 0 0 auto;
     width: 100%;
-    padding: 6px 10px;
+    height: 30px;
+    padding: 0 10px;
     border: 0;
+    border-radius: 7px;
     background: transparent;
-    color: inherit;
+    color: var(--t-text, #e6e6e6);
     font: inherit;
     text-align: left;
-    border-radius: 4px;
     cursor: pointer;
-    transition: background-color 100ms ease-in-out;
+    transition: background-color 100ms ease-in-out, color 100ms ease-in-out;
 }
-.dt-pane-menu-item:hover:not(:disabled) {
-    /* The menu surface is itself `--t-surface-alt`, so a hover fill of the
-       same token is invisible (the whole menu reads "dead"). Mix a little
-       text colour into the surface instead: this lightens on dark themes
-       and darkens on light ones, staying visibly distinct from the surface
-       whatever the theme. Fallback kicks in only when `--t-surface-alt` is
-       unset. */
-    background: color-mix(in srgb, var(--t-text, #e6e6e6) 10%, var(--t-surface-alt, #2a2a2a));
+.dt-pane-menu-item:hover:not(:disabled),
+.dt-hover-menu-item:hover:not(.dt-disabled) {
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.08));
+    color: var(--t-text-bright, var(--t-text, #e6e6e6));
 }
 .dt-pane-menu-item:disabled {
     opacity: 0.45;
     cursor: not-allowed;
 }
-.dt-pane-menu-item.dt-pane-menu-item-active {
-    color: var(--t-accent, #4f8cff);
+
+/* ── The current value ────────────────────────────────────────────
+   An accent field with the foreground the theme declared for it, plus a
+   check in the gutter every row reserves. The fill and the check say the
+   same thing twice on purpose: the fill is what you see, the check is what
+   survives a theme whose accent is too close to the panel to read as a
+   selection.
+
+   `:hover` is listed alongside so the pointer passing over the live row
+   does not demote it to the hover fill — the row it is on is still the
+   answer. */
+.dt-pane-menu-item.dt-pane-menu-item-active,
+.dt-pane-menu-item.dt-pane-menu-item-active:hover:not(:disabled),
+.dt-hover-menu-item.dt-menu-selected,
+.dt-hover-menu-item.dt-menu-selected:hover,
+.dt-hover-menu-item.dt-world-row.dt-active,
+.dt-hover-menu-item.dt-world-row.dt-active:hover {
+    background: var(--t-accent, #4f8cff);
+    color: var(--t-accent-on, #000000);
+    font-weight: 600;
+}
+/* A menu belongs to the zone it was opened from: one raised by the top bar
+   highlights in the CHROME accent, because the band it dropped out of is
+   chrome. Get this wrong and a theme that paints its two zones differently
+   — Framna fills windows amber and its chrome green — starts reading as two
+   apps. Hosts put `.dt-menu-chrome` on the panel; see `MenuZone`. */
+.dt-pane-menu.dt-menu-chrome .dt-pane-menu-item.dt-pane-menu-item-active,
+.dt-pane-menu.dt-menu-chrome .dt-pane-menu-item.dt-pane-menu-item-active:hover:not(:disabled),
+.dt-hover-menu.dt-menu-chrome .dt-hover-menu-item.dt-menu-selected,
+.dt-hover-menu.dt-menu-chrome .dt-hover-menu-item.dt-menu-selected:hover,
+.dt-hover-menu.dt-menu-chrome .dt-hover-menu-item.dt-world-row.dt-active,
+.dt-hover-menu.dt-menu-chrome .dt-hover-menu-item.dt-world-row.dt-active:hover {
+    background: var(--t-chrome-accent, var(--t-accent, #4f8cff));
+    color: var(--t-chrome-accent-on, var(--t-accent-on, #000000));
 }
 .dt-pane-menu-item.dt-pane-menu-item-danger {
     color: var(--t-danger, #ff6b6b);
 }
-.dt-pane-menu-item-icon {
+
+/* The 14px gutter, reserved by every row whether or not it has an icon, so
+   labels line up down the menu and a check can land in it. */
+.dt-pane-menu-item-icon,
+.dt-hover-menu-icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0;
+    flex: 0 0 14px;
     width: 14px;
     height: 14px;
+    line-height: 0;
     color: var(--t-text-dim, #b0b0b0);
 }
 .dt-pane-menu-item.dt-pane-menu-item-danger .dt-pane-menu-item-icon,
-.dt-pane-menu-item.dt-pane-menu-item-active .dt-pane-menu-item-icon {
+.dt-pane-menu-item.dt-pane-menu-item-active .dt-pane-menu-item-icon,
+.dt-hover-menu-item.dt-menu-selected .dt-hover-menu-icon,
+.dt-hover-menu-item.dt-world-row.dt-active .dt-hover-menu-icon,
+.dt-hover-menu-item:hover .dt-hover-menu-icon {
     color: currentColor;
 }
-.dt-pane-menu-item-icon svg {
+.dt-pane-menu-item-icon svg,
+.dt-hover-menu-icon svg {
     display: block;
+    width: 14px;
+    height: 14px;
 }
-.dt-pane-menu-item-label {
+.dt-pane-menu-item-label,
+.dt-hover-menu-label {
     flex: 1 1 auto;
     min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.dt-pane-menu-separator {
+
+/* A keyboard shortcut, or any other trailing hint: mono, right-aligned and
+   quiet. It names the row rather than competing with it. */
+.dt-menu-shortcut {
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding-left: 10px;
+    font-family: var(--dt-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+    font-size: 10.5px;
+    font-weight: 400;
+    opacity: 0.55;
+}
+
+/* Inset 4px so the rule stops short of the rows' rounded ends, and sitting
+   in the same 2px rhythm as the gaps around it. */
+.dt-pane-menu-separator,
+.dt-hover-menu-separator {
+    flex: 0 0 auto;
     height: 1px;
-    margin: 4px 6px;
-    background: var(--t-border, rgba(255, 255, 255, 0.1));
+    margin: 5px 4px;
+    background: var(--t-border, rgba(255, 255, 255, 0.14));
+    /* Non-interactive; sits between menu groups (e.g. New tab | New workspace). */
+    pointer-events: none;
 }
 
 /* ── Pane menu submenu (nested flyout) ─────────────────────────
@@ -2825,16 +2934,158 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     align-items: center;
     flex-shrink: 0;
     margin-left: auto;
+    padding-left: 8px;
     color: var(--t-text-dim, #b0b0b0);
 }
 .dt-pane-menu-item-chevron svg {
     display: block;
 }
-/* Keep the row visually "on" while its flyout is open, mirroring hover.
-   Same reasoning as `.dt-pane-menu-item:hover` above — a plain
-   `--t-surface-alt` fill would vanish into the menu surface. */
+/* Keep the row visually "on" while its flyout is open, mirroring hover — and
+   now literally wearing hover's fill, which the menu panel no longer spends
+   on itself. */
 .dt-pane-menu-item.dt-pane-menu-item-has-submenu[aria-expanded="true"] {
-    background: color-mix(in srgb, var(--t-text, #e6e6e6) 10%, var(--t-surface-alt, #2a2a2a));
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.08));
+    color: var(--t-text-bright, var(--t-text, #e6e6e6));
+}
+
+/* ══ Menu trigger — the closed face of a menu ══════════════════════
+   A button that reads as a value with a chevron: the toolbar dropdowns in
+   a host's pane, and the field selects in its forms. Built by
+   [buildMenuTrigger] (MenuTrigger.kt), which is also what keeps the chevron
+   an element rather than a background image — an image cannot take
+   `currentColor` and cannot rotate, and both are load-bearing here.
+
+   It is 30px because the menu's rows are 30px. The trigger and the panel
+   hanging off it are one object, and the pixel that says so is that one.
+
+   ── The one rule that decides the paint ──────────────────────────
+   Rest is a hairline and no background, so a row of these costs the
+   toolbar no material. Hover moves the hairline to the accent and stops
+   there: a fill on hover reads as "pressed" a moment before the user has
+   pressed anything. Open SWAPS the hairline for a `--t-surface-alt` fill —
+   swapped, never stacked — so the trigger wears the same material as the
+   menu below it.
+
+   The outline is an inset shadow rather than a border on purpose. A border
+   is layout, so a control that gains one on hover and loses it on open
+   would move its own label by a pixel twice per interaction. */
+.dt-menu-trigger {
+    appearance: none;
+    -webkit-appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    flex: 0 0 auto;
+    min-width: 0;
+    max-width: 100%;
+    height: 30px;
+    padding: 0 11px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--t-border, rgba(255, 255, 255, 0.14));
+    color: var(--t-text-bright, var(--t-text, #e6e6e6));
+    font: inherit;
+    font-size: 12.5px;
+    line-height: 1;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 120ms ease-in-out, box-shadow 120ms ease-in-out;
+}
+.dt-menu-trigger:hover,
+.dt-menu-trigger:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 1px var(--t-accent, #4f8cff);
+}
+.dt-menu-trigger[aria-expanded="true"],
+.dt-menu-trigger[aria-expanded="true"]:hover {
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.08));
+    box-shadow: none;
+}
+/* On the top bar the hairline is the CHROME accent, for the reason the menu
+   rows split zones: the control belongs to the band it sits in. */
+.dt-menu-trigger.dt-menu-chrome:hover,
+.dt-menu-trigger.dt-menu-chrome:focus-visible {
+    box-shadow: inset 0 0 0 1px var(--t-chrome-accent, var(--t-accent, #4f8cff));
+}
+.dt-menu-trigger:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+/* The label carries the current value, which is why the trigger needs no
+   other state to say what it is set to. It truncates rather than wraps: a
+   control that grows taller than its neighbours breaks the row it lives in. */
+.dt-menu-trigger-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+/* An unset value reads dim, so a row of fields still shows at a glance which
+   of them nobody has answered. */
+.dt-menu-trigger-label.dt-menu-trigger-unset {
+    color: var(--t-text-dim, #8a8a8a);
+}
+.dt-menu-trigger-chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 11px;
+    width: 11px;
+    height: 11px;
+    line-height: 0;
+    opacity: 0.55;
+    transition: transform 120ms ease-in-out, opacity 120ms ease-in-out;
+}
+.dt-menu-trigger-chevron svg {
+    display: block;
+    width: 11px;
+    height: 11px;
+}
+.dt-menu-trigger:hover .dt-menu-trigger-chevron,
+.dt-menu-trigger[aria-expanded="true"] .dt-menu-trigger-chevron {
+    opacity: 0.85;
+}
+.dt-menu-trigger[aria-expanded="true"] .dt-menu-trigger-chevron {
+    transform: rotate(180deg);
+}
+/* "This is not showing you everything." A 6px accent dot leading the label,
+   for a trigger whose value has moved off its default — it answers that
+   without spending a second fill, and it is the same mark a filter field
+   wears while a query is active. */
+.dt-menu-trigger-dot {
+    flex: 0 0 6px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--t-accent, #4f8cff);
+}
+
+/* ── The field variant ────────────────────────────────────────────
+   The same control inside a form, beside the text inputs — so it takes
+   their surface and their height, because it is the same kind of thing: a
+   value you can change.
+
+   Its open state cannot be the toolbar version's. A toolbar trigger could
+   swap its hairline for a fill because it had no fill; a field is already
+   filled, so the ring is the only move left — and it is the same ring the
+   text inputs draw on focus, which is what makes a form read as one control
+   set rather than as inputs plus something else. */
+.dt-menu-trigger.dt-menu-trigger-field {
+    display: flex;
+    width: 100%;
+    flex: 1 1 auto;
+    height: 34px;
+    gap: 9px;
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.08));
+    box-shadow: none;
+}
+.dt-menu-trigger.dt-menu-trigger-field:hover,
+.dt-menu-trigger.dt-menu-trigger-field:focus-visible,
+.dt-menu-trigger.dt-menu-trigger-field[aria-expanded="true"] {
+    background: var(--t-surface-alt, rgba(255, 255, 255, 0.08));
+    box-shadow: inset 0 0 0 1px var(--t-accent, #4f8cff);
 }
 
 /* ── Confirm dialog ───────────────────────────────────────── */
@@ -6483,67 +6734,19 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
 
 /* ── Hover menu (attachHoverMenu / buildNewWindowSplitButton) ──
    Popover revealed when the user hovers an anchor button (e.g. the
-   topbar "New pane" icon). Shares the same surface/border tokens as
-   .dt-layout-preset-grid so both popovers feel like one component
-   family; the layout is a vertical column of icon+label rows instead
-   of a tile grid. */
+   topbar "New pane" icon).
+
+   Surface, rows, gutter and separators are the shared menu geometry up
+   beside `.dt-pane-menu` — the two ARE one component, and the only reason
+   there are two class families is that they were built years apart. What
+   is left here is what only this one does: it is anchored `fixed` by the
+   helper, it scrolls, and it can throw a flyout. */
 .dt-hover-menu {
     position: fixed;
     z-index: 1000;
-    display: flex;
-    flex-direction: column;
-    min-width: 180px;
-    padding: 4px 0;
-    background: var(--t-bg, #252526);
-    border: 1px solid var(--t-border, var(--t-border, rgba(255, 255, 255, 0.45)));
-    border-radius: 6px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
     max-width: calc(100vw - 24px);
     max-height: calc(100vh - 80px);
     overflow-y: auto;
-}
-.dt-hover-menu-item {
-    appearance: none;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 6px 12px;
-    background: transparent;
-    border: 0;
-    color: var(--t-text-dim, #b8b8b8);
-    cursor: pointer;
-    font: inherit;
-    text-align: left;
-    transition: background 0.12s, color 0.12s;
-}
-.dt-hover-menu-item:hover {
-    background: var(--t-surface-alt, rgba(255, 255, 255, 0.08));
-    color: var(--t-text, #e6e6e6);
-}
-.dt-hover-menu-icon {
-    width: 18px;
-    height: 18px;
-    flex: 0 0 18px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 0;
-}
-.dt-hover-menu-icon svg {
-    width: 18px;
-    height: 18px;
-    display: block;
-}
-.dt-hover-menu-label {
-    flex: 1;
-    white-space: nowrap;
-}
-.dt-hover-menu-separator {
-    height: 1px;
-    margin: 4px 0;
-    background: var(--t-border, rgba(255, 255, 255, 0.14));
-    /* Non-interactive; sits between menu groups (e.g. New tab | New workspace). */
-    pointer-events: none;
 }
 /* A row whose choice is a list opens a flyout beside the menu instead of
    committing an action (HoverMenuItem.children). The caret marks it; the panel
@@ -6553,8 +6756,8 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
-    margin-left: 2px;
-    margin-right: -4px;
+    margin-left: auto;
+    padding-left: 8px;
     opacity: 0.6;
     line-height: 0;
 }
@@ -6575,18 +6778,14 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     position: relative;
     justify-content: flex-start;
 }
-.dt-world-check {
-    width: 16px;
-    height: 16px;
-    flex: 0 0 16px;
-}
+/* The check rides in the shared 14px gutter rather than widening the row
+   with a slot of its own — see `.dt-hover-menu-icon`. A live row's weight
+   and colour come from `.dt-menu-selected`'s accent field, which the label
+   inherits; a rule here would have to restate it and would then be the
+   thing that disagreed with every other menu. */
 .dt-world-check svg {
     width: 14px;
     height: 14px;
-}
-.dt-world-row.dt-active .dt-hover-menu-label {
-    color: var(--t-text, #e6e6e6);
-    font-weight: 600;
 }
 /* The per-world ⋮ reuses .dt-tab-menu / .dt-tab-menu-button wholesale; only the
    tab-tuned negative margins need neutralizing so the icon sits at the row's

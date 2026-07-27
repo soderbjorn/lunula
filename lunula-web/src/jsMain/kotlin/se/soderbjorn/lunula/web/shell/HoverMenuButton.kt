@@ -205,6 +205,10 @@ fun attachHoverMenu(
         cancelShow(); cancelHide()
         closeFlyout()
         menu?.remove(); menu = null
+        // The anchor stops looking pressed. Same attribute the menu triggers
+        // use (see MenuTrigger.kt), so one stylesheet rule paints both and the
+        // accessibility tree cannot drift away from the paint.
+        anchor.setAttribute("aria-expanded", "false")
         outsideClickHandler?.let { document.removeEventListener("click", it) }
         outsideClickHandler = null
         escHandler?.let { document.removeEventListener("keydown", it) }
@@ -221,8 +225,12 @@ fun attachHoverMenu(
         if (items.isEmpty()) return
 
         val box = document.createElement("div") as HTMLElement
-        box.className = "dt-hover-menu"
+        // Chrome zone: this menu is only ever raised from the top bar, so its
+        // highlighted row takes the chrome accent rather than the content one.
+        // See the menu surface block in `lunula.css`.
+        box.className = "dt-hover-menu ${MenuTriggerClassNames.CHROME}"
         box.setAttribute("role", "menu")
+        anchor.setAttribute("aria-expanded", "true")
 
         /**
          * Show [item]'s children beside [row], replacing whatever flyout is up.
@@ -236,7 +244,7 @@ fun attachHoverMenu(
             if (flyoutOwner === row) return
             closeFlyout()
             val panel = document.createElement("div") as HTMLElement
-            panel.className = "dt-hover-menu dt-hover-menu-flyout"
+            panel.className = "dt-hover-menu dt-hover-menu-flyout ${MenuTriggerClassNames.CHROME}"
             panel.setAttribute("role", "menu")
             for (child in item.children) {
                 if (child.isSeparator) {
