@@ -2703,7 +2703,24 @@ private class ShellState(
                     emptyList()
                 } else {
                     paneAddItemsProvider(activeTabId).map { item ->
-                        HoverMenuItem(item.id, item.label, item.iconHtml, onSelect = item.onSelect)
+                        HoverMenuItem(
+                            item.id,
+                            item.label,
+                            item.iconHtml,
+                            isSeparator = item.isSeparator,
+                            // One level deep, per PaneAddMenuItem.children: a
+                            // grandchild's own children are dropped here rather
+                            // than rendered, so the flyout cannot grow a flyout.
+                            children = item.children.map { child ->
+                                HoverMenuItem(
+                                    child.id,
+                                    child.label,
+                                    child.iconHtml,
+                                    onSelect = child.onSelect,
+                                )
+                            },
+                            onSelect = item.onSelect,
+                        )
                     }
                 }
                 val worldAdd = spec.worldSource?.onAdd

@@ -236,15 +236,43 @@ data class PaneSnapshotEntry(
  * @property iconHtml inline SVG (or other markup) shown in the row's
  *   icon slot. The toolkit slots it into a fixed-size container.
  * @property onSelect invoked when the user clicks this row. The
- *   toolkit closes the menu first.
+ *   toolkit closes the menu first. Ignored when [children] is non-empty —
+ *   such a row is a container rather than an action.
+ * @property children when non-empty, this row opens a **flyout submenu** of
+ *   these items beside the dropdown instead of committing [onSelect]. For a
+ *   host whose "new pane" choice is itself a list — one entry per project, per
+ *   workspace, per connection — which would otherwise have to be flattened into
+ *   the parent menu, where it crowds out every other entry as the list grows.
+ *   Lunicle's "New board ▸" lists the reader's projects this way.
+ *
+ *   One level deep: a child's own [children] are ignored.
+ * @property isSeparator when `true`, this entry renders as a thin,
+ *   non-interactive divider instead of a clickable row; every other field is
+ *   ignored. Use [paneAddSeparator] to build one. For a host whose menu has
+ *   groups — Lunicle's "what to create" above "where to look" — which otherwise
+ *   reads as one undifferentiated list as it grows.
  * @see TabSource.paneAddMenuItems
  */
 data class PaneAddMenuItem(
     val id: String,
     val label: String,
     val iconHtml: String,
+    val children: List<PaneAddMenuItem> = emptyList(),
+    val isSeparator: Boolean = false,
     val onSelect: () -> Unit,
 )
+
+/**
+ * A non-interactive divider row for the "+" dropdown.
+ *
+ * Convenience over the [PaneAddMenuItem] constructor so callers can drop a
+ * separator between groups without spelling out empty label/icon/onSelect.
+ *
+ * @param id stable identifier (never shown); make it unique within the menu.
+ * @return a separator [PaneAddMenuItem].
+ */
+fun paneAddSeparator(id: String): PaneAddMenuItem =
+    PaneAddMenuItem(id = id, label = "", iconHtml = "", isSeparator = true, onSelect = {})
 
 /**
  * Push-based source of the app's tab + pane structure. Supply this

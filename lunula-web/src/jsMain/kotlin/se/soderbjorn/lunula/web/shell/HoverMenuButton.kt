@@ -44,12 +44,28 @@ import org.w3c.dom.events.MouseEvent
  *   workspace"). Declared before [onSelect] so the common trailing-lambda call
  *   form `HoverMenuItem(id, label, icon) { … }` still binds the lambda to
  *   [onSelect].
+ * @property children when non-empty, this row opens a **flyout submenu** of
+ *   these items instead of committing an action: the row grows a right-pointing
+ *   chevron, hovering (or clicking) it reveals the children beside it, and
+ *   [onSelect] is never called. The same shape the tab overflow menu's "Move to
+ *   world" row uses, offered here because a row whose choice is a list — one
+ *   entry per project, per workspace, per connection — is otherwise forced to
+ *   flatten that list into the parent menu, where it crowds out every other
+ *   entry as the list grows.
+ *
+ *   One level deep: a child's own [children] are ignored. Nothing has needed
+ *   two, and a second flyout has nowhere to go on a topbar dropdown already
+ *   anchored to the right edge of the window.
+ *
+ *   Declared before [onSelect] for [isSeparator]'s reason — the trailing-lambda
+ *   call form keeps binding to [onSelect].
  */
 data class HoverMenuItem(
     val id: String,
     val label: String,
     val iconHtml: String,
     val isSeparator: Boolean = false,
+    val children: List<HoverMenuItem> = emptyList(),
     val onSelect: () -> Unit,
 )
 
@@ -67,6 +83,18 @@ fun hoverMenuSeparator(id: String): HoverMenuItem =
 
 private const val SHOW_DELAY_MS = 120
 private const val HIDE_DELAY_MS = 180
+
+/**
+ * The right-pointing chevron flagging a row that opens a flyout submenu.
+ *
+ * The same mark the tab overflow menu's "Move to world" row wears, at the size
+ * the hover menu's own rows are drawn: two menus in one chrome should not
+ * disagree about what "there is more behind this row" looks like.
+ */
+private const val SUBMENU_CARET: String =
+    "<svg viewBox=\"0 0 24 24\" width=\"12\" height=\"12\" fill=\"none\" " +
+        "stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" " +
+        "stroke-linejoin=\"round\"><path d=\"M9 6l6 6-6 6\"/></svg>"
 
 /**
  * Module-level suppression rect, set when the user clicks a hover-menu
@@ -152,6 +180,11 @@ fun attachHoverMenu(
     var hideTimerId: Int? = null
     var outsideClickHandler: ((Event) -> Unit)? = null
     var escHandler: ((Event) -> Unit)? = null
+    // The one open flyout, and the row it belongs to. At most one, so hovering
+    // a second parent row replaces the first rather than leaving two panels
+    // stacked over each other — see openFlyout.
+    var flyout: HTMLElement? = null
+    var flyoutOwner: HTMLElement? = null
 
     fun cancelShow() {
         showTimerId?.let { window.clearTimeout(it) }
@@ -162,8 +195,15 @@ fun attachHoverMenu(
         hideTimerId = null
     }
 
+    fun closeFlyout() {
+        flyout?.remove()
+        flyout = null
+        flyoutOwner = null
+    }
+
     fun closeMenu() {
         cancelShow(); cancelHide()
+        closeFlyout()
         menu?.remove(); menu = null
         outsideClickHandler?.let { document.removeEventListener("click", it) }
         outsideClickHandler = null
@@ -183,6 +223,75 @@ fun attachHoverMenu(
         val box = document.createElement("div") as HTMLElement
         box.className = "dt-hover-menu"
         box.setAttribute("role", "menu")
+
+        /**
+         * Show [item]'s children beside [row], replacing whatever flyout is up.
+         *
+         * Appended to `<body>` and positioned `fixed`, not nested inside the
+         * menu: `.dt-hover-menu` scrolls (`overflow-y: auto`), and a child
+         * panel inside a scrolling box is clipped by it — the submenu would be
+         * cut off at the menu's own edge, which is the one place it must not be.
+         */
+        fun openFlyout(row: HTMLElement, item: HoverMenuItem) {
+            if (flyoutOwner === row) return
+            closeFlyout()
+            val panel = document.createElement("div") as HTMLElement
+            panel.className = "dt-hover-menu dt-hover-menu-flyout"
+            panel.setAttribute("role", "menu")
+            for (child in item.children) {
+                if (child.isSeparator) {
+                    val sep = document.createElement("div") as HTMLElement
+                    sep.className = "dt-hover-menu-separator"
+                    sep.setAttribute("role", "separator")
+                    sep.setAttribute("data-id", child.id)
+                    panel.appendChild(sep)
+                    continue
+                }
+                val childRow = document.createElement("button") as HTMLElement
+                childRow.setAttribute("type", "button")
+                childRow.className = "dt-hover-menu-item"
+                childRow.setAttribute("role", "menuitem")
+                childRow.setAttribute("data-id", child.id)
+                childRow.title = child.label
+                val childIcon = document.createElement("span") as HTMLElement
+                childIcon.className = "dt-hover-menu-icon"
+                childIcon.innerHTML = child.iconHtml
+                val childLabel = document.createElement("span") as HTMLElement
+                childLabel.className = "dt-hover-menu-label"
+                childLabel.textContent = child.label
+                childRow.appendChild(childIcon)
+                childRow.appendChild(childLabel)
+                childRow.addEventListener("click", { ev: Event ->
+                    ev.stopPropagation()
+                    closeMenu()
+                    child.onSelect()
+                })
+                panel.appendChild(childRow)
+            }
+            document.body?.appendChild(panel)
+            // Left of the parent menu by preference: the "+" is at the trailing
+            // edge of the topbar, so its dropdown is already flush right and
+            // there is rarely room on that side. Flip only when the left would
+            // run off screen.
+            val menuRect = box.getBoundingClientRect()
+            val rowRect = row.getBoundingClientRect()
+            val panelRect = panel.getBoundingClientRect()
+            val left = (menuRect.left - panelRect.width - 4)
+                .takeIf { it >= 4.0 }
+                ?: (menuRect.right + 4).coerceAtMost(window.innerWidth - panelRect.width - 4.0)
+            val top = rowRect.top
+                .coerceAtMost(window.innerHeight - panelRect.height - 8.0)
+                .coerceAtLeast(4.0)
+            panel.style.left = "${left}px"
+            panel.style.top = "${top}px"
+            panel.addEventListener("mouseenter", { _: Event -> cancelHide() })
+            panel.addEventListener("mouseleave", { _: Event ->
+                cancelHide()
+                hideTimerId = window.setTimeout({ closeMenu() }, HIDE_DELAY_MS)
+            })
+            flyout = panel
+            flyoutOwner = row
+        }
 
         for (item in items) {
             if (item.isSeparator) {
@@ -210,11 +319,34 @@ fun attachHoverMenu(
 
             row.appendChild(iconWrap)
             row.appendChild(labelEl)
+            val hasChildren = item.children.isNotEmpty()
+            if (hasChildren) {
+                row.classList.add("dt-hover-menu-submenu-parent")
+                val caret = document.createElement("span") as HTMLElement
+                caret.className = "dt-hover-menu-submenu-caret"
+                caret.innerHTML = SUBMENU_CARET
+                row.appendChild(caret)
+            }
+            // Hovering any row dismisses a sibling's flyout, so moving down the
+            // menu never leaves a panel hanging beside a row the cursor has
+            // left. A parent row opens its own in the same gesture.
+            row.addEventListener("mouseenter", { _: Event ->
+                cancelHide()
+                if (hasChildren) openFlyout(row, item) else closeFlyout()
+            })
             row.addEventListener("click", { ev: Event ->
                 // Stop the click from bubbling to the anchor's onclick
                 // (which would fire the default action on top of the
                 // item's onSelect).
                 ev.stopPropagation()
+                // A parent row is a container, not an action: clicking it
+                // opens the flyout for anyone not using hover (touch, or a
+                // pointer that arrived by keyboard) rather than committing
+                // something the row never offered.
+                if (hasChildren) {
+                    openFlyout(row, item)
+                    return@addEventListener
+                }
                 closeMenu()
                 item.onSelect()
             })
@@ -240,6 +372,10 @@ fun attachHoverMenu(
         val outside: (Event) -> Unit = handler@{ ev ->
             val target = ev.target as? HTMLElement ?: return@handler
             if (box.contains(target) || anchor.contains(target)) return@handler
+            // The flyout is a sibling of the menu under <body>, not a
+            // descendant of it (see openFlyout), so "inside" has to name it
+            // explicitly or clicking one would close the menu it belongs to.
+            if (flyout?.contains(target) == true) return@handler
             closeMenu()
         }
         outsideClickHandler = outside

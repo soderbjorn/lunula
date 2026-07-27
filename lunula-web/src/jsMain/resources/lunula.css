@@ -6502,6 +6502,26 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     /* Non-interactive; sits between menu groups (e.g. New tab | New workspace). */
     pointer-events: none;
 }
+/* A row whose choice is a list opens a flyout beside the menu instead of
+   committing an action (HoverMenuItem.children). The caret marks it; the panel
+   itself is a second .dt-hover-menu appended to <body>, because this one
+   scrolls and would clip a nested child. */
+.dt-hover-menu-submenu-caret {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    margin-left: 2px;
+    margin-right: -4px;
+    opacity: 0.6;
+    line-height: 0;
+}
+.dt-hover-menu-item:hover > .dt-hover-menu-submenu-caret {
+    opacity: 1;
+}
+.dt-hover-menu-flyout {
+    /* Above the menu it hangs off, which is already at 1000. */
+    z-index: 1001;
+}
 
 /* --- World switcher --------------------------------------------------- */
 /* The globe button carries the standard topbar-icon chrome; the popover
