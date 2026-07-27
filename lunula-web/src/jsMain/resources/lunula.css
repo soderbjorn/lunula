@@ -694,6 +694,23 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     background: var(--t-chrome-accent, #ff8a3d);
     color: var(--t-chrome-bg, #101010);
 }
+/* …except on the one tab that is already wearing the accent. Under Fill
+   selection the active tab is a solid `--t-chrome-accent` pill, so the badge's
+   accent fill lands on its own colour and the marker disappears on exactly the
+   tab whose unread count the user is most likely to be watching change.
+
+   Inverting is the fix that cannot go wrong: `--t-chrome-accent-on` is defined
+   as the colour that reads on the accent, so a badge painted in it is legible
+   on the pill by the same guarantee that makes the pill's label legible — and
+   filling it back with the accent keeps the badge reading as an accent mark
+   rather than as a hole in the tab.
+
+   Ring selection needs no rule of its own: there the active tab is only an
+   accent-*soft* tint, which a solid accent badge still stands out against. */
+:root[data-dt-selection="fill"] .dt-tab.dt-selected .dt-tab-badge {
+    background: var(--t-chrome-accent-on, #000000);
+    color: var(--t-chrome-accent, #ff8a3d);
+}
 /* Numeric: a pill wide enough for "99+" but circular for a single digit,
    via min-width + a fully-rounded radius rather than a fixed width. */
 .dt-tab-badge-count {
@@ -924,7 +941,19 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     appearance: none;
     background: transparent;
     border: none;
-    color: var(--t-chrome-text-dim, #b8b8b8);
+    /* Track the tab's own foreground, not the chrome's. Under Fill selection
+       the active tab is a solid `--t-chrome-accent` pill whose text is
+       `--t-chrome-accent-on` — usually dark — so a kebab painted from the
+       chrome's text tokens is a light glyph on a light fill, invisible on
+       exactly the tab the user is working in. Inheriting instead means the
+       button is legible on whatever the tab is filled with, by construction,
+       and it is the same answer the sidebar row's children give (`.dt-sidebar-row
+       .dt-active`, whose icon and index just inherit).
+
+       The mix keeps the resting kebab a step quieter than the label beside it —
+       the reason it used the *dim* chrome token — without leaving the tab's
+       palette to do it. */
+    color: color-mix(in srgb, currentColor 70%, transparent);
     font: inherit;
     font-size: 15px;
     line-height: 1;
@@ -946,10 +975,15 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 .dt-tab-menu-button:focus-visible {
     opacity: 1;
 }
+/* Reaching the ⋮ brings it to the tab's full foreground, and backs it with a
+   wash of that same colour. A fixed `--t-chrome-accent-soft` backing cannot
+   work here: on the active tab it is a tint of the accent laid over the accent
+   itself, which is no backing at all. Mixed from currentColor it darkens a
+   light pill and lightens a dark bar without either side being named. */
 .dt-tab-menu-button:hover,
 .dt-tab-menu.dt-open .dt-tab-menu-button {
-    color: var(--t-chrome-text, #e6e6e6);
-    background: var(--t-chrome-accent-soft, rgba(255, 255, 255, 0.12));
+    color: inherit;
+    background: color-mix(in srgb, currentColor 14%, transparent);
 }
 
 /* ── Layout-preset preview-tile dropdown ─────────────────────
@@ -1088,7 +1122,10 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     appearance: none;
     background: transparent;
     border: 0;
-    color: var(--t-chrome-text-dim, #b3b3b3);
+    /* Inherits the tab's foreground for the reason `.dt-tab-menu-button` does:
+       it sits on whatever the tab is filled with, and under Fill selection that
+       is the accent, not the chrome. */
+    color: color-mix(in srgb, currentColor 70%, transparent);
     font: inherit;
     font-size: 14px;
     line-height: 1;
@@ -1098,8 +1135,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: background-color 120ms ease-in-out, color 120ms ease-in-out;
 }
 .dt-tab-close:hover {
-    background: var(--t-chrome-border, rgba(255, 255, 255, 0.16));
-    color: var(--t-chrome-text, #e6e6e6);
+    background: color-mix(in srgb, currentColor 16%, transparent);
+    color: inherit;
 }
 .dt-tab-add {
     appearance: none;
