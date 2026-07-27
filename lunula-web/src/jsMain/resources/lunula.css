@@ -2923,34 +2923,28 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     cursor: pointer;
     transition: background-color 100ms ease-in-out, color 100ms ease-in-out;
 }
-.dt-pane-menu-item:hover:not(:disabled),
-.dt-hover-menu-item:hover:not(.dt-disabled) {
-    background: var(--t-surface-alt, rgba(255, 255, 255, 0.08));
-    color: var(--t-text-bright, var(--t-text, #e6e6e6));
-}
 .dt-pane-menu-item:disabled {
     opacity: 0.45;
     cursor: not-allowed;
 }
 
 /* ── The current value ────────────────────────────────────────────
-   An accent field with the foreground the theme declared for it, plus a
-   check in the gutter every row reserves. The fill and the check say the
-   same thing twice on purpose: the fill is what you see, the check is what
-   survives a theme whose accent is too close to the panel to read as a
-   selection.
-
-   `:hover` is listed alongside so the pointer passing over the live row
-   does not demote it to the hover fill — the row it is on is still the
-   answer. */
+   An accent TINT with the accent as the foreground: enough to find the live
+   row at a glance, not so much that it outshouts the row the pointer is on.
+   The two states are ranked deliberately. Which row is current is a fact the
+   menu states once and the eye can take at leisure; which row will fire if
+   you click is a live answer to what the hand is doing right now, and a menu
+   that paints the standing fact louder than the live one reads as if the
+   pointer isn't being tracked. So the solid field goes to hover (below) and
+   selection keeps the quieter half of the same accent, backed by weight and
+   — where a host draws one, as the world switcher does — a check in the
+   gutter every row reserves. The check is what survives a theme whose accent
+   tint is too close to the panel to read as a selection. */
 .dt-pane-menu-item.dt-pane-menu-item-active,
-.dt-pane-menu-item.dt-pane-menu-item-active:hover:not(:disabled),
 .dt-hover-menu-item.dt-menu-selected,
-.dt-hover-menu-item.dt-menu-selected:hover,
-.dt-hover-menu-item.dt-world-row.dt-active,
-.dt-hover-menu-item.dt-world-row.dt-active:hover {
-    background: var(--t-accent, #4f8cff);
-    color: var(--t-accent-on, #000000);
+.dt-hover-menu-item.dt-world-row.dt-active {
+    background: var(--t-accent-soft, rgba(79, 140, 255, 0.18));
+    color: var(--t-accent, #4f8cff);
     font-weight: 600;
 }
 /* A menu belongs to the zone it was opened from: one raised by the top bar
@@ -2959,16 +2953,40 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    — Framna fills windows amber and its chrome green — starts reading as two
    apps. Hosts put `.dt-menu-chrome` on the panel; see `MenuZone`. */
 .dt-pane-menu.dt-menu-chrome .dt-pane-menu-item.dt-pane-menu-item-active,
-.dt-pane-menu.dt-menu-chrome .dt-pane-menu-item.dt-pane-menu-item-active:hover:not(:disabled),
 .dt-hover-menu.dt-menu-chrome .dt-hover-menu-item.dt-menu-selected,
-.dt-hover-menu.dt-menu-chrome .dt-hover-menu-item.dt-menu-selected:hover,
-.dt-hover-menu.dt-menu-chrome .dt-hover-menu-item.dt-world-row.dt-active,
-.dt-hover-menu.dt-menu-chrome .dt-hover-menu-item.dt-world-row.dt-active:hover {
+.dt-hover-menu.dt-menu-chrome .dt-hover-menu-item.dt-world-row.dt-active {
+    background: var(--t-chrome-accent-soft, var(--t-accent-soft, rgba(79, 140, 255, 0.18)));
+    color: var(--t-chrome-accent, var(--t-accent, #4f8cff));
+}
+
+/* ── The row under the pointer ────────────────────────────────────
+   The solid accent field, and it beats selection on purpose — see above. It
+   also has to beat it in the cascade: every hover selector below carries one
+   more compound than its selected counterpart, so a hovered live row takes
+   the fill rather than staying on its tint, and the zone-scoped hover clears
+   the zone-scoped selection too. */
+.dt-pane-menu-item:hover:not(:disabled),
+.dt-hover-menu-item:hover:not(.dt-disabled) {
+    background: var(--t-accent, #4f8cff);
+    color: var(--t-accent-on, #000000);
+}
+.dt-pane-menu.dt-menu-chrome .dt-pane-menu-item:hover:not(:disabled),
+.dt-hover-menu.dt-menu-chrome .dt-hover-menu-item:hover:not(.dt-disabled) {
     background: var(--t-chrome-accent, var(--t-accent, #4f8cff));
     color: var(--t-chrome-accent-on, var(--t-accent-on, #000000));
 }
 .dt-pane-menu-item.dt-pane-menu-item-danger {
     color: var(--t-danger, #ff6b6b);
+}
+/* Hovering a destructive row must not repaint it in the accent — the accent
+   is the app's "yes", and Delete is not it. Same quiet danger-tinted surface
+   the danger dialog button uses, so the row deepens under the pointer while
+   staying red. Listed at both zone depths so the chrome hover above, which
+   is one compound heavier than the plain one, cannot outrank it. */
+.dt-pane-menu .dt-pane-menu-item.dt-pane-menu-item-danger:hover:not(:disabled),
+.dt-pane-menu.dt-menu-chrome .dt-pane-menu-item.dt-pane-menu-item-danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--t-danger, #b33a36) 18%, transparent);
+    color: var(--t-danger, #e5534b);
 }
 
 /* The 14px gutter, reserved by every row whether or not it has an icon, so
@@ -2986,6 +3004,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 }
 .dt-pane-menu-item.dt-pane-menu-item-danger .dt-pane-menu-item-icon,
 .dt-pane-menu-item.dt-pane-menu-item-active .dt-pane-menu-item-icon,
+.dt-pane-menu-item:hover:not(:disabled) .dt-pane-menu-item-icon,
 .dt-hover-menu-item.dt-menu-selected .dt-hover-menu-icon,
 .dt-hover-menu-item.dt-world-row.dt-active .dt-hover-menu-icon,
 .dt-hover-menu-item:hover .dt-hover-menu-icon {
