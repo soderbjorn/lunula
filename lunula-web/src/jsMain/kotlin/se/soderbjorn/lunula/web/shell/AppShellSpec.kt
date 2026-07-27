@@ -251,7 +251,18 @@ data class PaneSnapshotEntry(
  *   ignored. Use [paneAddSeparator] to build one. For a host whose menu has
  *   groups — Lunicle's "what to create" above "where to look" — which otherwise
  *   reads as one undifferentiated list as it grows.
+ * @property isDefault marks the row that does the same thing as clicking the
+ *   "+" itself — the row that mirrors [TabSource.onPaneAdd]. It takes a
+ *   standing fill in the chrome accent, so a menu opened only to look at says
+ *   which row the button is already pointed at, and somebody who wanted the
+ *   common thing learns they could have skipped the menu.
+ *
+ *   Purely a mark: the click still routes through this row's own [onSelect], so
+ *   a host that marks the wrong row gets a misleading menu rather than a broken
+ *   one. Set it on at most one row; the toolkit paints every row that carries
+ *   it rather than policing that. Defaults `false`.
  * @see TabSource.paneAddMenuItems
+ * @see TabSource.onPaneAdd
  */
 data class PaneAddMenuItem(
     val id: String,
@@ -259,6 +270,7 @@ data class PaneAddMenuItem(
     val iconHtml: String,
     val children: List<PaneAddMenuItem> = emptyList(),
     val isSeparator: Boolean = false,
+    val isDefault: Boolean = false,
     val onSelect: () -> Unit,
 )
 

@@ -59,6 +59,19 @@ import org.w3c.dom.events.MouseEvent
  *
  *   Declared before [onSelect] for [isSeparator]'s reason — the trailing-lambda
  *   call form keeps binding to [onSelect].
+ * @property isDefault marks the row that does what pressing the anchor button
+ *   itself does. It wears the zone's accent as a standing fill — not a hover, a
+ *   statement — so a menu opened only to look at says which row the button is
+ *   already pointed at.
+ *
+ *   This is the one fill a menu of pure actions has to spend, and it is spent
+ *   here for the reason a value list spends it on the current value: both
+ *   answer "which of these is the live one?". Without it the "+" dropdown is a
+ *   flat list in which the button's own behaviour is invisible, and a user who
+ *   wants the common thing has no way to learn they could have just clicked.
+ *
+ *   At most one row should carry it; the toolkit does not enforce that, it
+ *   simply paints every row that does. Defaults `false`.
  */
 data class HoverMenuItem(
     val id: String,
@@ -66,6 +79,7 @@ data class HoverMenuItem(
     val iconHtml: String,
     val isSeparator: Boolean = false,
     val children: List<HoverMenuItem> = emptyList(),
+    val isDefault: Boolean = false,
     val onSelect: () -> Unit,
 )
 
@@ -185,6 +199,8 @@ fun attachHoverMenu(
     // stacked over each other — see openFlyout.
     var flyout: HTMLElement? = null
     var flyoutOwner: HTMLElement? = null
+    /** The anchor's `title`, held while the menu is up so it can be put back. */
+    var suppressedTooltip: String? = null
 
     fun cancelShow() {
         showTimerId?.let { window.clearTimeout(it) }
@@ -209,6 +225,8 @@ fun attachHoverMenu(
         // use (see MenuTrigger.kt), so one stylesheet rule paints both and the
         // accessibility tree cannot drift away from the paint.
         anchor.setAttribute("aria-expanded", "false")
+        suppressedTooltip?.let { anchor.setAttribute("title", it) }
+        suppressedTooltip = null
         outsideClickHandler?.let { document.removeEventListener("click", it) }
         outsideClickHandler = null
         escHandler?.let { document.removeEventListener("keydown", it) }
@@ -231,6 +249,14 @@ fun attachHoverMenu(
         box.className = "dt-hover-menu ${MenuTriggerClassNames.CHROME}"
         box.setAttribute("role", "menu")
         anchor.setAttribute("aria-expanded", "true")
+        // Park the anchor's tooltip for as long as the menu is up. The pointer
+        // is resting on the button — that is what opened the menu — so the
+        // browser fires its tooltip a beat later, on top of the panel, naming a
+        // button the user can plainly see and hiding the rows they opened it
+        // for. Restored on close, so the affordance survives for the next
+        // hover that does NOT open anything.
+        suppressedTooltip = anchor.getAttribute("title")
+        if (suppressedTooltip != null) anchor.removeAttribute("title")
 
         /**
          * Show [item]'s children beside [row], replacing whatever flyout is up.
@@ -257,10 +283,11 @@ fun attachHoverMenu(
                 }
                 val childRow = document.createElement("button") as HTMLElement
                 childRow.setAttribute("type", "button")
-                childRow.className = "dt-hover-menu-item"
+                childRow.className = "dt-hover-menu-item" +
+                    if (child.isDefault) " ${MenuTriggerClassNames.SELECTED}" else ""
                 childRow.setAttribute("role", "menuitem")
                 childRow.setAttribute("data-id", child.id)
-                childRow.title = child.label
+                // No `title`, for the reason the parent rows have none.
                 val childIcon = document.createElement("span") as HTMLElement
                 childIcon.className = "dt-hover-menu-icon"
                 childIcon.innerHTML = child.iconHtml
@@ -312,10 +339,15 @@ fun attachHoverMenu(
             }
             val row = document.createElement("button") as HTMLElement
             row.setAttribute("type", "button")
-            row.className = "dt-hover-menu-item"
+            // The default action wears the zone's accent; see HoverMenuItem.isDefault.
+            row.className = "dt-hover-menu-item" +
+                if (item.isDefault) " ${MenuTriggerClassNames.SELECTED}" else ""
             row.setAttribute("role", "menuitem")
             row.setAttribute("data-id", item.id)
-            row.title = item.label
+            // Deliberately no `title`. It repeated the row's own visible text, so
+            // the browser drew a second copy of the label in a native tooltip
+            // that floated over the panel it was opened from — an unthemed box
+            // saying nothing, covering rows the user is trying to read.
 
             val iconWrap = document.createElement("span") as HTMLElement
             iconWrap.className = "dt-hover-menu-icon"

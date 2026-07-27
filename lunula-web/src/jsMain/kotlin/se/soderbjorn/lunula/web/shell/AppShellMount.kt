@@ -2716,9 +2716,11 @@ private class ShellState(
                                     child.id,
                                     child.label,
                                     child.iconHtml,
+                                    isDefault = child.isDefault,
                                     onSelect = child.onSelect,
                                 )
                             },
+                            isDefault = item.isDefault,
                             onSelect = item.onSelect,
                         )
                     }
