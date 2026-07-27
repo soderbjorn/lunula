@@ -1933,7 +1933,19 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     background: var(--t-accent-soft, var(--t-surface-alt, var(--t-surface, #1e1e1e)));
 }
 .dt-pane.dt-pane-focused .dt-pane-header-icon,
-.dt-pane.dt-pane-focused .dt-pane-title {
+.dt-pane.dt-pane-focused /* Always-visible host controls after the pane title (PaneHeaderSpec.titleControls).
+   Sized to their content and never shrunk: the title beside them is `flex: 0 1
+   auto` and gives way first, which is the right order — a truncated title is
+   still readable, a truncated filter box is not. */
+.dt-pane-title-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    min-width: 0;
+}
+
+.dt-pane-title {
     color: var(--t-text-bright, var(--t-text-bright, var(--t-text-dim, #b0b0b0)));
 }
 
