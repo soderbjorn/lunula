@@ -32,6 +32,7 @@
  */
 package se.soderbjorn.lunula.web.themeeditor
 
+import se.soderbjorn.lunula.core.SelectionStyle
 import se.soderbjorn.lunula.core.Theme
 import se.soderbjorn.lunula.core.ThemeCategory
 import se.soderbjorn.lunula.core.allThemes
@@ -491,7 +492,8 @@ private fun buildNoThemesMatchRow(): HTMLElement {
 
 /**
  * Builds one theme card: the name plus two hover-revealed top-right controls (a
- * favorite star and an "open editor" arrow) above a mini-window thumbnail.
+ * favorite star and an "open editor" arrow) above a mini-shell thumbnail
+ * ([buildThemeThumb]).
  * Clicking the card body assigns the theme to the slot for the currently-active
  * appearance (dark mode → dark slot, light mode → light slot); the assigned
  * theme is highlighted via `dt-theme-card-assigned`.
@@ -582,127 +584,194 @@ private fun renderThemeCard(theme: Theme, onOpen: (String, Boolean) -> Unit): HT
 }
 
 /**
- * Builds the realistic mini-app silhouette thumbnail for [theme]: a tab strip,
- * a sidebar column, two floating panes (one focused) each with their own
- * titlebar and a few code lines, and a bottom accent strip — coloured entirely
- * from the theme's resolved tokens, so each card previews the real app chrome
- * at a glance.
+ * The corner radius the shell uses when the user has set none — the fallback
+ * baked into `--dt-frame-radius` in `lunula.css`. Kept in sync by hand; the
+ * thumbnail is the only place that has to know the number, because CSS reads
+ * its own fallback and this builder cannot.
+ */
+private const val DEFAULT_CORNER_RADIUS_PX = 18
+
+/**
+ * The cap `lunula.css` applies when deriving `--dt-tab-radius` from
+ * `--dt-corner-radius` (`min(radius, 11px)`), so a very round pane setting
+ * doesn't turn the tab pills into circles.
+ */
+private const val TAB_RADIUS_CAP_PX = 11
+
+/**
+ * How much of a real corner radius survives into the thumbnail.
  *
- * This mirrors the pre-revamp `defaultRenderConfigSilhouetteHtml` look (which
- * the multi-scheme theme model drove); here each region is mapped onto the flat
- * [se.soderbjorn.lunula.core.ResolvedTheme] tokens. The `.dt-config-silhouette`
- * / `.dt-cs-*` class hierarchy (sizing, proportions) is defined in
- * `lunula.css`; this builder only assigns the per-token colours.
+ * A true-to-scale mapping (thumbnail height ÷ window height, roughly 1:13)
+ * would render the default 18px radius as 1.4px and every setting between 0
+ * and 24 as "slightly soft" — technically faithful, visually nothing. These
+ * two factors are a deliberate exaggeration, chosen so the *ratio* of radius
+ * to element size lands near the real one: a pane at the default setting reads
+ * as gently rounded, a pill reads as a pill, and 0 still reads as square.
+ */
+private const val PANE_RADIUS_SCALE = 0.18
+private const val TAB_RADIUS_SCALE = 0.30
+
+/**
+ * Builds the mini-shell silhouette thumbnail for [theme] — a miniature of what
+ * the app actually looks like wearing it.
+ *
+ * The silhouette is the real shell's layer order, not a generic window mockup:
+ * a **chrome** frame (top bar with its tab strip, sidebar column, bottom status
+ * bar) wrapping an inset, rounded **canvas** that holds two panes, the first
+ * focused. That structure is load-bearing, because the two zones are separately
+ * themable. A theme like *Lunamux Split* — dark navy chrome around a white
+ * workspace — paints `chromeBg`/`canvas` nowhere near its `bg`, and any preview
+ * that fills one flat background renders it identically to plain *Lunamux
+ * Light*. Splitting the frame from the canvas is what makes those themes
+ * distinguishable at 135px wide.
+ *
+ * Two things beyond the palette decide how the real shell looks, and both are
+ * honoured here rather than assumed:
+ *
+ *  - **Selection style** ([ThemeManagerHost.selectionStyle]). Under
+ *    [SelectionStyle.Fill] the active tab, the active sidebar row and the
+ *    focused pane's header are solid accent fields with `accentOn` type, and
+ *    panes carry no outline; under [SelectionStyle.Tint] the same three
+ *    surfaces are an accent wash under a 1px accent ring, and the focused pane
+ *    keeps its accent outline and glow. Chrome-zone selections fill with
+ *    `chromeAccent` and content-zone ones with `accent` — on a theme that
+ *    splits those two, that difference *is* the look.
+ *  - **Corner radius** ([ThemeManagerHost.cornerRadiusPx]), scaled down for the
+ *    thumbnail — see [PANE_RADIUS_SCALE].
+ *
+ * Density ([ThemeManagerHost.uiDensity]) is deliberately *not* reflected: its
+ * three steps differ by a few pixels of padding, which is under one pixel at
+ * this scale and would only add noise.
+ *
+ * The `.dt-config-silhouette` / `.dt-cs-*` class hierarchy (sizing,
+ * proportions) is defined in `lunula.css`; this builder assigns every colour
+ * inline, because they come from the theme being previewed rather than the
+ * theme in force.
  *
  * @param theme the theme to preview.
  * @return the thumbnail element (a `.dt-config-silhouette` flex column).
+ * @see SelectionStyle
+ * @see se.soderbjorn.lunula.core.ResolvedTheme
  */
 private fun buildThemeThumb(theme: Theme): HTMLElement {
     val r = theme.resolve()
     fun c(v: Long) = argbToCss(v)
 
-    // Token → region mapping. Named locals so the markup below reads like the
-    // real chrome it mimics rather than a wall of `argbToCss(...)`.
-    val tabsBg         = c(r.surfaceAlt)
-    val tabsActiveBg   = c(r.surface)
-    val tabsActiveRing = c(r.accent)
-    val tabsActiveText = c(r.textBright)
-    val tabsDim        = c(r.textDim)
-    val tabsAccent     = c(r.accent)
+    val fill = (host.selectionStyle ?: SelectionStyle.Default) == SelectionStyle.Fill
+    val cornerPx = host.cornerRadiusPx ?: DEFAULT_CORNER_RADIUS_PX
+    val paneRadius = (cornerPx * PANE_RADIUS_SCALE).coerceIn(0.0, 6.0)
+    val tabRadius = (minOf(cornerPx, TAB_RADIUS_CAP_PX) * TAB_RADIUS_SCALE).coerceIn(0.0, 4.0)
 
-    val sidebarBg   = c(r.surface)
-    val sidebarText = c(r.text)
-    val sidebarDim  = c(r.textDim)
+    // ── Chrome zone: top bar, sidebar, status bar ───────────────────────
+    val chromeBg = c(r.chromeBg)
+    val chromeText = c(r.chromeText)
+    val chromeDim = c(r.chromeTextDim)
+    val chromeBorder = c(r.chromeBorder)
+    // The active tab and the active sidebar row are one treatment in two
+    // places (`.dt-tab.dt-selected` / `.dt-sidebar-row.dt-active`), so they
+    // share these two values rather than computing the same thing twice.
+    val chromeSelBg = if (fill) "background:${c(r.chromeAccent)}"
+        else "background:${c(r.chromeAccentSoft)};box-shadow:inset 0 0 0 1px ${c(r.chromeAccent)}"
+    val chromeSelFg = if (fill) c(r.chromeAccentOn) else c(r.chromeTextBright)
 
-    val windowsBg           = c(r.bg)
-    val mainBg              = c(r.surface)
-    val mainFg              = c(r.text)
-    val paneBorder          = c(r.border)
-    val paneTitleBg         = c(r.surfaceAlt)
-    val paneTitleText       = c(r.textDim)
-    val paneTitleBgActive   = c(r.surfaceAlt)
-    val paneTitleTextActive = c(r.textBright)
-    val activeBg            = c(r.accent)
+    // ── Content zone: canvas, panes, pane content ───────────────────────
+    val canvas = c(r.canvas)
+    val surface = c(r.surface)
+    val text = c(r.text)
+    val textDim = c(r.textDim)
+    // Focused pane header: solid accent under Fill, accent wash under Tint.
+    val headerSel = if (fill) "background:${c(r.accent)}" else "background:${c(r.accentSoft)}"
+    val headerSelFg = if (fill) c(r.accentOn) else c(r.textBright)
+    // …and the resting header lifts to the sunken tone under Fill, exactly as
+    // `:root[data-dt-selection="fill"] .dt-pane-header` does.
+    val headerRest = if (fill) c(r.surfaceAlt) else surface
+    // Fill drops the pane outline and the focus glow entirely — with a solid
+    // header band doing the work, the ring is a second voice saying the same
+    // word. Under Tint both are what marks the focused pane.
+    val paneRing = if (fill) "" else "box-shadow:inset 0 0 0 1px ${c(r.border)};"
+    val focusRing = if (fill) "" else
+        "box-shadow:inset 0 0 0 1px ${c(r.accent)}, 0 0 5px -1px ${c(r.glow)};"
 
     val thumb = document.createElement("div") as HTMLElement
     thumb.className = "dt-config-silhouette"
-    thumb.style.background = windowsBg
+    thumb.style.background = chromeBg
     thumb.innerHTML = """
-        <span class="dt-cs-tabs" style="background:$tabsBg">
-            <span class="dt-cs-tab-toggle" style="background:$tabsDim"></span>
-            <span class="dt-cs-tab dt-cs-tab-active" style="background:$tabsActiveBg;box-shadow:inset 0 0 0 1px $tabsActiveRing">
-                <span class="dt-cs-tab-label" style="background:$tabsActiveText"></span>
+        <span class="dt-cs-topbar">
+            <span class="dt-cs-toggle" style="background:$chromeDim"></span>
+            <span class="dt-cs-tab" style="$chromeSelBg;border-radius:${tabRadius}px">
+                <span class="dt-cs-tab-label" style="background:$chromeSelFg"></span>
             </span>
-            <span class="dt-cs-tab">
-                <span class="dt-cs-tab-label" style="background:$tabsDim"></span>
+            <span class="dt-cs-tab" style="box-shadow:inset 0 0 0 1px $chromeBorder;border-radius:${tabRadius}px">
+                <span class="dt-cs-tab-label" style="background:$chromeDim"></span>
             </span>
-            <span class="dt-cs-tab">
-                <span class="dt-cs-tab-label" style="background:$tabsDim"></span>
+            <span class="dt-cs-tab" style="box-shadow:inset 0 0 0 1px $chromeBorder;border-radius:${tabRadius}px">
+                <span class="dt-cs-tab-label" style="background:$chromeDim"></span>
             </span>
-            <span class="dt-cs-tabs-spacer"></span>
-            <span class="dt-cs-tab-icons">
-                <span class="dt-cs-tab-icon" style="background:$tabsAccent"></span>
-                <span class="dt-cs-tab-icon" style="background:$tabsDim"></span>
-                <span class="dt-cs-tab-icon" style="background:$tabsDim"></span>
+            <span class="dt-cs-spacer"></span>
+            <span class="dt-cs-topbar-icons">
+                <span class="dt-cs-topbar-icon" style="background:$chromeText"></span>
+                <span class="dt-cs-topbar-icon" style="background:$chromeText"></span>
+                <span class="dt-cs-topbar-icon" style="background:$chromeText"></span>
             </span>
         </span>
         <span class="dt-cs-body">
-            <span class="dt-cs-sidebar" style="background:$sidebarBg">
-                <span class="dt-cs-sb-header" style="background:$sidebarDim"></span>
-                <span class="dt-cs-sb-item dt-cs-sb-item-active" style="box-shadow:inset 0 0 0 1px $activeBg">
-                    <span class="dt-cs-sb-item-label" style="background:$sidebarText"></span>
+            <span class="dt-cs-sidebar" style="border-right:1px solid $chromeBorder">
+                <span class="dt-cs-sb-header" style="background:$chromeDim"></span>
+                <span class="dt-cs-sb-row" style="$chromeSelBg;border-radius:${tabRadius}px">
+                    <span class="dt-cs-sb-row-label" style="background:$chromeSelFg"></span>
                 </span>
-                <span class="dt-cs-sb-item">
-                    <span class="dt-cs-sb-item-label" style="background:$sidebarText"></span>
+                <span class="dt-cs-sb-row">
+                    <span class="dt-cs-sb-row-label" style="background:$chromeText"></span>
                 </span>
-                <span class="dt-cs-sb-header" style="background:$sidebarDim"></span>
-                <span class="dt-cs-sb-item">
-                    <span class="dt-cs-sb-item-label" style="background:$sidebarText"></span>
+                <span class="dt-cs-sb-header" style="background:$chromeDim"></span>
+                <span class="dt-cs-sb-row">
+                    <span class="dt-cs-sb-row-label" style="background:$chromeText"></span>
                 </span>
             </span>
-            <span class="dt-cs-main" style="background:$windowsBg">
-                <span class="dt-cs-pane dt-cs-pane-focused" style="box-shadow:inset 0 0 0 1px $paneBorder, 0 0 0 1px $activeBg">
-                    <span class="dt-cs-pane-titlebar" style="background:$paneTitleBgActive">
-                        <span class="dt-cs-pane-icon" style="background:$paneTitleTextActive"></span>
-                        <span class="dt-cs-pane-title" style="background:$paneTitleTextActive"></span>
-                        <span class="dt-cs-pane-titlebar-spacer"></span>
-                        <span class="dt-cs-pane-icon" style="background:$paneTitleTextActive"></span>
+            <span class="dt-cs-canvas" style="background:$canvas;border-radius:${paneRadius}px">
+                <span class="dt-cs-pane" style="background:$surface;border-radius:${paneRadius}px;$focusRing">
+                    <span class="dt-cs-pane-header" style="$headerSel">
+                        <span class="dt-cs-pane-icon" style="background:$headerSelFg"></span>
+                        <span class="dt-cs-pane-title" style="background:$headerSelFg"></span>
                     </span>
-                    <span class="dt-cs-pane-body" style="background:$mainBg">
+                    <span class="dt-cs-pane-body">
                         <span class="dt-cs-line">
-                            <span class="dt-cs-prompt" style="background:$activeBg"></span>
-                            <span class="dt-cs-text dt-cs-text-long" style="background:$mainFg"></span>
+                            <span class="dt-cs-prompt" style="background:${c(r.accent)}"></span>
+                            <span class="dt-cs-text dt-cs-text-long" style="background:$text"></span>
                         </span>
                         <span class="dt-cs-line">
-                            <span class="dt-cs-text dt-cs-text-indent dt-cs-text-mid" style="background:$mainFg"></span>
+                            <span class="dt-cs-text dt-cs-text-indent dt-cs-text-mid" style="background:$textDim"></span>
                         </span>
                         <span class="dt-cs-line">
-                            <span class="dt-cs-text dt-cs-text-indent dt-cs-text-short" style="background:$mainFg"></span>
+                            <span class="dt-cs-text dt-cs-text-indent dt-cs-text-short" style="background:$text"></span>
                         </span>
                     </span>
                 </span>
-                <span class="dt-cs-pane" style="box-shadow:inset 0 0 0 1px $paneBorder">
-                    <span class="dt-cs-pane-titlebar" style="background:$paneTitleBg">
-                        <span class="dt-cs-pane-icon" style="background:$paneTitleText"></span>
-                        <span class="dt-cs-pane-title" style="background:$paneTitleText"></span>
-                        <span class="dt-cs-pane-titlebar-spacer"></span>
-                        <span class="dt-cs-pane-icon" style="background:$paneTitleText"></span>
+                <span class="dt-cs-pane" style="background:$surface;border-radius:${paneRadius}px;$paneRing">
+                    <span class="dt-cs-pane-header" style="background:$headerRest">
+                        <span class="dt-cs-pane-icon" style="background:$textDim"></span>
+                        <span class="dt-cs-pane-title" style="background:$textDim"></span>
                     </span>
-                    <span class="dt-cs-pane-body" style="background:$mainBg">
+                    <span class="dt-cs-pane-body">
                         <span class="dt-cs-line">
-                            <span class="dt-cs-text dt-cs-text-long" style="background:$mainFg"></span>
+                            <span class="dt-cs-text dt-cs-text-mid" style="background:${c(r.synKeyword)}"></span>
                         </span>
                         <span class="dt-cs-line">
-                            <span class="dt-cs-text dt-cs-text-short" style="background:$mainFg"></span>
+                            <span class="dt-cs-text dt-cs-text-indent dt-cs-text-long" style="background:${c(r.synString)}"></span>
                         </span>
                         <span class="dt-cs-line">
-                            <span class="dt-cs-text dt-cs-text-mid" style="background:$mainFg"></span>
+                            <span class="dt-cs-text dt-cs-text-indent dt-cs-text-short" style="background:$text"></span>
                         </span>
                     </span>
                 </span>
             </span>
         </span>
-        <span class="dt-cs-accent" style="background:$activeBg"></span>
+        <span class="dt-cs-statusbar">
+            <span class="dt-cs-status-tick dt-cs-status-tick-wide" style="background:$chromeDim"></span>
+            <span class="dt-cs-status-tick dt-cs-status-tick-narrow" style="background:$chromeDim"></span>
+            <span class="dt-cs-spacer"></span>
+            <span class="dt-cs-status-tick dt-cs-status-tick-end" style="background:$chromeDim"></span>
+        </span>
     """.trimIndent()
     return thumb
 }

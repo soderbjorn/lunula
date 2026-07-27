@@ -3364,9 +3364,10 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     color: var(--t-accent, #4f8cff);
     background: var(--t-accent-soft, rgba(79, 140, 255, 0.15));
 }
-/* The thumbnail is the realistic `.dt-config-silhouette` (tab strip + sidebar +
-   two panes), sized by aspect-ratio so it stays proportional as the grid column
-   width changes. Hover/assigned states swap its outer ring to the accent. */
+/* The thumbnail is the realistic `.dt-config-silhouette` (chrome frame around
+   an inset canvas holding two panes), sized by aspect-ratio so it stays
+   proportional as the grid column width changes. Hover/assigned states swap
+   its outer ring to the accent. */
 .dt-theme-card .dt-config-silhouette {
     width: 100%;
     transition: box-shadow 120ms ease;
@@ -4087,7 +4088,21 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     filter: none;
 }
 
-/* ── Default theme silhouette + swatch (DefaultThemeManagerHost) ── */
+/* ── Theme-card silhouette (ThemeManager.buildThemeThumb) ──────────
+   A miniature of the real shell, in the same layer order the app paints:
+   a chrome frame (topbar + sidebar + status bar) wrapping an inset, rounded
+   canvas that holds two panes.
+
+   That nesting is the whole point. The chrome zone and the canvas zone are
+   separately themable (`--t-chrome-bg` / `--t-canvas`), and a theme that
+   splits them — dark navy chrome around a white workspace — is invisible in
+   any preview that paints one flat background. The canvas being a rounded
+   rectangle INSET from the frame is what makes the two zones read as two
+   zones at 135px wide.
+
+   This file owns geometry only. Every colour is assigned inline by
+   `buildThemeThumb`, because the colours depend on the theme being previewed
+   (not the theme in force) and on the user's selection-style setting. */
 .dt-config-silhouette {
     display: flex;
     flex-direction: column;
@@ -4097,161 +4112,150 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     overflow: hidden;
     cursor: pointer;
     box-shadow: 0 0 0 1px var(--t-border, rgba(255, 255, 255, 0.08));
+    /* The silhouette is built entirely from empty <span>s; killing the font
+       size stops stray text nodes / line-height from adding phantom height. */
     font-size: 0;
 }
 
-/* Tab strip: toggle icon, tabs, then a row of control icons */
-.dt-cs-tabs {
+/* Top bar: sidebar toggle, the tab strip, then the trailing icon cluster.
+   Transparent — the root's `--t-chrome-bg` shows through, exactly as
+   `.dt-topbar` sits on `.dt-app-frame`. */
+.dt-cs-topbar {
     display: flex;
     align-items: center;
     gap: 3px;
     padding: 0 4px;
-    height: 11px;
+    height: 12px;
     flex-shrink: 0;
 }
-.dt-cs-tab-toggle {
+.dt-cs-toggle {
     width: 4px;
     height: 4px;
     border-radius: 1px;
-    opacity: 0.65;
+    opacity: 0.85;
     flex-shrink: 0;
 }
 .dt-cs-tab {
     flex: 0 0 auto;
     width: 20px;
     height: 8px;
+    box-sizing: border-box;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 2px;
     padding: 0 3px;
 }
 .dt-cs-tab-label {
     width: 100%;
     height: 2px;
     border-radius: 1px;
-    opacity: 0.6;
 }
-.dt-cs-tab-active .dt-cs-tab-label {
-    opacity: 1;
-}
-.dt-cs-tabs-spacer { flex: 1; min-width: 0; }
-.dt-cs-tab-icons {
+/* Shared by the topbar and the status bar — both push a trailing cluster to
+   the far edge. */
+.dt-cs-spacer { flex: 1; min-width: 0; }
+.dt-cs-topbar-icons {
     display: flex;
     gap: 2px;
     align-items: center;
 }
-.dt-cs-tab-icon {
+.dt-cs-topbar-icon {
     width: 3px;
     height: 4px;
     border-radius: 1px;
-    opacity: 0.8;
+    opacity: 0.75;
 }
 
-/* Body: sidebar + main */
+/* Body row: the chrome sidebar, then the canvas. */
 .dt-cs-body {
     display: flex;
     flex: 1;
     min-height: 0;
 }
 .dt-cs-sidebar {
-    width: 30px;
+    width: 27px;
+    flex-shrink: 0;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    gap: 3px;
-    padding: 5px 3px;
-    flex-shrink: 0;
+    gap: 2px;
+    padding: 4px 3px;
 }
 .dt-cs-sb-header {
     height: 2px;
     width: 55%;
     border-radius: 1px;
-    opacity: 0.75;
-    margin-top: 1px;
+    opacity: 0.9;
+    margin: 1px 0 1px 2px;
 }
-.dt-cs-sb-header + .dt-cs-sb-header,
-.dt-cs-sb-item + .dt-cs-sb-header {
-    margin-top: 2px;
-}
-.dt-cs-sb-item {
+.dt-cs-sb-row {
     height: 5px;
-    border-radius: 1.5px;
+    box-sizing: border-box;
     display: flex;
     align-items: center;
-    padding: 0 3px 0 5px;
+    padding: 0 3px;
 }
-.dt-cs-sb-item-label {
+.dt-cs-sb-row-label {
     height: 2px;
-    width: 80%;
+    width: 78%;
     border-radius: 1px;
-    opacity: 0.7;
-}
-.dt-cs-sb-item-active .dt-cs-sb-item-label {
-    opacity: 1;
 }
 
-/* Main content area: holds two floating panes side-by-side. The gap shows
-   the windows-chrome (.dt-cs-main bg) between panes, like a real split. */
-.dt-cs-main {
+/* The canvas: `.dt-app-frame-main` in miniature. The margin is the frame
+   padding that lets the chrome wrap it on all four sides; the padding + gap
+   are the gutter the panes float in. */
+.dt-cs-canvas {
     flex: 1;
-    padding: 3px;
-    gap: 3px;
-    display: flex;
     min-width: 0;
+    box-sizing: border-box;
+    margin: 3px;
+    padding: 2px;
+    display: flex;
+    gap: 2px;
 }
 .dt-cs-pane {
     flex: 1 1 0;
+    min-width: 0;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    border-radius: 3px;
     overflow: hidden;
-    min-width: 0;
 }
-/* Focused pane: outer ring in the Active section's accent so the eye is
-   drawn to it the same way the real `.dt-pane-focused` outline reads.
-   The inset border (paneBorder) is preserved by stacking both shadows in
-   the inline style; this class only needs to exist for future overrides. */
-.dt-cs-pane-focused {}
-.dt-cs-pane-titlebar {
-    height: 9px;
+.dt-cs-pane-header {
+    height: 8px;
+    flex-shrink: 0;
+    box-sizing: border-box;
     display: flex;
     align-items: center;
-    gap: 3px;
-    padding: 0 4px;
-    flex-shrink: 0;
+    gap: 2px;
+    padding: 0 3px;
 }
 .dt-cs-pane-icon {
     width: 3px;
     height: 3px;
     border-radius: 1px;
-    opacity: 0.85;
     flex-shrink: 0;
 }
 .dt-cs-pane-title {
-    flex: 1 1 auto;
-    min-width: 0;
-    max-width: 65%;
+    width: 52%;
     height: 2px;
     border-radius: 1px;
-    opacity: 0.95;
 }
-.dt-cs-pane-titlebar-spacer { flex: 1; min-width: 0; }
 .dt-cs-pane-body {
     flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 3px;
-    padding: 4px;
-    min-width: 0;
+    gap: 2px;
+    padding: 3px;
 }
 .dt-cs-line {
     display: flex;
     align-items: center;
-    gap: 3px;
+    gap: 2px;
     height: 3px;
 }
 .dt-cs-prompt {
-    width: 4px;
+    width: 3px;
     height: 3px;
     border-radius: 1px;
     flex-shrink: 0;
@@ -4260,19 +4264,29 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     height: 2px;
     flex: 0 0 auto;
     border-radius: 1px;
-    opacity: 0.55;
 }
-.dt-cs-text-long  { width: 70%; }
-.dt-cs-text-mid   { width: 55%; }
-.dt-cs-text-short { width: 35%; }
-.dt-cs-text-indent { margin-left: 7px; }
+.dt-cs-text-long  { width: 62%; }
+.dt-cs-text-mid   { width: 48%; }
+.dt-cs-text-short { width: 34%; }
+.dt-cs-text-indent { margin-left: 5px; }
 
-/* Bottom accent strip */
-.dt-cs-accent {
-    height: 2px;
+/* Bottom status bar — chrome, like the topbar, so it closes the frame. */
+.dt-cs-statusbar {
+    height: 5px;
     flex-shrink: 0;
-    opacity: 0.7;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0 4px;
 }
+.dt-cs-status-tick {
+    height: 2px;
+    border-radius: 1px;
+    opacity: 0.8;
+}
+.dt-cs-status-tick-wide   { width: 14px; }
+.dt-cs-status-tick-narrow { width: 8px; }
+.dt-cs-status-tick-end    { width: 10px; }
 
 .dt-theme-swatch {
     display: flex;
