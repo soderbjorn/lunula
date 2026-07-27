@@ -8,7 +8,7 @@ plugins {
 
 allprojects {
     group = "se.soderbjorn.lunula"
-    version = "0.2.60"
+    version = "0.2.61"
 }
 
 // The toolkit publishes to a single file-Maven-repo whose location is supplied
