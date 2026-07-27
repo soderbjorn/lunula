@@ -68,6 +68,13 @@ fun injectLunulaStyles(target: HTMLElement = document.head as HTMLElement) {
     autoApplyElectronMacBodyClass()
     autoApplyCustomTitleBarBodyClass()
     autoWireMacFullscreenBodyClass()
+    // Keeps `dt-pointer-active` on the body while the mouse is moving
+    // anywhere in the window, which is what brings every pane's (otherwise
+    // hover-only) action strip back at once. Installed here rather than
+    // left to the host: the rules that read the class ship in the very
+    // stylesheet this function mounts, so without it the chrome would be
+    // hover-only for anyone who never called it.
+    installPointerActivityTracking()
 }
 
 /**

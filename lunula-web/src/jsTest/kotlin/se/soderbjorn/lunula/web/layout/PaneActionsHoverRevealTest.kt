@@ -28,6 +28,7 @@ import kotlinx.browser.document
 import kotlinx.browser.window
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.css.CSSStyleSheet
+import se.soderbjorn.lunula.web.POINTER_ACTIVE_BODY_CLASS
 import se.soderbjorn.lunula.web.injectLunulaStyles
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -83,6 +84,12 @@ class PaneActionsHoverRevealTest {
     @BeforeTest
     fun mount() {
         injectLunulaStyles()
+        // The "at rest" this file asserts is *no pointer activity* as well as
+        // no hover: `body.dt-pointer-active` (PointerActivity.kt) reveals
+        // every strip in the document, and it is a shared body class that a
+        // stray movement — a sibling test's synthetic event, or a real cursor
+        // over a headed karma browser — can leave behind.
+        document.body!!.classList.remove(POINTER_ACTIVE_BODY_CLASS)
         container = (document.createElement("div") as HTMLElement).also {
             // Real size: the renderer reads the container's box when placing
             // floating panes, and a zero-sized host would collapse the pane.

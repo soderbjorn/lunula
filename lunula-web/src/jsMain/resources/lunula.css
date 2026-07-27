@@ -2238,9 +2238,11 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 /* ── Hidden until the pointer comes near ─────────────────────────────
    The strip is chrome, not content: at rest it stays out of the way and a
    titlebar reads as just its icon, its title, and (when set) its pane
-   index. Moving the cursor into the titlebar — or into the thin proximity
-   band immediately below it, see `.dt-pane-header-proximity` — fades the
-   buttons back in.
+   index. Moving the mouse AT ALL, anywhere in the window, brings the strip
+   back on every pane at once (see `body.dt-pointer-active` below); moving
+   the cursor into a titlebar — or into the thin proximity band immediately
+   below it, see `.dt-pane-header-proximity` — holds that one pane's strip
+   revealed for as long as the pointer stays there.
 
    Only paint changes. The strip keeps its box at `opacity: 0` so revealing
    it never reflows the title beside it; that is the same reasoning as
@@ -2258,7 +2260,14 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     .dt-pane-actions {
         opacity: 0;
         pointer-events: none;
-        transition: opacity 120ms ease-in-out;
+        /* Asymmetric on purpose, and this is the whole duration pair: the
+           rest state's transition is the one that runs on the way OUT, the
+           reveal rules' is the one that runs on the way IN. Coming back has
+           to feel instant because the user is already reaching; going away
+           has to be slow and unremarkable, because it happens on its own
+           while nobody asked for anything. A 120ms fade-out on an idle
+           timer reads as a flicker and pulls the eye back. */
+        transition: opacity 320ms ease-in-out;
     }
     /* Revealed by, in order: the titlebar itself (which includes its
        proximity band — that band is a sibling of the header, hence the
@@ -2285,6 +2294,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
        and it outranks the grip (z-index 5 vs 4), so the cursor moves off
        the grip and onto the strip — which is INSIDE the header, so the
        first clause takes over and holds it revealed. */
+    body.dt-pointer-active .dt-pane-actions,
     .dt-pane-header:hover .dt-pane-actions,
     .dt-pane-header:focus-within .dt-pane-actions,
     .dt-pane:has(> .dt-pane-header-proximity:hover) > .dt-pane-header .dt-pane-actions,
@@ -2293,7 +2303,26 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     .dt-pane-actions:has(> .dt-pane-action.dt-open) {
         opacity: 1;
         pointer-events: auto;
+        /* Fast in — see the rest state's transition for why the two
+           directions differ. */
+        transition: opacity 110ms ease-in-out;
     }
+    /* ── Any movement, anywhere in the window ─────────────────────────
+       `dt-pointer-active` is put on the body by [installPointerActivityTracking]
+       (PointerActivity.kt) on any `mousemove` and taken off again once the
+       pointer has held still for ~1.8s. It reveals EVERY pane's strip, not
+       just the hovered one: the point is that the buttons are already there
+       when the user starts reaching, which they cannot be if the reveal
+       waits for the cursor to arrive.
+
+       The hover clauses above are not made redundant by it. They cover the
+       cases where the class is absent or stale — a pointer that has been
+       parked on a titlebar past the idle timeout still has that pane's
+       buttons, and keyboard focus still reveals with no mouse involved.
+
+       Live `pointer-events` follows visibility here as it does everywhere
+       else in this block: while the strip is painted it is aimable, and
+       while it is invisible it takes no clicks. */
 }
 /* Invisible band just below the titlebar that counts as hovering it.
    [LayoutRenderer] mounts it as a zero-height flow sibling directly after
