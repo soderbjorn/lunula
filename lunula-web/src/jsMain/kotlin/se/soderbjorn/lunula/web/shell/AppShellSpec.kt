@@ -757,24 +757,6 @@ data class AppShellSpec(
     val tabTrailingBadge: (tabId: String) -> HTMLElement? = { _ -> null },
     val paneHeaderBadge: (tabId: String, paneId: String) -> HTMLElement? = { _, _ -> null },
     /**
-     * Optional per-pane controls in the pane chrome's header, after the title
-     * and **always visible** — unlike [paneActions], which the stylesheet hides
-     * until the titlebar is hovered.
-     *
-     * For a control the pane's content depends on rather than a window control:
-     * a board's filter box, a view switcher, a scope picker. Without it a host
-     * had to draw its own toolbar inside the pane body, directly under the
-     * chrome's — two strips, one row apart, saying the same kind of thing.
-     *
-     * Forwarded verbatim to
-     * [se.soderbjorn.lunula.web.layout.PaneHeaderSpec.titleControls]; same
-     * identity/caching contract as the other host-element slots — the toolkit
-     * re-parents what it is given, so cache it host-side if listeners or
-     * in-place state matter. Invoked on every header rebuild; defaults to
-     * returning `null`.
-     */
-    val paneHeaderControls: (tabId: String, paneId: String) -> HTMLElement? = { _, _ -> null },
-    /**
      * Returns a 1-based pane slot index that the toolkit renders as an
      * encircled glyph (`①..⑨`, `Ⓐ..Ⓩ`) at the trailing edge of both the
      * pane header and the pane's sidebar row. The toolkit forces start-clip

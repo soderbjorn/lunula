@@ -71,12 +71,6 @@ object PaneHeaderClassNames {
      */
     const val LEADING_ICON = "dt-pane-header-icon"
     const val TITLE = "dt-pane-title"
-    /**
-     * Wrapper for [PaneHeaderSpec.titleControls] — always-visible host controls
-     * sitting after the title. Distinct from [ACTIONS], which is the
-     * hidden-until-hover window-control strip at the trailing edge.
-     */
-    const val TITLE_CONTROLS = "dt-pane-title-controls"
     const val TITLE_ARMED = "dt-pane-title-armed"
     const val TITLE_INPUT = "dt-pane-title-input"
     /** Container modifier applied to `.dt-pane-title` when rendering breadcrumb segments. */
@@ -177,29 +171,6 @@ data class PaneTitleSegment(
 data class PaneHeaderSpec(
     val title: String?,
     val leadingBadge: HTMLElement? = null,
-    /**
-     * Host-supplied controls placed immediately after the title, and — unlike
-     * [actions] — **always visible**.
-     *
-     * The trailing [actions] strip is hidden until the titlebar is hovered,
-     * which is right for window controls (close, maximize) and wrong for a
-     * control the pane's content depends on: a filter box nobody can see is a
-     * filter nobody uses, and a host that wanted one had to put it in a toolbar
-     * of its own inside the pane body — a second horizontal strip directly under
-     * the first, saying the same kind of thing.
-     *
-     * The element is appended verbatim into a `.dt-pane-title-controls` wrapper
-     * and is the host's to own: the toolkit re-parents it on every header
-     * rebuild rather than cloning it, so listeners and in-place state survive
-     * (cache it host-side, as with the sidebar header/footer slots).
-     *
-     * Sized to its content and sitting between the title and the flex gap, so a
-     * long title shrinks first ([PaneHeaderClassNames.TITLE] is `flex: 0 1
-     * auto`) and the controls keep their width. Keep them small — a titlebar is
-     * a slim strip, and anything tall enough to change its height belongs in the
-     * pane body.
-     */
-    val titleControls: HTMLElement? = null,
     val actions: List<PaneAction> = emptyList(),
     val onRename: ((newTitle: String) -> Unit)? = null,
     /**
@@ -416,20 +387,6 @@ fun renderPaneHeader(paneId: PaneId, spec: PaneHeaderSpec): HTMLElement {
         badge.textContent = indexGlyph
         badge.setAttribute("aria-label", "Pane ${spec.paneIndex}")
         header.appendChild(badge)
-    }
-
-    // Host controls ride after the title and the index badge, before the space
-    // that pushes the action strip right — so they read as belonging to the
-    // pane's subject rather than to its window buttons. See titleControls.
-    spec.titleControls?.let {
-        val controls = document.createElement("div") as HTMLElement
-        controls.className = PaneHeaderClassNames.TITLE_CONTROLS
-        // The header owns drag; a click inside a control must not start one, and
-        // a double-click must not maximize the pane out from under a text field.
-        controls.addEventListener("mousedown", { ev -> ev.stopPropagation() })
-        controls.addEventListener("dblclick", { ev -> ev.stopPropagation() })
-        controls.appendChild(it)
-        header.appendChild(controls)
     }
 
     spec.onRename?.let { onRename ->

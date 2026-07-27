@@ -2033,7 +2033,6 @@ private class ShellState(
                             titleAlignRight = titleSegments.isEmpty(),
                             leadingIcon = spec.paneIcon(activeTab, paneId),
                             leadingBadge = spec.paneHeaderBadge(activeTab, paneId),
-                            titleControls = spec.paneHeaderControls(activeTab, paneId),
                             actions = spec.paneActions(activeTab, paneId),
                             onRename = renameCb,
                             allowEmptyRename = spec.allowEmptyPaneRename,
