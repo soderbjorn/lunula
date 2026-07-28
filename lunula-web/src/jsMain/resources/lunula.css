@@ -3127,7 +3127,11 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     color: var(--t-text-bright, var(--t-text, #e6e6e6));
     font: inherit;
     font-size: 12.5px;
-    line-height: 1;
+    /* The label clips to one line, so the line box is also the clipping box:
+       at 1 it is shorter than the glyphs it holds and the descender of a "g"
+       is cut off. The height above is what sets the control's size — this only
+       has to be tall enough to hold a letter whole. */
+    line-height: 1.4;
     text-align: left;
     cursor: pointer;
     transition: background-color 120ms ease-in-out, box-shadow 120ms ease-in-out;
