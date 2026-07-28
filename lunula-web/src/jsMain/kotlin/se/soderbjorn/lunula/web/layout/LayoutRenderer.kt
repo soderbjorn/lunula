@@ -1139,18 +1139,6 @@ class LayoutRenderer(
         // them).
         val shouldAnimateEntry = !suppressAnimationsForThisRender &&
             hasRenderedOnce && prior == null
-        // TEMP: diagnostic for the maximize-pane "third location" flash.
-        // Remove once the regression is understood / fixed.
-        console.log(
-            "buildFloatingPane",
-            "id=${spec.id}",
-            "prior=$prior",
-            "isMaximized=${spec.isMaximized}",
-            "shouldAnimateMaximize=$shouldAnimateMaximize",
-            "shouldAnimateEntry=$shouldAnimateEntry",
-            "suppressAnimations=$suppressAnimationsForThisRender",
-            "xPct=${spec.xPct} yPct=${spec.yPct} w=${spec.widthPct} h=${spec.heightPct}",
-        )
         val initialMaximized = if (shouldAnimateMaximize) !spec.isMaximized else spec.isMaximized
         if (initialMaximized) pane.classList.add("dt-maximized")
         if (shouldAnimateEntry) {

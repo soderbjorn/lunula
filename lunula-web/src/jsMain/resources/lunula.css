@@ -1842,7 +1842,19 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
        touch in a split. */
     outline: 2px solid var(--t-border, rgba(255, 255, 255, 0.1));
     outline-offset: -2px;
-    transition: outline-color 120ms ease-in-out, box-shadow 120ms ease-in-out;
+    /* The frame's own timing lives in a custom property, not in `transition`
+       directly, because `transition` is a single property: a later rule that
+       wants a different frame timing would otherwise REPLACE the whole list,
+       taking the floating pane's geometry animation (below) down with it.
+       That is precisely what happened — Fill's "no ring, no halo" override
+       restated `transition` at a higher specificity and maximize/restore
+       stopped animating for every host using the Fill selection language.
+       Overriding the variable instead lets the two concerns compose: rules
+       that care about the frame set `--dt-pane-frame-transition`, and every
+       rule that owns a `transition` splices it into its own list. */
+    --dt-pane-frame-transition: outline-color 120ms ease-in-out,
+        box-shadow 120ms ease-in-out;
+    transition: var(--dt-pane-frame-transition);
 }
 /* Focused pane: the accent frame (outline flip) plus a soft accent glow halo,
    matching the Theme Studio reference's active pane (`box-shadow: 0 0 22px -4px
@@ -1881,14 +1893,19 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
        their new size instead of snapping. Matches termtastic's
        `.floating-pane` rule (380ms cubic-bezier). The `dt-pane-no-anim`
        class disables the transition for the duration of a live drag/resize
-       so the pane tracks the cursor frame-by-frame without lag. */
+       so the pane tracks the cursor frame-by-frame without lag.
+
+       `--dt-pane-frame-transition` is spliced in rather than restated so the
+       focus ring keeps whatever timing the selection language gave it — see
+       the variable's own comment on `.dt-pane` for why it is a variable. */
     transition:
         left 380ms cubic-bezier(.2, .8, .2, 1),
         top 380ms cubic-bezier(.2, .8, .2, 1),
         width 380ms cubic-bezier(.2, .8, .2, 1),
         height 380ms cubic-bezier(.2, .8, .2, 1),
         opacity 280ms ease,
-        transform 380ms cubic-bezier(.2, .8, .2, 1);
+        transform 380ms cubic-bezier(.2, .8, .2, 1),
+        var(--dt-pane-frame-transition);
 }
 .dt-pane.dt-pane-floating.dt-pane-no-anim {
     transition: none;
@@ -2064,8 +2081,14 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     /* Slow out, for the same reason `.dt-pane-actions` fades out slowly: the
        frame leaves on an idle timer nobody asked for, and a quick fade there
        reads as a flicker and pulls the eye back. Coming in is overridden to be
-       fast at the reveal rule. */
-    transition: outline-color 320ms ease-in-out, box-shadow 120ms ease-in-out;
+       fast at the reveal rule.
+
+       Set on the variable, never on `transition` itself: this selector outranks
+       `.dt-pane.dt-pane-floating`, so declaring the shorthand here erased that
+       rule's geometry animation and maximize/restore snapped instead of
+       sliding. */
+    --dt-pane-frame-transition: outline-color 320ms ease-in-out,
+        box-shadow 120ms ease-in-out;
 }
 :root[data-dt-selection="fill"] .dt-pane.dt-pane-focused {
     box-shadow: none;
@@ -2410,8 +2433,13 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
        selection, which is the one thing it must not say. */
     :root[data-dt-selection="fill"] body.dt-pointer-active .dt-pane {
         outline-color: var(--t-chrome-border, var(--t-border, #333));
-        /* Fast in — see the rest state for why the two directions differ. */
-        transition: outline-color 110ms ease-in-out, box-shadow 120ms ease-in-out;
+        /* Fast in — see the rest state for why the two directions differ.
+           On the variable, not on `transition`: this is the rule that is live
+           while the pointer moves, i.e. during every pane drag, so restating
+           the shorthand here would strip the geometry animation exactly when
+           a maximize click is most likely to land. */
+        --dt-pane-frame-transition: outline-color 110ms ease-in-out,
+            box-shadow 120ms ease-in-out;
     }
 }
 /* Invisible band just below the titlebar that counts as hovering it.
