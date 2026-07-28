@@ -13,6 +13,7 @@
   ],
 
   "project": "Lunula - UI toolkit",
+  "maintainer": "soderbjorn",
   "keyPrefix": "LNA",
   "issueUrl": "https://issues.lunicle.dev/?issue={id}",
 
