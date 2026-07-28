@@ -1755,12 +1755,15 @@ private class ShellState(
         topSlot.appendChild(buildTopBar())
 
         // Left sidebar — always mount via mountSidebarOrPlaceholder so a
-        // collapsed sidebar still leaves a draggable hairline strip in
-        // the DOM (the user can grab it to drag the sidebar back open).
-        // Without the placeholder path, dragging the sidebar to zero
-        // leaves no visible affordance and the only way back is the
+        // sidebar the user *dragged* to zero still leaves a draggable
+        // hairline strip in the DOM (they can grab it to drag the sidebar
+        // back open). Without the placeholder path, dragging the sidebar to
+        // zero leaves no visible affordance and the only way back is the
         // topbar's sidebar-toggle button — which the user reasonably
         // expected (and previously had) the drag handle to also provide.
+        // A sidebar closed with that toggle button gets the other form of
+        // the placeholder: 0 width and nothing else, no strip and no
+        // hairline over the content (see SidebarController.isCollapsedByDrag).
         //
         // Preserve the tab/pane tree's scroll position across the rebuild.
         // rerender() fires on state changes unrelated to the sidebar (in

@@ -1345,7 +1345,16 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 .dt-sidebar-collapsed > .dt-sidebar-resize-handle::after {
     /* Always-on hairline when the sidebar is collapsed. Without it the
        sidebar is 0px wide and the user has no visible cue that
-       drag-to-restore is available. */
+       drag-to-restore is available.
+
+       This only ever applies to a sidebar the user DRAGGED to zero:
+       `SidebarController.mountSidebarOrPlaceholder` omits the handle
+       entirely when the sidebar was closed with a toggle instead. The
+       hairline is painted 30px inside the content area (the offset the
+       rules above need to dodge the OS window resize gutter), so on a
+       toggled-away sidebar — where the toggle button is the obvious way
+       back and no cue is needed — it read as a stray line ruled down the
+       user's page rather than as an edge. */
     background: var(--t-chrome-border, #444);
 }
 .dt-sidebar-resize-handle.dt-dragging::after {
