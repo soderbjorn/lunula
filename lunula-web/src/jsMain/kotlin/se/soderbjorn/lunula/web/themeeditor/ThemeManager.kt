@@ -40,12 +40,15 @@ import se.soderbjorn.lunula.core.argbToCss
 import se.soderbjorn.lunula.core.builtinTheme
 import se.soderbjorn.lunula.core.filterThemesForPicker
 import se.soderbjorn.lunula.web.isDarkActive
+import se.soderbjorn.lunula.web.layout.PaneMenuItem
+import se.soderbjorn.lunula.web.layout.PaneMenuSpec
+import se.soderbjorn.lunula.web.layout.openPaneMenu
+import se.soderbjorn.lunula.web.shell.buildMenuTrigger
+import se.soderbjorn.lunula.web.shell.setMenuTriggerLabel
 
 import kotlinx.browser.document
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.HTMLInputElement
-import org.w3c.dom.HTMLOptionElement
-import org.w3c.dom.HTMLSelectElement
 import org.w3c.dom.events.Event
 import org.w3c.dom.events.KeyboardEvent
 
@@ -245,16 +248,25 @@ fun showThemeManager(
     filterInput.setAttribute("aria-label", "Filter themes by name")
     filterRow.appendChild(filterInput)
 
-    val filterSelect = document.createElement("select") as HTMLSelectElement
-    filterSelect.className = "dt-theme-filter-select"
+    // The category filter is a toolkit menu trigger, not a `<select>`.
+    //
+    // A native select's open list is drawn by the operating system, which is the
+    // one surface in this panel no theme can reach: on macOS it came up in the
+    // system appearance with the system's own blue highlight, so a light theme
+    // got a dark popover with a blue selected row — the toolkit's palette
+    // contradicted by the control that picks the palette. Its closed face was no
+    // better: the caret was two `linear-gradient` triangles, a chevron the
+    // toolkit could neither colour nor flip.
+    //
+    // So it is `buildMenuTrigger` + `openPaneMenu` like every other menu here:
+    // the same 30px rows, the same accent on the live one, the same hairline
+    // pill. See MenuTrigger.kt.
+    lateinit var openCategoryMenu: () -> Unit
+    val filterSelect = buildMenuTrigger(
+        extraClass = "dt-theme-filter-select",
+        onClick = { openCategoryMenu() },
+    )
     filterSelect.setAttribute("aria-label", "Filter themes by category")
-    for (category in ThemeCategory.entries) {
-        val opt = document.createElement("option") as HTMLOptionElement
-        opt.value = category.name
-        opt.text = category.label
-        if (category == themeFilterCategory) opt.selected = true
-        filterSelect.appendChild(opt)
-    }
     filterRow.appendChild(filterSelect)
 
     header.appendChild(filterRow)
@@ -351,11 +363,49 @@ fun showThemeManager(
             renderAll()
         }
     })
-    filterSelect.addEventListener("change", {
-        themeFilterCategory = ThemeCategory.entries
-            .firstOrNull { it.name == filterSelect.value } ?: ThemeCategory.All
-        renderAll()
-    })
+    // The category menu is wired here, not beside the trigger, because it has to
+    // call `renderAll` — which only exists further up.
+    //
+    // Open/closed is read off the trigger's own `aria-expanded`, which
+    // [openPaneMenu] sets on the way up and clears on the way down whatever
+    // dismissed it — outside press, Escape, scroll, resize or a row. A local
+    // "is it open" flag would go stale on every one of those routes except the
+    // last and leave the trigger painted pressed over nothing.
+    var closeCategoryMenu: (() -> Unit)? = null
+    /** Repaint the closed trigger from [themeFilterCategory]. */
+    fun syncCategoryTrigger() {
+        setMenuTriggerLabel(
+            trigger = filterSelect,
+            text = themeFilterCategory.label,
+            // The dot says "this control is filtering something out", so it
+            // belongs to every category except the one that filters nothing.
+            isChanged = themeFilterCategory != ThemeCategory.All,
+            title = "",
+        )
+    }
+    openCategoryMenu = {
+        if (filterSelect.getAttribute("aria-expanded") == "true") {
+            closeCategoryMenu?.invoke()
+        } else {
+            closeCategoryMenu = openPaneMenu(
+                anchor = filterSelect,
+                spec = PaneMenuSpec(
+                    items = ThemeCategory.entries.map { category ->
+                        PaneMenuItem(
+                            label = category.label,
+                            isActive = category == themeFilterCategory,
+                            handler = {
+                                themeFilterCategory = category
+                                syncCategoryTrigger()
+                                renderAll()
+                            },
+                        )
+                    },
+                ),
+            )
+        }
+    }
+    syncCategoryTrigger()
 
     renderAll()
 

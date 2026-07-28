@@ -77,7 +77,7 @@ internal fun appendTabDotMenu(tabEl: HTMLElement, tab: TabSpec, spec: TabBarSpec
     menuBtn.addEventListener("mousedown", { ev: Event -> ev.stopPropagation() })
 
     val menuList = document.createElement("div") as HTMLElement
-    menuList.className = "dt-tabbar-menu-list dt-tab-menu-list"
+    menuList.className = "dt-tabbar-menu-list dt-tab-menu-list ${MenuTriggerClassNames.CHROME}"
 
     val closeMenu = wireMenuToggle(menuWrap, menuBtn, menuList)
 
@@ -175,7 +175,7 @@ private fun appendMoveToWorldSubmenu(
     row.appendChild(caret)
 
     val flyout = document.createElement("div") as HTMLElement
-    flyout.className = "dt-tabbar-menu-list dt-tabbar-menu-submenu-list"
+    flyout.className = "dt-tabbar-menu-list dt-tabbar-menu-submenu-list ${MenuTriggerClassNames.CHROME}"
     for (w in cb.moveToWorlds) {
         flyout.appendChild(menuRow(w.label.ifBlank { "(untitled)" }, ICON_WORLD) {
             closeMenu()
@@ -261,7 +261,7 @@ internal fun appendTabBarOverflowMenu(host: HTMLElement, spec: TabBarSpec) {
     menuBtn.textContent = "⋮"
 
     val menuList = document.createElement("div") as HTMLElement
-    menuList.className = "dt-tabbar-menu-list"
+    menuList.className = "dt-tabbar-menu-list ${MenuTriggerClassNames.CHROME}"
 
     val closeMenu = wireMenuToggle(menuWrap, menuBtn, menuList)
 

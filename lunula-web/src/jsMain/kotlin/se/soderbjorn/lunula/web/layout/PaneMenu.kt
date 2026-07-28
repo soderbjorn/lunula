@@ -286,7 +286,13 @@ fun openPaneMenu(anchor: HTMLElement, spec: PaneMenuSpec): () -> Unit {
     lateinit var close: () -> Unit
     val onOutsideMouseDown: (Event) -> Unit = { ev ->
         val target = (ev as MouseEvent).target as? HTMLElement
-        if (target == null || !menu.asDynamic().contains(target) as Boolean) {
+        val inMenu = target != null && menu.asDynamic().contains(target) as Boolean
+        // A press on the anchor is not "outside". The anchor's own click handler
+        // owns the toggle and runs *after* this one, so closing here would let
+        // that click reopen the menu the press was meant to dismiss — a trigger
+        // that opens a menu and can never shut it again.
+        val onAnchor = target != null && anchor.asDynamic().contains(target) as Boolean
+        if (!inMenu && !onAnchor) {
             close()
         }
     }
@@ -305,6 +311,10 @@ fun openPaneMenu(anchor: HTMLElement, spec: PaneMenuSpec): () -> Unit {
             // host re-rendered the header out from under us — the class then
             // comes off a detached element and the fresh button never had it.
             anchor.classList.remove(PaneHeaderClassNames.ACTION_MENU_OPEN)
+            // Same attribute the menu triggers and the hover menu keep (see
+            // MenuTrigger.kt), so one stylesheet rule paints every anchor that
+            // has a menu up and the accessibility tree cannot drift from it.
+            anchor.setAttribute("aria-expanded", "false")
             // Tear down the flyout state first so a pending grace timer
             // can't fire against elements we're about to remove.
             submenuHost?.closeCurrent()
@@ -324,6 +334,7 @@ fun openPaneMenu(anchor: HTMLElement, spec: PaneMenuSpec): () -> Unit {
     // an anchor inside a pane header — it holds the hidden-until-hover action
     // strip revealed while the cursor is away in the popover.
     anchor.classList.add(PaneHeaderClassNames.ACTION_MENU_OPEN)
+    anchor.setAttribute("aria-expanded", "true")
 
     document.body?.appendChild(menu)
     positionMenu(menu, anchor)

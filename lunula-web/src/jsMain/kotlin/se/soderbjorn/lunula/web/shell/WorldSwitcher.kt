@@ -399,7 +399,7 @@ private fun appendWorldRowDotMenu(
     menuBtn.textContent = "⋮"
 
     val menuList = document.createElement("div") as HTMLElement
-    menuList.className = "dt-tabbar-menu-list dt-tab-menu-list dt-world-row-menu-list"
+    menuList.className = "dt-tabbar-menu-list dt-tab-menu-list dt-world-row-menu-list ${MenuTriggerClassNames.CHROME}"
 
     val closeMenu = wireMenuToggle(menuWrap, menuBtn, menuList)
 

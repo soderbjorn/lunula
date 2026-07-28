@@ -777,6 +777,15 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     color: var(--t-chrome-text, #e6e6e6);
     background: var(--t-chrome-track, rgba(255, 255, 255, 0.10));
 }
+/* Surface, rows, gutter, separators, the selected row and the hovered one are
+   ALL the shared menu geometry — see the "Menu surface" block further down,
+   which names `.dt-tabbar-menu-list.dt-open` and `.dt-tabbar-menu-item`
+   alongside `.dt-pane-menu` and `.dt-hover-menu`. These three menus were the
+   last ones drawing their own: a 6px panel of 4px rows with a neutral hover,
+   opening off a tab strip six pixels from a "+" whose menu was a 9px panel of
+   7px rows with an accent one. What is left here is what only these do —
+   they are placed by JS against a strip that scrolls, and they are mounted on
+   `<body>`, outside the frame whose font they would otherwise inherit. */
 .dt-tabbar-menu-list {
     display: none;
     /* Fixed-position so the bar's overflow-x:auto doesn't clip; JS places
@@ -785,72 +794,15 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     top: 0;
     left: 0;
     min-width: 200px;
-    background: var(--t-bg, #252526);
-    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.18));
-    border-radius: 6px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-    padding: 4px;
     z-index: 1000;
-    color: var(--t-text, #e6e6e6);
-    /* The menu list is mounted on document.body (not inside .dt-app-frame)
-       so `font-family: inherit` would resolve to the host's body font, which
-       can be missing entirely. Spell the chrome font out so the menu always
-       renders in the toolkit's UI font. */
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
-        Ubuntu, sans-serif;
-    font-size: 13px;
 }
-.dt-tabbar-menu-list.dt-open {
-    display: block;
-}
-.dt-tabbar-menu-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 6px 10px;
-    border-radius: 4px;
-    font-size: 12px;
-    color: var(--t-text, #e6e6e6);
-    cursor: pointer;
-}
-/* Fixed-width icon column so labels in the menu line up vertically even
-   when some rows have icons and others don't (the empty span still
-   reserves the slot). 14×14 matches the inline SVG sizes shipped by
-   `TabBarOverflowMenu.kt`. */
-.dt-tabbar-menu-item-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    width: 14px;
-    height: 14px;
-    color: var(--t-text-dim, #b8b8b8);
-}
-.dt-tabbar-menu-item-icon svg {
-    width: 14px;
-    height: 14px;
-    display: block;
-}
-.dt-tabbar-menu-item-label {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.dt-tabbar-menu-item:hover {
-    background: var(--t-surface-alt, rgba(255, 255, 255, 0.10));
-}
-.dt-tabbar-menu-item:hover .dt-tabbar-menu-item-icon {
-    color: var(--t-text, #e6e6e6);
-}
-.dt-tabbar-menu-separator {
-    height: 1px;
-    background: var(--t-border, rgba(255, 255, 255, 0.10));
-    margin: 4px 2px;
-}
+/* Section heading ("Unlisted tabs"). Not a row, so it is the one thing in the
+   panel the shared row geometry does not cover. */
 .dt-tabbar-menu-heading {
-    padding: 4px 10px 2px;
+    /* The panel is a column flex box; without this the heading is stretched by
+       the rows around it instead of taking its own text height. */
+    flex: 0 0 auto;
+    padding: 6px 10px 2px;
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.06em;
@@ -859,21 +811,18 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     user-select: none;
     pointer-events: none;
 }
-.dt-tabbar-menu-item.dt-active {
-    color: var(--t-accent, #ff8a3d);
-    font-weight: 700;
-    box-shadow: inset 0 0 0 2px var(--t-accent, #ff8a3d);
-}
 /* "Move to world" submenu parent row: the trailing chevron sits after the
    flex label, dimmed like the leading icon. */
 .dt-tabbar-menu-submenu-caret {
     display: inline-flex;
     align-items: center;
     flex-shrink: 0;
-    color: var(--t-text-dim, #b8b8b8);
+    margin-left: auto;
+    opacity: 0.6;
+    line-height: 0;
 }
-.dt-tabbar-menu-item:hover .dt-tabbar-menu-submenu-caret {
-    color: var(--t-text, #e6e6e6);
+.dt-tabbar-menu-item:hover > .dt-tabbar-menu-submenu-caret {
+    opacity: 1;
 }
 /* The flyout list hangs off the parent list's right edge (top set per-row via
    JS). Override the base `.dt-tabbar-menu-list` fixed/0,0 placement — it is a
@@ -899,7 +848,12 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     appearance: none;
     background: transparent;
     border: none;
-    color: var(--t-text-dim, #b8b8b8);
+    /* `currentColor` and not `--t-text-dim`: the row it sits in is repainted in
+       the accent under the pointer, which is exactly when this button is about
+       to be pressed — a fixed dim grey goes invisible on it. Following the row
+       keeps one contrast in both states. */
+    color: currentColor;
+    opacity: 0.6;
     cursor: pointer;
     flex-shrink: 0;
     display: inline-flex;
@@ -907,9 +861,10 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     justify-content: center;
     width: 22px;
     height: 22px;
-    margin: -4px -4px -4px 4px;
-    border-radius: 4px;
-    transition: color 120ms ease-in-out, background-color 120ms ease-in-out;
+    /* Pulled into the row's 10px right padding so the icon sits at the edge. */
+    margin: 0 -6px 0 4px;
+    border-radius: 5px;
+    transition: opacity 120ms ease-in-out, background-color 120ms ease-in-out;
 }
 .dt-tabbar-menu-item-action svg {
     width: 14px;
@@ -917,8 +872,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     display: block;
 }
 .dt-tabbar-menu-item-action:hover {
-    color: var(--t-text, #e6e6e6);
-    background: var(--t-accent-soft, rgba(255, 255, 255, 0.18));
+    opacity: 1;
+    background: color-mix(in srgb, currentColor 18%, transparent);
 }
 
 /* ── Per-tab `⋯` dot menu (TabBarOverflowMenu.kt#appendTabDotMenu) ──
@@ -2872,7 +2827,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    allows itself, because a menu is the only thing here that genuinely
    floats. */
 .dt-pane-menu,
-.dt-hover-menu {
+.dt-hover-menu,
+.dt-tabbar-menu-list.dt-open {
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -2887,6 +2843,15 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     -webkit-user-select: none;
     font-family: inherit;
     font-size: 12.5px;
+}
+/* The tab-bar menus are mounted on `<body>`, outside `.dt-app-frame`, so the
+   `inherit` above resolves to the host page's own font — which in an Electron
+   shell may not be a font at all. They alone spell the chrome stack out.
+   Stated here rather than beside their block so the panel is one rule with one
+   exception, not two panels that happen to agree. */
+.dt-tabbar-menu-list.dt-open {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+        Ubuntu, sans-serif;
 }
 .dt-pane-menu {
     /* Historically 1001 to clear `.dt-maximized`'s old `z-index: 1000`. That
@@ -2905,7 +2870,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    object arriving. `flex: 0 0 auto` because the panel scrolls: without it a
    long list squashes its rows to fit instead of overflowing. */
 .dt-pane-menu-item,
-.dt-hover-menu-item {
+.dt-hover-menu-item,
+.dt-tabbar-menu-item {
     appearance: none;
     display: flex;
     align-items: center;
@@ -2942,7 +2908,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    tint is too close to the panel to read as a selection. */
 .dt-pane-menu-item.dt-pane-menu-item-active,
 .dt-hover-menu-item.dt-menu-selected,
-.dt-hover-menu-item.dt-world-row.dt-active {
+.dt-hover-menu-item.dt-world-row.dt-active,
+.dt-tabbar-menu-item.dt-active {
     background: var(--t-accent-soft, rgba(79, 140, 255, 0.18));
     color: var(--t-accent, #4f8cff);
     font-weight: 600;
@@ -2954,7 +2921,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    apps. Hosts put `.dt-menu-chrome` on the panel; see `MenuZone`. */
 .dt-pane-menu.dt-menu-chrome .dt-pane-menu-item.dt-pane-menu-item-active,
 .dt-hover-menu.dt-menu-chrome .dt-hover-menu-item.dt-menu-selected,
-.dt-hover-menu.dt-menu-chrome .dt-hover-menu-item.dt-world-row.dt-active {
+.dt-hover-menu.dt-menu-chrome .dt-hover-menu-item.dt-world-row.dt-active,
+.dt-tabbar-menu-list.dt-menu-chrome .dt-tabbar-menu-item.dt-active {
     background: var(--t-chrome-accent-soft, var(--t-accent-soft, rgba(79, 140, 255, 0.18)));
     color: var(--t-chrome-accent, var(--t-accent, #4f8cff));
 }
@@ -2966,12 +2934,14 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    the fill rather than staying on its tint, and the zone-scoped hover clears
    the zone-scoped selection too. */
 .dt-pane-menu-item:hover:not(:disabled),
-.dt-hover-menu-item:hover:not(.dt-disabled) {
+.dt-hover-menu-item:hover:not(.dt-disabled),
+.dt-tabbar-menu-item:hover:not(.dt-disabled) {
     background: var(--t-accent, #4f8cff);
     color: var(--t-accent-on, #000000);
 }
 .dt-pane-menu.dt-menu-chrome .dt-pane-menu-item:hover:not(:disabled),
-.dt-hover-menu.dt-menu-chrome .dt-hover-menu-item:hover:not(.dt-disabled) {
+.dt-hover-menu.dt-menu-chrome .dt-hover-menu-item:hover:not(.dt-disabled),
+.dt-tabbar-menu-list.dt-menu-chrome .dt-tabbar-menu-item:hover:not(.dt-disabled) {
     background: var(--t-chrome-accent, var(--t-accent, #4f8cff));
     color: var(--t-chrome-accent-on, var(--t-accent-on, #000000));
 }
@@ -2992,7 +2962,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 /* The 14px gutter, reserved by every row whether or not it has an icon, so
    labels line up down the menu and a check can land in it. */
 .dt-pane-menu-item-icon,
-.dt-hover-menu-icon {
+.dt-hover-menu-icon,
+.dt-tabbar-menu-item-icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -3007,17 +2978,21 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 .dt-pane-menu-item:hover:not(:disabled) .dt-pane-menu-item-icon,
 .dt-hover-menu-item.dt-menu-selected .dt-hover-menu-icon,
 .dt-hover-menu-item.dt-world-row.dt-active .dt-hover-menu-icon,
-.dt-hover-menu-item:hover .dt-hover-menu-icon {
+.dt-hover-menu-item:hover .dt-hover-menu-icon,
+.dt-tabbar-menu-item.dt-active .dt-tabbar-menu-item-icon,
+.dt-tabbar-menu-item:hover .dt-tabbar-menu-item-icon {
     color: currentColor;
 }
 .dt-pane-menu-item-icon svg,
-.dt-hover-menu-icon svg {
+.dt-hover-menu-icon svg,
+.dt-tabbar-menu-item-icon svg {
     display: block;
     width: 14px;
     height: 14px;
 }
 .dt-pane-menu-item-label,
-.dt-hover-menu-label {
+.dt-hover-menu-label,
+.dt-tabbar-menu-item-label {
     flex: 1 1 auto;
     min-width: 0;
     white-space: nowrap;
@@ -3040,7 +3015,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 /* Inset 4px so the rule stops short of the rows' rounded ends, and sitting
    in the same 2px rhythm as the gaps around it. */
 .dt-pane-menu-separator,
-.dt-hover-menu-separator {
+.dt-hover-menu-separator,
+.dt-tabbar-menu-separator {
     flex: 0 0 auto;
     height: 1px;
     margin: 5px 4px;
@@ -3565,18 +3541,18 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    colours read the toolkit's own --t-* tokens so the editor is themed by the
    active selection. */
 /* ── Theme list filters ────────────────────────────────────────────────
-   A text box and a category dropdown, side by side under the panel title.
+   A text box and a category menu, side by side under the panel title.
    They sit in the header (not the scrolling body) so the list can repaint
    under them without the input losing its caret. The box takes the slack;
-   the select is sized to its longest label ("Dark/Light Split"). */
+   the menu trigger is sized to its longest label ("Dark/Light Split"). */
 .dt-theme-filter {
     display: flex;
     gap: 6px;
     align-items: stretch;
 }
-.dt-theme-filter-input,
-.dt-theme-filter-select {
+.dt-theme-filter-input {
     appearance: none;
+    flex: 1 1 auto;
     background: var(--t-surface-alt, rgba(255, 255, 255, 0.06));
     border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
     color: var(--t-text, #d4d4d4);
@@ -3587,34 +3563,29 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     min-width: 0;
     transition: border-color 0.12s, background 0.12s;
 }
-.dt-theme-filter-input {
-    flex: 1 1 auto;
-}
 .dt-theme-filter-input::placeholder {
     color: var(--t-text-dim, #9aa0a8);
 }
-.dt-theme-filter-input:focus,
-.dt-theme-filter-select:focus {
+.dt-theme-filter-input:focus {
     outline: none;
     border-color: var(--t-accent, #4f8cff);
 }
+/* The category picker is `.dt-menu-trigger` (see MenuTrigger.kt), so rest,
+   hover, open, chevron and the off-default dot are all the toolbar pill's —
+   nothing to restate here but the size it takes in this row.
+
+   It used to be a `<select>`, and a `<select>` cannot be themed where it
+   matters: the open list is drawn by the operating system, which on macOS
+   meant a dark popover with the system's blue selection sitting inside a
+   LIGHT theme's panel — the palette contradicted by the control that picks
+   the palette. Its caret was two `linear-gradient` triangles for the same
+   reason every hand-rolled chevron in this family was replaced: a background
+   image takes no `currentColor` and cannot rotate when the menu opens. */
 .dt-theme-filter-select {
     flex: 0 0 auto;
-    cursor: pointer;
-    /* Room for the caret drawn below. */
-    padding-right: 24px;
-    background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
-        linear-gradient(135deg, currentColor 50%, transparent 50%);
-    background-position: right 11px top 52%, right 7px top 52%;
-    background-size: 4px 4px, 4px 4px;
-    background-repeat: no-repeat;
-}
-/* The dropdown's popup is drawn by the OS and does not inherit the panel's
-   colours, so state them on the options too — otherwise a light theme can end
-   up with dark-on-dark text in the open list. */
-.dt-theme-filter-select option {
-    background: var(--t-surface, #252526);
-    color: var(--t-text, #d4d4d4);
+    /* Matches the filter box beside it, which is 12px + 6px padding + border. */
+    height: auto;
+    align-self: stretch;
 }
 /* Shown in place of the grid when the two filters between them match nothing.
    An empty panel reads as a broken picker; this says which filter to relax. */
