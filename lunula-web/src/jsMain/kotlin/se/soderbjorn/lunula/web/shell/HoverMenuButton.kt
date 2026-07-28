@@ -95,8 +95,31 @@ data class HoverMenuItem(
 fun hoverMenuSeparator(id: String): HoverMenuItem =
     HoverMenuItem(id = id, label = "", iconHtml = "", isSeparator = true, onSelect = {})
 
-private const val SHOW_DELAY_MS = 120
-private const val HIDE_DELAY_MS = 180
+/**
+ * Pause the pointer must hold on an anchor before its menu reveals itself.
+ *
+ * Long enough that a cursor merely travelling across the topbar on its way
+ * somewhere else doesn't leave a trail of opened menus behind it; short
+ * enough that a deliberate hover doesn't feel like waiting.
+ *
+ * Internal rather than file-private because the layout dropdown
+ * ([se.soderbjorn.lunula.web.layout.LayoutDropdown]) reveals itself on hover
+ * too, and two topbar buttons sitting next to each other must not disagree
+ * about how long a hover takes to mean something.
+ */
+internal const val HOVER_MENU_SHOW_DELAY_MS = 120
+
+/**
+ * Grace period between the pointer leaving an anchor (or its menu) and the
+ * menu closing.
+ *
+ * Buys the diagonal: the panel hangs below the button with a gap between
+ * them, and a cursor crossing that gap is briefly over neither surface.
+ * Re-entering either one cancels the pending close.
+ *
+ * Shared with the layout dropdown for [HOVER_MENU_SHOW_DELAY_MS]'s reason.
+ */
+internal const val HOVER_MENU_HIDE_DELAY_MS = 180
 
 /**
  * The right-pointing chevron flagging a row that opens a flyout submenu.
@@ -112,10 +135,10 @@ private const val SUBMENU_CARET: String =
 
 /**
  * Module-level suppression rect, set when the user clicks a hover-menu
- * anchor (committing the default action). Subsequent `mouseenter` events
- * on any hover-menu anchor are ignored as long as the cursor is still
- * inside this rect. Cleared the moment a global `mousemove` carries the
- * cursor outside the rect.
+ * anchor (committing the default action, or dismissing an open menu).
+ * Subsequent `mouseenter` events on any hover-revealing topbar anchor are
+ * ignored as long as the cursor is still inside this rect. Cleared the
+ * moment a global `mousemove` carries the cursor outside the rect.
  *
  * Why module-level: the topbar's trailing area is rebuilt on every
  * re-render, so the post-click anchor is a *different* DOM element from
@@ -154,14 +177,72 @@ private fun ensureSuppressCleanupInstalled() {
 }
 
 /**
+ * Whether a hover-open should be swallowed because the cursor is still
+ * parked where it last clicked a hover-revealing button.
+ *
+ * Without this, dismissing a menu by clicking its own button is futile: the
+ * click closes the menu, the topbar rebuild puts a fresh anchor element
+ * under the unmoved cursor, the browser fires `mouseenter` on it, and the
+ * menu the user just dismissed reappears. Checking a *rect* rather than an
+ * element is what makes that survive the rebuild.
+ *
+ * Side effect: a call made from outside the recorded rect clears the
+ * suppression, so one stale click can't keep blocking unrelated opens.
+ *
+ * Called from the `mouseenter` handler of every hover-revealing topbar
+ * anchor — [attachHoverMenu]'s and the layout dropdown's alike.
+ *
+ * @param ev the `mouseenter` event whose client coordinates decide it.
+ *   A non-[MouseEvent] (synthetic, as in tests) counts as suppressed while
+ *   suppression is armed, since it carries no position to judge by.
+ * @return `true` when the caller should ignore this hover.
+ * @see armHoverOpenSuppression
+ */
+internal fun isHoverOpenSuppressed(ev: Event): Boolean {
+    if (!suppressOpenActive) return false
+    val me = ev as? MouseEvent ?: return true
+    if (me.clientX >= suppressOpenRectLeft &&
+        me.clientX <= suppressOpenRectRight &&
+        me.clientY >= suppressOpenRectTop &&
+        me.clientY <= suppressOpenRectBottom
+    ) {
+        return true
+    }
+    suppressOpenActive = false
+    return false
+}
+
+/**
+ * Arms [isHoverOpenSuppressed] over [anchor]'s current screen rect, and
+ * installs the global cleanup that disarms it once the cursor leaves.
+ *
+ * Called from the click handler of a hover-revealing topbar button: a click
+ * is an explicit decision (commit the default action, or dismiss the menu),
+ * and hover must not immediately undo it.
+ *
+ * @param anchor the button that was clicked; measured immediately, so call
+ *   before any re-render replaces it.
+ * @see isHoverOpenSuppressed
+ */
+internal fun armHoverOpenSuppression(anchor: HTMLElement) {
+    val rect = anchor.getBoundingClientRect()
+    suppressOpenRectLeft = rect.left
+    suppressOpenRectTop = rect.top
+    suppressOpenRectRight = rect.right
+    suppressOpenRectBottom = rect.bottom
+    suppressOpenActive = true
+    ensureSuppressCleanupInstalled()
+}
+
+/**
  * Attaches a hover-revealed menu to [anchor].
  *
  * Behaviour:
- * - `mouseenter` on the anchor schedules a [SHOW_DELAY_MS] timer; on
+ * - `mouseenter` on the anchor schedules a [HOVER_MENU_SHOW_DELAY_MS] timer; on
  *   fire, the menu element is built (via [itemsProvider]) and positioned
  *   under the anchor's bottom-right corner.
  * - `mouseleave` from either the anchor or the menu schedules a
- *   [HIDE_DELAY_MS] timer; re-entering either surface before it fires
+ *   [HOVER_MENU_HIDE_DELAY_MS] timer; re-entering either surface before it fires
  *   cancels the close.
  * - Clicking a row fires the item's `onSelect`, closes the menu, and
  *   stops the click from propagating to [anchor]'s click handler.
@@ -322,7 +403,7 @@ fun attachHoverMenu(
             panel.addEventListener("mouseenter", { _: Event -> cancelHide() })
             panel.addEventListener("mouseleave", { _: Event ->
                 cancelHide()
-                hideTimerId = window.setTimeout({ closeMenu() }, HIDE_DELAY_MS)
+                hideTimerId = window.setTimeout({ closeMenu() }, HOVER_MENU_HIDE_DELAY_MS)
             })
             flyout = panel
             flyoutOwner = row
@@ -406,7 +487,7 @@ fun attachHoverMenu(
         box.addEventListener("mouseenter", { _: Event -> cancelHide() })
         box.addEventListener("mouseleave", { _: Event ->
             cancelHide()
-            hideTimerId = window.setTimeout({ closeMenu() }, HIDE_DELAY_MS)
+            hideTimerId = window.setTimeout({ closeMenu() }, HOVER_MENU_HIDE_DELAY_MS)
         })
 
         val outside: (Event) -> Unit = handler@{ ev ->
@@ -439,22 +520,9 @@ fun attachHoverMenu(
         // the mouse away to dismiss the menu they explicitly dismissed
         // by clicking. The suppression clears as soon as the mouse moves
         // outside the recorded rect (handled by the global cleanup).
-        if (suppressOpenActive) {
-            val me = ev as? MouseEvent
-            if (me != null &&
-                me.clientX >= suppressOpenRectLeft &&
-                me.clientX <= suppressOpenRectRight &&
-                me.clientY >= suppressOpenRectTop &&
-                me.clientY <= suppressOpenRectBottom
-            ) {
-                return@addEventListener
-            }
-            // Cursor is outside the suppressed rect — clear so we don't
-            // keep blocking unrelated future opens.
-            suppressOpenActive = false
-        }
+        if (isHoverOpenSuppressed(ev)) return@addEventListener
         cancelShow()
-        showTimerId = window.setTimeout({ openMenu() }, SHOW_DELAY_MS)
+        showTimerId = window.setTimeout({ openMenu() }, HOVER_MENU_SHOW_DELAY_MS)
     })
     anchor.addEventListener("mouseleave", { ev: Event ->
         cancelShow()
@@ -463,7 +531,7 @@ fun attachHoverMenu(
         val related = (ev as? MouseEvent)?.relatedTarget as? HTMLElement
         if (related != null && menu?.contains(related) == true) return@addEventListener
         cancelHide()
-        hideTimerId = window.setTimeout({ closeMenu() }, HIDE_DELAY_MS)
+        hideTimerId = window.setTimeout({ closeMenu() }, HOVER_MENU_HIDE_DELAY_MS)
     })
     // Clicking the anchor itself commits the default action — the user
     // has already made a choice, so dismiss the hover menu immediately
@@ -477,13 +545,7 @@ fun attachHoverMenu(
         // immediately reappear after a topbar re-render (which replaces
         // the anchor element). Cleared by the global mousemove handler
         // once the cursor leaves the recorded rect.
-        val rect = anchor.getBoundingClientRect()
-        suppressOpenRectLeft = rect.left
-        suppressOpenRectTop = rect.top
-        suppressOpenRectRight = rect.right
-        suppressOpenRectBottom = rect.bottom
-        suppressOpenActive = true
-        ensureSuppressCleanupInstalled()
+        armHoverOpenSuppression(anchor)
     })
 
     return anchor
