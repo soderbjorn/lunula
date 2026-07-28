@@ -82,7 +82,8 @@ enum class ThemeCategory(val label: String) {
     /**
      * Light in both zones, but still split into two: the shell is as white as
      * the content, and the zones are told apart by hue alone ("Harbour",
-     * "Orchid", "Marmalade", "Cerise").
+     * "Orchid", "Marmalade", "Cerise", "Fern", "Lagoon", "Peony", "Sunbeam",
+     * "Bluebell").
      *
      * The distinction from [Light] is that the theme actually declares a chrome
      * zone *and* paints something differently in it — see
@@ -97,7 +98,7 @@ enum class ThemeCategory(val label: String) {
  * from its content zone.
  *
  * Declaring the tokens is not enough on its own: a theme may set `chromeBg` to
- * the same value as `bg` (all four white two-tones do exactly that) and carry
+ * the same value as `bg` (every white two-tone does exactly that) and carry
  * the split entirely in the accent and the canvas gutter. So this asks whether
  * any of the three visible zone surfaces — the chrome background, the canvas
  * behind the panes, or the chrome accent — differs from its content

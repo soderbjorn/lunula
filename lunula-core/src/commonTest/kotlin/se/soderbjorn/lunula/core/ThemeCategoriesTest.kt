@@ -37,7 +37,7 @@ class ThemeCategoriesTest {
         // than declared. A theme whose palette contradicts its former label
         // would move one of these.
         assertEquals(35, builtinThemes.count { it.isDarkToned }, "dark-toned built-ins")
-        assertEquals(42, builtinThemes.count { !it.isDarkToned }, "light-toned built-ins")
+        assertEquals(47, builtinThemes.count { !it.isDarkToned }, "light-toned built-ins")
     }
 
     @Test
@@ -89,7 +89,10 @@ class ThemeCategoriesTest {
             .filter { paletteCategoryOf(it) == ThemeCategory.WhiteTwoTone }
             .map { it.name }
         assertEquals(
-            listOf("Harbour", "Orchid", "Marmalade", "Cerise"),
+            listOf(
+                "Harbour", "Orchid", "Marmalade", "Cerise",
+                "Fern", "Lagoon", "Peony", "Sunbeam", "Bluebell",
+            ),
             found,
         )
     }
@@ -213,15 +216,21 @@ class ThemeCategoriesTest {
 
     @Test
     fun theCategoryAndTheSearchBothApply() {
-        // The tag "Bright" is on exactly the four White two-tone themes, but
-        // the word also appears in other themes' descriptions — so the search
+        // The tag "Bright" is on exactly the White two-tone themes, but the
+        // word also appears in other themes' descriptions — so the search
         // alone over-matches and the category has to narrow it.
         val searchOnly = filterThemesForPicker(builtinThemes, emptySet(), query = "bright")
         val both = filterThemesForPicker(
             builtinThemes, emptySet(), ThemeCategory.WhiteTwoTone, "bright",
         )
         assertTrue(searchOnly.size > both.size, "the search alone must match more")
-        assertEquals(listOf("Harbour", "Orchid", "Marmalade", "Cerise").sorted(), both.map { it.name }.sorted())
+        assertEquals(
+            listOf(
+                "Harbour", "Orchid", "Marmalade", "Cerise",
+                "Fern", "Lagoon", "Peony", "Sunbeam", "Bluebell",
+            ).sorted(),
+            both.map { it.name }.sorted(),
+        )
         assertTrue(both.all { paletteCategoryOf(it) == ThemeCategory.WhiteTwoTone })
     }
 

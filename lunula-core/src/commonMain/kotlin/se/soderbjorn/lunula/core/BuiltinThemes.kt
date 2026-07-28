@@ -1,22 +1,23 @@
 /* BuiltinThemes.kt
- * The 77 built-in themes (35 dark-toned, 42 light-toned): 71 transcribed verbatim from
+ * The 82 built-in themes (35 dark-toned, 47 light-toned): 71 transcribed verbatim from
  * the "Termtastic Theme Studio" design's RAW array, plus two hand-tuned
  * retro-computer palettes ("Workbench", "C64") appended at the
- * end of the list and four hand-tuned light-chrome splits in the light
- * section ("Harbour", "Orchid", "Marmalade", "Cerise"). Each theme
+ * end of the list and nine hand-tuned light-chrome splits in the light
+ * section ("Harbour", "Orchid", "Marmalade", "Cerise", "Fern", "Lagoon",
+ * "Peony", "Sunbeam", "Bluebell"). Each theme
  * defines all 20 literal tokens (including 8 dedicated syntax slots); the
  * four the design computes by formula (accentSoft, glow, addBg,
  * chromeAccentSoft) are derived at render time by [Theme.resolve] applying the
  * design's alpha to the accent/add/chromeAccent colour, so nothing else is
  * computed.
  *
- * Thirteen themes additionally set the 8 optional chrome/canvas tokens,
+ * Eighteen themes additionally set the 8 optional chrome/canvas tokens,
  * painting the title bar / tab bar / sidebar and the pane canvas independently
  * of the pane content. Every other theme leaves them unset and so falls back to
  * the base tokens exactly as before.
  *
  * Nine of them (tagged "Chrome") split by *value* — white or near-white
- * content in a near-black shell. The four tagged "Bright" split by *hue*
+ * content in a near-black shell. The nine tagged "Bright" split by *hue*
  * instead: the shell stays as white as the content, and the two zones are told
  * apart only by `accent` against `chromeAccent`.
  *
@@ -89,7 +90,7 @@ private fun theme(
 )
 
 /**
- * The 77 built-in themes.
+ * The 82 built-in themes.
  *
  * **This list's order is not the display order.** The picker sorts by name
  * ([orderThemesForPicker]), so the grouping below — house block, dark section,
@@ -341,7 +342,7 @@ val builtinThemes: List<Theme> = listOf(
         chromeBg = "#241a12", chromeText = "#cbb79c", chromeTextDim = "#8a745c",
         chromeTextBright = "#f5e9d8", chromeBorder = "#45341f",
         chromeAccent = "#e0a24b", chromeTrack = "#33261a"),
-    // The four light-chrome splits, tagged "Bright". Every chrome-zone theme
+    // The light-chrome splits, tagged "Bright". Every chrome-zone theme
     // above wraps white content in a near-black shell; these leave the shell white
     // too and let the two accents carry the whole theme — the pane title bar
     // takes `accent`, the sidebar and tab rail take `chromeAccent`, and the
@@ -395,7 +396,7 @@ val builtinThemes: List<Theme> = listOf(
         addOn = "#000000",
         chromeAccentOn = "#000000", chromeAccentText = "#2a5a96",
         tintAlpha = 0.1),
-    theme("Cerise", "Bright", "Rose windows over a gold rail, on white. The loudest of the four.",
+    theme("Cerise", "Bright", "Rose windows over a gold rail, on white. Loud and sweet.",
         "#ffffff", "#ffffff", "#f7eff2", "#eddfe4", "#180f13", "#736569", "#000000",
         "#ff7aa8", "#f0a63c", "#e5544d", "#3ac2a0", "#0a6b5c",
         "#b0245c", "#180f13", "#96580b", "#736569", "#b0245c", "#180f13", "#180f13", "#96580b",
@@ -408,6 +409,81 @@ val builtinThemes: List<Theme> = listOf(
         dangerOn = "#000000", dangerText = "#b3332d",
         addOn = "#000000",
         chromeAccentOn = "#000000", chromeAccentText = "#7a5c05",
+        tintAlpha = 0.1),
+    // Five more of the same construction, added because four hue pairs is a
+    // thin shelf next to the nine value-splits above. Each picks a pair no
+    // earlier one uses — neither the pane accent nor the rail repeats a hue
+    // family already spoken for — so the set stays tellable apart at a glance
+    // in the picker rather than shading into one another.
+    theme("Fern", "Bright", "Leaf-green windows over a plum rail, on white. Fresh and grassy.",
+        "#ffffff", "#ffffff", "#eef5ea", "#dde8d6", "#101810", "#6a716a", "#000000",
+        "#6ecb4e", "#f0a63c", "#e5544d", "#3ac2a0", "#0a6b5c",
+        "#2e6b1c", "#101810", "#96580b", "#6a716a", "#2e6b1c", "#101810", "#101810", "#96580b",
+        canvas = "#e9f2e4",
+        chromeBg = "#ffffff", chromeText = "#101810", chromeTextDim = "#6a716a",
+        chromeTextBright = "#000000", chromeBorder = "#dde8d6",
+        chromeAccent = "#d79ceb", chromeTrack = "#e9f2e4",
+        accentOn = "#000000", accentText = "#2e6b1c",
+        warnOn = "#000000", warnText = "#96580b",
+        dangerOn = "#000000", dangerText = "#b3332d",
+        addOn = "#000000",
+        chromeAccentOn = "#000000", chromeAccentText = "#7b2fa8",
+        tintAlpha = 0.1),
+    theme("Lagoon", "Bright", "Turquoise windows over a sand rail, on white. Shallow water and beach.",
+        "#ffffff", "#ffffff", "#eaf5f4", "#d8e8e6", "#0d1717", "#667070", "#000000",
+        "#33cec8", "#f0a63c", "#e5544d", "#3ac2a0", "#0a6b5c",
+        "#0b6b68", "#0d1717", "#96580b", "#667070", "#0b6b68", "#0d1717", "#0d1717", "#96580b",
+        canvas = "#e4f0ef",
+        chromeBg = "#ffffff", chromeText = "#0d1717", chromeTextDim = "#667070",
+        chromeTextBright = "#000000", chromeBorder = "#d8e8e6",
+        chromeAccent = "#e8bd85", chromeTrack = "#e4f0ef",
+        accentOn = "#000000", accentText = "#0b6b68",
+        warnOn = "#000000", warnText = "#96580b",
+        dangerOn = "#000000", dangerText = "#b3332d",
+        addOn = "#000000",
+        chromeAccentOn = "#000000", chromeAccentText = "#7a5410",
+        tintAlpha = 0.1),
+    theme("Peony", "Bright", "Magenta windows over a lime rail, on white. Bold and tropical.",
+        "#ffffff", "#ffffff", "#f7eff5", "#ecdfe8", "#180f16", "#736570", "#000000",
+        "#ee7ad6", "#f0a63c", "#e5544d", "#3ac2a0", "#0a6b5c",
+        "#a3268c", "#180f16", "#96580b", "#736570", "#a3268c", "#180f16", "#180f16", "#96580b",
+        canvas = "#f2e7ef",
+        chromeBg = "#ffffff", chromeText = "#180f16", chromeTextDim = "#736570",
+        chromeTextBright = "#000000", chromeBorder = "#ecdfe8",
+        chromeAccent = "#b7dd5c", chromeTrack = "#f2e7ef",
+        accentOn = "#000000", accentText = "#a3268c",
+        warnOn = "#000000", warnText = "#96580b",
+        dangerOn = "#000000", dangerText = "#b3332d",
+        addOn = "#000000",
+        chromeAccentOn = "#000000", chromeAccentText = "#4c6b0f",
+        tintAlpha = 0.1),
+    theme("Sunbeam", "Bright", "Yellow windows over a violet rail, on white. Bright, with a cool counterweight.",
+        "#ffffff", "#ffffff", "#f7f4e8", "#ebe4cd", "#181710", "#6f6b5e", "#000000",
+        "#f5d64a", "#f0a63c", "#e5544d", "#3ac2a0", "#0a6b5c",
+        "#7a5c05", "#181710", "#96580b", "#6f6b5e", "#7a5c05", "#181710", "#181710", "#96580b",
+        canvas = "#f2edda",
+        chromeBg = "#ffffff", chromeText = "#181710", chromeTextDim = "#6f6b5e",
+        chromeTextBright = "#000000", chromeBorder = "#ebe4cd",
+        chromeAccent = "#ac9bf0", chromeTrack = "#f2edda",
+        accentOn = "#000000", accentText = "#7a5c05",
+        warnOn = "#000000", warnText = "#96580b",
+        dangerOn = "#000000", dangerText = "#b3332d",
+        addOn = "#000000",
+        chromeAccentOn = "#000000", chromeAccentText = "#5b3fb0",
+        tintAlpha = 0.1),
+    theme("Bluebell", "Bright", "Periwinkle windows over an apricot rail, on white. Soft and even-handed.",
+        "#ffffff", "#ffffff", "#eef0f8", "#dee2f0", "#10121a", "#676a75", "#000000",
+        "#8fa2f2", "#f0a63c", "#e5544d", "#3ac2a0", "#0a6b5c",
+        "#35479c", "#10121a", "#96580b", "#676a75", "#35479c", "#10121a", "#10121a", "#96580b",
+        canvas = "#e8ecf7",
+        chromeBg = "#ffffff", chromeText = "#10121a", chromeTextDim = "#676a75",
+        chromeTextBright = "#000000", chromeBorder = "#dee2f0",
+        chromeAccent = "#f5b877", chromeTrack = "#e8ecf7",
+        accentOn = "#000000", accentText = "#35479c",
+        warnOn = "#000000", warnText = "#96580b",
+        dangerOn = "#000000", dangerText = "#b3332d",
+        addOn = "#000000",
+        chromeAccentOn = "#000000", chromeAccentText = "#8a5210",
         tintAlpha = 0.1),
     theme("Paper", "Ink", "Warm paper & ink. Quiet, focused, minimal.",
         "#f3efe5", "#faf7ef", "#eae5d8", "#dbd3c2", "#44423a", "#8d877a", "#211f1a",
@@ -635,7 +711,7 @@ private val houseThemeRank: Map<String, Int> =
  *   3. everything else, alphabetically by name
  *
  * Alphabetical is the only order a stranger to the catalog can predict. The
- * list is 77 entries and growing; hand-maintained ordering meant the position
+ * list is 82 entries and growing; hand-maintained ordering meant the position
  * of "Sandstone" was a fact you could only learn by scrolling, and it
  * silently decided which themes got seen. Sorting by name makes a theme
  * findable by the name it is displayed under, which is also the thing the
