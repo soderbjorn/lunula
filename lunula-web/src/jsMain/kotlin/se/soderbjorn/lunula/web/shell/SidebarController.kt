@@ -66,6 +66,25 @@ class SidebarController(
     var widthPx: Int = defaultWidthPx
         private set
 
+    /**
+     * Whether the current closed state was reached by *dragging* the resize
+     * handle all the way to zero, as opposed to a toggle (button / hotkey /
+     * menu) or a closed state restored from persistence at boot.
+     *
+     * The distinction decides whether [mountSidebarOrPlaceholder] leaves a
+     * drag-to-restore strip behind. A drag-collapse genuinely needs one —
+     * the user made the bar vanish with a gesture and, without a grabbable
+     * strip, the gesture is a one-way door. A toggle does not: the control
+     * that closed the sidebar is still sitting in the chrome, so the strip
+     * buys nothing and costs an always-painted hairline 30 px inside the
+     * content area (see the `.dt-sidebar-collapsed` rules in `lunula.css`),
+     * which reads as a stray line ruled down the user's page.
+     *
+     * Read by [mountSidebarOrPlaceholder]; hosts do not normally need it.
+     */
+    var isCollapsedByDrag: Boolean = false
+        private set
+
     /** Currently-mounted sidebar element, or `null` when closed. */
     private var current: HTMLElement? = null
 
@@ -82,6 +101,10 @@ class SidebarController(
     fun setInitial(open: Boolean, widthPx: Int) {
         isOpen = open
         this.widthPx = widthPx
+        // A state seeded from persistence (or from the drag-back-to-restore
+        // path below) is never a live drag-collapse: the boot path has no
+        // gesture behind it at all, and the restore path is re-opening.
+        isCollapsedByDrag = false
         // The boot mount that follows this setInitial is the initial
         // appearance, not a user-driven toggle — skip the slide-in so
         // the sidebar is just there.
@@ -100,11 +123,19 @@ class SidebarController(
      * state to false and calls [requestRebuild] so the host re-renders
      * without the slot.
      *
+     * A close routed through here is a *toggle* close, so it clears
+     * [isCollapsedByDrag] and the rebuild leaves no drag-to-restore strip
+     * behind — the control the user just pressed is the way back. The one
+     * exception is the already-at-zero branch below, which exists precisely
+     * for hosts that funnel a drag-collapse through [toggle]; there the flag
+     * is left as the drag set it.
+     *
      * @param requestRebuild called once per state flip
      */
     fun toggle(requestRebuild: () -> Unit) {
         if (!isOpen) {
             isOpen = true
+            isCollapsedByDrag = false
             // Clear stale reference so the next attach plays the slide-in
             // (real open transition) instead of being treated as a re-mount.
             current = null
@@ -114,6 +145,7 @@ class SidebarController(
         val sidebar = current
         if (sidebar == null) {
             isOpen = false
+            isCollapsedByDrag = false
             requestRebuild()
             return
         }
@@ -138,6 +170,7 @@ class SidebarController(
             if (ev.target !== sidebar) return@handler
             done = true
             isOpen = false
+            isCollapsedByDrag = false
             current = null
             requestRebuild()
         }
@@ -234,12 +267,28 @@ class SidebarController(
 
     /**
      * Mount the full sidebar when [isOpen] is true, otherwise mount a
-     * chromeless 0-width placeholder that carries only the resize
-     * handle. Mirrors `BarController.mountTopBar` for the horizontal
-     * axis: keeps a draggable strip in the DOM while the sidebar is
-     * collapsed so the user can drag it back to restore (without this,
-     * dragging-to-collapse strands the user, since the only way to
-     * bring the sidebar back is the host's toggle button).
+     * chromeless 0-width placeholder. Mirrors `BarController.mountTopBar`
+     * for the horizontal axis.
+     *
+     * The placeholder comes in two forms, chosen by [isCollapsedByDrag]:
+     *
+     *  - **collapsed by drag** — it carries the resize handle, so a
+     *    draggable strip (with an always-painted hairline) stays in the
+     *    DOM. Without it, dragging-to-collapse strands the user: they made
+     *    the bar disappear with a gesture and the gesture has no inverse.
+     *  - **closed by toggle, or closed at boot** — it carries nothing at
+     *    all: no handle, no hairline, no `col-resize` hit-target hovering
+     *    over the first 44 px of the user's content. The affordance that
+     *    closed the sidebar (topbar button, hotkey, menu item) is still
+     *    right there, so the strip would only be paying a permanent line
+     *    ruled down the page for a second route back.
+     *
+     * The second form is the fix for “when the sidebar is hidden, a thin
+     * line obstructs the view”: the collapsed handle's hairline is painted
+     * 30 px *inside* the content area (it has to dodge the OS window resize
+     * gutter — see `.dt-sidebar-collapsed > .dt-sidebar-resize-handle-right`
+     * in `lunula.css`), which over a hidden sidebar reads as a stray rule
+     * across the page rather than as a window edge.
      *
      * The placeholder inherits the host's resize geometry from [spec]
      * ([SidebarSpec.minWidthPx], [SidebarSpec.maxWidthPx],
@@ -259,10 +308,10 @@ class SidebarController(
      * @param onLeft         `true` for the left sidebar, `false` for
      *   the right.
      * @param requestRebuild fired when the user drags the collapsed
-     *   placeholder back open.
-     * @return the freshly-mounted sidebar element. Always non-null —
-     *   even when collapsed, the placeholder occupies the slot so its
-     *   resize handle remains grabbable.
+     *   placeholder back open (drag-collapsed form only).
+     * @return the freshly-mounted sidebar element. Always non-null — the
+     *   placeholder occupies the slot either way; whether it is grabbable
+     *   depends on [isCollapsedByDrag].
      */
     fun mountSidebarOrPlaceholder(
         spec: SidebarSpec,
@@ -295,6 +344,11 @@ class SidebarController(
                     spec.onResize?.invoke(newWidth)
                     if (newWidth <= 0) {
                         isOpen = false
+                        // The user dragged the bar out of existence, so the
+                        // placeholder below must keep a grabbable strip (and
+                        // its always-painted hairline) — it is the only way
+                        // back that matches the gesture they just made.
+                        isCollapsedByDrag = true
                         current = null
                         requestRebuild()
                     }
@@ -307,7 +361,12 @@ class SidebarController(
             header = null,
             content = null,
             visible = true,
-            isResizable = spec.isResizable,
+            // Only a drag-collapse earns a handle. Mounting one after a
+            // toggle-close would paint the always-on hairline 30 px into the
+            // content area and hand the leftmost 14 px of the user's page a
+            // `col-resize` cursor, for a sidebar that is not there and that
+            // the toggle button already restores.
+            isResizable = spec.isResizable && isCollapsedByDrag,
             minWidthPx = spec.minWidthPx,
             maxWidthPx = spec.maxWidthPx,
             defaultWidthPx = spec.defaultWidthPx,
@@ -336,9 +395,12 @@ class SidebarController(
                           else renderRightSidebar(placeholderSpec)
         placeholder.style.width = "0px"
         placeholder.style.setProperty("min-width", "0")
-        // Drag-to-restore affordance: same hairline-on-hover treatment
-        // as the bar collapse, but always painted while collapsed so
-        // the user has a visual cue.
+        // Marks the 0-width state for the toolkit CSS. Two jobs, and both
+        // are wanted whichever form the placeholder took: it blanks the
+        // slot's edge hairlines (at 0 content width the top border
+        // degenerates into a stray dot) and, when a handle IS present,
+        // switches that handle's hairline from hover-only to always-on —
+        // the drag-to-restore cue, same treatment as the bar collapse.
         placeholder.classList.add("dt-sidebar-collapsed")
         current = placeholder
         return placeholder
