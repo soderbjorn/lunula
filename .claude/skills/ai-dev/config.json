@@ -1,0 +1,60 @@
+{
+  "_comment": [
+    "The only per-repo file in this skill. SKILL.md and repos.md are identical",
+    "across every repo that uses /ai-dev — when you copy the skill to another",
+    "project, edit this file and nothing else.",
+    "",
+    "'toolkit' is null here because this repo IS the toolkit. There is no companion",
+    "PR and no -Plunula.toolkit.path: a Lunula ticket's own PR is the toolkit change.",
+    "",
+    "basePort is deliberately distinct from Lunicle's (8090) and Lunamux's (8460).",
+    "All three automations can be sweeping at the same time on one machine, and a",
+    "shared port would have them fight over it across repos."
+  ],
+
+  "project": "Lunula - UI toolkit",
+  "keyPrefix": "LNA",
+  "issueUrl": "https://issues.lunicle.dev/?issue={id}",
+
+  "statuses": {
+    "ready": "Ready for AI development",
+    "claimed": "In progress",
+    "review": "Ready for review"
+  },
+
+  "github": "soderbjorn/lunula",
+  "repoRoot": "/Users/soderbjorn/repo-private/lunula/main",
+  "worktreeParent": "/Users/soderbjorn/repo-private/lunula",
+
+  "toolkit": null,
+
+  "build": "./gradlew build",
+  "basePort": 8470,
+  "runInstructions": [
+    "This repo ships an in-tree demo app under demo/ that exercises the toolkit as a",
+    "pure consumer. It is the right way to verify almost any toolkit change, and it",
+    "costs nothing to run: no server, no database, no sign-in.",
+    "",
+    "    ./gradlew :demo:web:jsBrowserDevelopmentExecutableDistribution",
+    "    python3 -m http.server {port} --bind 127.0.0.1 \\",
+    "        --directory demo/web/build/dist/js/developmentExecutable",
+    "",
+    "Then browse http://127.0.0.1:{port}/. The bundle is served off disk, so after an",
+    "edit just re-run the distribution task and reload — no restart.",
+    "",
+    "Do not use ./gradlew :demo:web:jsBrowserDevelopmentRun. Its webpack dev server",
+    "takes its port from the build script rather than the command line, so every",
+    "concurrent ticket would try to bind the same one. Serving the built distribution",
+    "on your assigned {port} is what keeps parallel sweeps from colliding. The build",
+    "directory is per-worktree, so nothing else needs isolating.",
+    "",
+    "Kill the server you started when you are done.",
+    "",
+    "A change the demo cannot reach — a Compose-only surface, or something only a real",
+    "consumer exercises — is a Verification gap. Say so in the PR. Do NOT go and build",
+    "Lunicle or Lunamux against your branch to prove it: that is a much larger job than",
+    "the ticket, and those checkouts belong to other tickets that may be running now."
+  ],
+
+  "maxConcurrent": 3
+}
