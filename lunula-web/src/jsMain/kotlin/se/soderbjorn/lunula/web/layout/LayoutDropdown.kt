@@ -10,12 +10,31 @@
  * typically routes [onSelect] into a [LayoutController.setPreset].
  *
  * Affordances:
- * - Click the trigger to open / close.
+ * - Hover the trigger and the grid reveals itself; leaving it without
+ *   landing in the grid puts it away again. The same contract the topbar's
+ *   "+" menu has — see [se.soderbjorn.lunula.web.shell.attachHoverMenu] —
+ *   down to the shared show/hide delays, because two buttons sitting side
+ *   by side in one chrome should not disagree about what a hover means.
+ * - Click the trigger to open / close — and nothing more. Where the "+"
+ *   commits a default action on click and offers the menu as the way to
+ *   ask for something else, this button has no default: there is no
+ *   layout it could sensibly pick on your behalf, so the click is purely
+ *   show/hide.
  * - Click a tile to pick.
  * - Arrow keys navigate the grid; mouse-move tracks focus too.
  * - Enter / Space invoke the focused tile.
  * - Escape closes.
  * - Outside click dismisses.
+ *
+ * A hover-revealed grid deliberately does *less* than a clicked one: it
+ * takes no keyboard focus and answers no key but Escape, because moving a
+ * cursor past a toolbar button is not a request to stop typing into
+ * whatever had focus. It picks up the full keyboard behaviour the moment
+ * the pointer actually enters the grid — see [openAnchoredTo]'s `takeFocus`.
+ *
+ * The self-closing is likewise the hover path's alone: a grid the user
+ * opened by clicking stays up until they pick, press Escape, or click
+ * away, even if the pointer wanders off in the meantime.
  *
  * Tiles render miniature SVG previews of each preset's geometry for
  * the current pane count via [LayoutPreset.computeBoxes]. The
@@ -30,10 +49,16 @@
 package se.soderbjorn.lunula.web.layout
 
 import kotlinx.browser.document
+import kotlinx.browser.window
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.events.Event
 import org.w3c.dom.events.KeyboardEvent
+import org.w3c.dom.events.MouseEvent
+import se.soderbjorn.lunula.web.shell.HOVER_MENU_HIDE_DELAY_MS
+import se.soderbjorn.lunula.web.shell.HOVER_MENU_SHOW_DELAY_MS
 import se.soderbjorn.lunula.web.shell.ICON_LAYOUT
+import se.soderbjorn.lunula.web.shell.armHoverOpenSuppression
+import se.soderbjorn.lunula.web.shell.isHoverOpenSuppressed
 
 /**
  * One layout dropdown for an app's topbar. The dropdown owns its own
@@ -80,17 +105,78 @@ class LayoutDropdown(
     private var documentClickHandler: ((Event) -> Unit)? = null
     private var documentKeyHandler: ((Event) -> Unit)? = null
 
+    /** Pending hover-open timer; see [scheduleHoverOpen]. */
+    private var showTimerId: Int? = null
+
+    /** Pending hover-close timer; see [scheduleHoverClose]. */
+    private var hideTimerId: Int? = null
+
+    /**
+     * Whether this open is allowed to drive the keyboard — set by
+     * [openAnchoredTo]'s `takeFocus`, and raised later if a hover-revealed
+     * grid is entered by the pointer.
+     *
+     * While `false` the grid is a passive preview: no tile wears the focus
+     * ring, none is focused, and the document key handler answers Escape
+     * only. Arrow keys and Enter belong to whatever the user was actually
+     * typing into, which a hover never asked them to leave.
+     */
+    private var keyboardActive: Boolean = false
+
+    /**
+     * Whether this open was the hover reveal rather than something the user
+     * asked for outright.
+     *
+     * Only a hover-revealed grid closes itself when the pointer leaves. A
+     * grid opened by clicking the trigger — or by a command palette entry,
+     * where the pointer may be nowhere near it — was asked for, and keeps
+     * the dismissal rules it always had: pick a tile, press Escape, or
+     * click away. Losing it because the mouse drifted while its owner
+     * reached for the arrow keys would be taking something back that the
+     * user explicitly asked for.
+     */
+    private var openedByHover: Boolean = false
+
     /** `true` while the popover is mounted. Used by the trigger's click
      *  handler to toggle. */
     fun isOpen(): Boolean = gridEl != null
 
     /**
-     * Open the popover anchored under [anchor], with the first tile
-     * focused so arrow keys are immediately useful. Idempotent —
-     * calling while already open re-anchors and re-focuses.
+     * Open the popover anchored under [anchor]. Idempotent — calling
+     * while already open re-anchors and re-focuses.
+     *
+     * By default the first tile is focused so arrow keys are immediately
+     * useful; pass `takeFocus = false` for an open the user did not ask
+     * for outright, which comes up as a passive preview instead.
+     *
+     * Called by the trigger's own click handler, by the hover reveal
+     * ([scheduleHoverOpen], with `takeFocus = false`), and by hosts that
+     * raise the grid from elsewhere — e.g. a command-palette "Layout"
+     * entry anchoring to [triggerButton].
+     *
+     * @param anchor the element the grid is positioned under; its
+     *   bottom-right corner is where the grid hangs from.
+     * @param takeFocus whether this open may claim the keyboard: focus the
+     *   first tile, paint the focus ring, and answer arrow keys / Enter.
+     *   `true` for the deliberate opens (a click on the trigger, a command
+     *   palette entry), where the user has asked for the grid and expects
+     *   to drive it. Passed `false` by the hover reveal, which happens
+     *   without being asked for and so must not pull focus out of a
+     *   terminal the user is mid-sentence in; the grid still lists and
+     *   still clicks, and promotes itself the moment the pointer enters it.
      */
-    fun openAnchoredTo(anchor: HTMLElement) {
+    fun openAnchoredTo(anchor: HTMLElement, takeFocus: Boolean = true) {
         if (gridEl != null) close()
+        // Only one grid at a time, including one this instance doesn't own.
+        // The topbar is rebuilt wholesale on re-render, which builds a fresh
+        // LayoutDropdown and quietly detaches the old trigger — without
+        // firing the `mouseleave` that would have closed its grid. That
+        // orphan can no longer close itself, so the next open evicts it,
+        // the same way the hover menu evicts stale `.dt-hover-menu` nodes.
+        val stale = document.querySelectorAll(".dt-layout-preset-grid")
+        for (i in 0 until stale.length) (stale.item(i) as HTMLElement).remove()
+        keyboardActive = takeFocus
+        openedByHover = false
         val n = paneCount()
         val grid = document.createElement("div") as HTMLElement
         grid.className = "dt-layout-preset-grid"
@@ -145,7 +231,13 @@ class LayoutDropdown(
                 })
                 tile.addEventListener("mousemove", { _: Event ->
                     val idx = tileList.indexOf(tile)
-                    if (idx >= 0 && idx != focusedIndex) {
+                    // The pointer is on a tile: whatever revealed the grid,
+                    // the user is now working it, so a hover-opened grid
+                    // stops being a passive preview and starts tracking
+                    // focus like a clicked one.
+                    val promoting = !keyboardActive
+                    keyboardActive = true
+                    if (idx >= 0 && (idx != focusedIndex || promoting)) {
                         focusedIndex = idx
                         repaintFocusRing()
                     }
@@ -163,19 +255,91 @@ class LayoutDropdown(
         focusedIndex = 0
         repaintFocusRing()
 
+        // The grid is the other half of the hover surface: crossing the gap
+        // from the trigger into it must call off the pending close, and
+        // leaving it must start one — otherwise a menu you hovered open
+        // could only be dismissed by clicking.
+        grid.addEventListener("mouseenter", { _: Event -> cancelHoverClose() })
+        grid.addEventListener("mouseleave", { _: Event ->
+            if (openedByHover) scheduleHoverClose()
+        })
+
         attachDocumentDismiss(anchor)
     }
 
     /** Close the popover. Idempotent. */
     fun close() {
+        cancelHoverOpen()
+        cancelHoverClose()
         gridEl?.let { it.parentNode?.removeChild(it) }
         gridEl = null
         tiles = emptyList()
         focusedIndex = 0
         activeAtOpen = null
+        keyboardActive = false
+        openedByHover = false
         detachDocumentDismiss()
     }
 
+    /**
+     * Reveal the grid after [HOVER_MENU_SHOW_DELAY_MS], unless something
+     * cancels first. Called from the trigger's `mouseenter`.
+     *
+     * The delay is what keeps a cursor merely passing over the topbar from
+     * flinging the grid open behind it.
+     *
+     * @param anchor the element to hang the grid under when the timer
+     *   fires — always [triggerButton] in practice, passed rather than read
+     *   so the timer cannot resolve it differently than the hover did.
+     * @see cancelHoverOpen
+     */
+    private fun scheduleHoverOpen(anchor: HTMLElement) {
+        cancelHoverOpen()
+        showTimerId = window.setTimeout(
+            {
+                openAnchoredTo(anchor, takeFocus = false)
+                // Set after the open, which clears it: this is the one
+                // path that may close itself again on `mouseleave`.
+                openedByHover = true
+            },
+            HOVER_MENU_SHOW_DELAY_MS,
+        )
+    }
+
+    /** Drops any pending hover-open. Idempotent. */
+    private fun cancelHoverOpen() {
+        showTimerId?.let { window.clearTimeout(it) }
+        showTimerId = null
+    }
+
+    /**
+     * Close the grid after [HOVER_MENU_HIDE_DELAY_MS]. Called when the
+     * pointer leaves either half of the hover surface; entering the other
+     * half within the grace period calls it off, which is what makes the
+     * diagonal from trigger to grid survivable.
+     */
+    private fun scheduleHoverClose() {
+        cancelHoverClose()
+        hideTimerId = window.setTimeout({ close() }, HOVER_MENU_HIDE_DELAY_MS)
+    }
+
+    /** Drops any pending hover-close. Idempotent. */
+    private fun cancelHoverClose() {
+        hideTimerId?.let { window.clearTimeout(it) }
+        hideTimerId = null
+    }
+
+    /**
+     * Builds the topbar icon button behind [triggerButton], wired for both
+     * gestures: hover reveals the grid and leaving puts it away, click
+     * toggles it.
+     *
+     * Called once, lazily, the first time a host reads [triggerButton].
+     *
+     * @return the trigger element, not yet mounted; the host appends it.
+     * @see se.soderbjorn.lunula.web.shell.attachHoverMenu the "+" button's
+     *   equivalent, whose hover contract and delays this matches.
+     */
     private fun buildTrigger(): HTMLElement {
         val btn = document.createElement("button") as HTMLElement
         btn.setAttribute("type", "button")
@@ -183,7 +347,39 @@ class LayoutDropdown(
         btn.className = "dt-topbar-icon-button"
         btn.innerHTML = ICON_LAYOUT
         btn.addEventListener("click", { _: Event ->
+            cancelHoverOpen()
+            // Open or close, and nothing else. Unlike the "+" next to it,
+            // this button has no default action to commit — there is no
+            // "the layout you probably meant", so a click that quietly
+            // applied one would be picking for the user. The grid is the
+            // whole offer, and the click is only how you ask for it or
+            // take the question back.
             if (isOpen()) close() else openAnchoredTo(btn)
+            // Whichever way that went, the user has just decided something
+            // with a click, and the cursor is now parked on the button.
+            // Without this the next `mouseenter` — which the browser fires
+            // again the instant a topbar rebuild swaps in a fresh trigger
+            // element under the unmoved pointer — would re-open the grid
+            // they just dismissed. Shared with the "+" menu so a click on
+            // either button silences hover for both.
+            armHoverOpenSuppression(btn)
+        })
+        btn.addEventListener("mouseenter", { ev: Event ->
+            // Arriving back on the trigger while a close is pending means
+            // the user never really left.
+            cancelHoverClose()
+            if (isOpen()) return@addEventListener
+            if (isHoverOpenSuppressed(ev)) return@addEventListener
+            scheduleHoverOpen(btn)
+        })
+        btn.addEventListener("mouseleave", { ev: Event ->
+            cancelHoverOpen()
+            // Heading straight into the grid is not leaving; the grid's own
+            // `mouseenter` would cancel the close anyway, but skipping the
+            // timer entirely avoids a needless close/cancel round-trip.
+            val related = (ev as? MouseEvent)?.relatedTarget as? HTMLElement
+            if (related != null && gridEl?.contains(related) == true) return@addEventListener
+            if (isOpen() && openedByHover) scheduleHoverClose()
         })
         return btn
     }
@@ -197,6 +393,14 @@ class LayoutDropdown(
     }
 
     private fun repaintFocusRing() {
+        // A hover-revealed grid shows no focus ring and steals no focus:
+        // there is no "where you are" to paint until the user has said,
+        // by pointing at it or by opening it on purpose, that they are in
+        // the grid at all.
+        if (!keyboardActive) {
+            for (tile in tiles) tile.classList.toggle("is-focused", false)
+            return
+        }
         for ((i, tile) in tiles.withIndex()) {
             val focused = i == focusedIndex
             // Toggle only the is-focused class — overwriting className
@@ -241,6 +445,13 @@ class LayoutDropdown(
         }
         val keyHandler: (Event) -> Unit = handler@{ e ->
             val ke = e as? KeyboardEvent ?: return@handler
+            // Escape always closes — dismissing something that appeared
+            // uninvited is exactly what Escape is for. Every other key
+            // belongs to whatever holds focus until the user engages with
+            // the grid; a listener in the capture phase that ate arrow keys
+            // because the cursor happened to rest on the layout button
+            // would be stealing them from a terminal.
+            if (ke.key != "Escape" && !keyboardActive) return@handler
             when (ke.key) {
                 "Escape" -> {
                     ke.preventDefault()
