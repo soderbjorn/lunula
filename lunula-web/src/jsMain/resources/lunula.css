@@ -732,15 +732,25 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     border-radius: 50%;
 }
 
-/* ── Tab-bar overflow `⋮` menu (TabBarOverflowMenu.kt) ────── */
+/* ── Tab-bar overflow `⋮` trigger (TabBarOverflowMenu.kt) ────── */
 /* Ported from termtastic .tab-bar-menu*. The button lives inline in the
-   bar; the dropdown list is mounted on document.body so the bar's
-   horizontal scroll doesn't clip it. */
+   bar; what it opens is `.dt-hover-menu` — the one menu surface, mounted on
+   document.body so the bar's horizontal scroll doesn't clip it.
+
+   There is deliberately no panel styling here. The three menus that hang off
+   this bar (this one, each tab's `⋮`, and the world switcher's per-world
+   rows) used to draw their own under `.dt-tabbar-menu-list*`: a 6px box of
+   4px rows with a neutral hover, opening six pixels from a "+" whose menu was
+   a 9px box of 30px rows with an accent one. Two menus in one bar reads as
+   two applications, and nothing about a menu raised from a tab strip is
+   different from one raised from the top bar — so that block is gone and they
+   are the same object, marked as chrome because a tab strip is chrome. What
+   is left below is the closed face: the buttons. */
 /* Transparent dismissal backdrop for the tab menus. Mounted on document.body
    beneath the open dropdown (z-index 1000) but above everything else, and
    marked no-drag so it catches presses even over the Electron titlebar drag
    region — where a plain click listener would never fire. See
-   TabBarOverflowMenu.kt#wireMenuToggle. */
+   TabBarOverflowMenu.kt#wireDotMenu. */
 .dt-menu-backdrop {
     position: fixed;
     inset: 0;
@@ -752,13 +762,13 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    `.dt-tabbar-strip`), so it reads as part of the tab bar — spaced from the
    last tab by the strip's own column-gap rather than floating off to the
    right. */
-.dt-tabbar-menu {
+.dt-tabbar-overflow {
     position: relative;
     display: inline-flex;
     align-items: center;
     flex-shrink: 0;
 }
-.dt-tabbar-menu-button {
+.dt-tabbar-overflow-button {
     appearance: none;
     background: transparent;
     border: none;
@@ -772,116 +782,18 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     letter-spacing: 1px;
     transition: color 120ms ease-in-out, background-color 120ms ease-in-out;
 }
-.dt-tabbar-menu-button:hover,
-.dt-tabbar-menu.dt-open .dt-tabbar-menu-button {
+.dt-tabbar-overflow-button:hover,
+.dt-tabbar-overflow.dt-open .dt-tabbar-overflow-button {
     color: var(--t-chrome-text, #e6e6e6);
     background: var(--t-chrome-track, rgba(255, 255, 255, 0.10));
-}
-/* Surface, rows, gutter, separators, the selected row and the hovered one are
-   ALL the shared menu geometry — see the "Menu surface" block further down,
-   which names `.dt-tabbar-menu-list.dt-open` and `.dt-tabbar-menu-item`
-   alongside `.dt-pane-menu` and `.dt-hover-menu`. These three menus were the
-   last ones drawing their own: a 6px panel of 4px rows with a neutral hover,
-   opening off a tab strip six pixels from a "+" whose menu was a 9px panel of
-   7px rows with an accent one. What is left here is what only these do —
-   they are placed by JS against a strip that scrolls, and they are mounted on
-   `<body>`, outside the frame whose font they would otherwise inherit. */
-.dt-tabbar-menu-list {
-    display: none;
-    /* Fixed-position so the bar's overflow-x:auto doesn't clip; JS places
-       it at the button's bottom-right rect on open. */
-    position: fixed;
-    top: 0;
-    left: 0;
-    min-width: 200px;
-    z-index: 1000;
-}
-/* Section heading ("Unlisted tabs"). Not a row, so it is the one thing in the
-   panel the shared row geometry does not cover. */
-.dt-tabbar-menu-heading {
-    /* The panel is a column flex box; without this the heading is stretched by
-       the rows around it instead of taking its own text height. */
-    flex: 0 0 auto;
-    padding: 6px 10px 2px;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--t-text-dim, #b8b8b8);
-    user-select: none;
-    pointer-events: none;
-}
-/* "Move to world" submenu parent row: the trailing chevron sits after the
-   flex label, dimmed like the leading icon. */
-.dt-tabbar-menu-submenu-caret {
-    display: inline-flex;
-    align-items: center;
-    flex-shrink: 0;
-    margin-left: auto;
-    opacity: 0.6;
-    line-height: 0;
-}
-.dt-tabbar-menu-item:hover > .dt-tabbar-menu-submenu-caret {
-    opacity: 1;
-}
-/* The flyout list hangs off the parent list's right edge (top set per-row via
-   JS). Override the base `.dt-tabbar-menu-list` fixed/0,0 placement — it is a
-   nested child of the fixed parent list, so absolute positions relative to it. */
-.dt-tabbar-menu-list.dt-tabbar-menu-submenu-list {
-    position: absolute;
-    left: 100%;
-    top: 0;
-    margin-left: 3px;
-}
-/* Flipped to the parent's left edge when a right-hand flyout would overflow
-   the viewport (set by JS in appendMoveToWorldSubmenu). */
-.dt-tabbar-menu-list.dt-tabbar-menu-submenu-list.dt-flip-left {
-    left: auto;
-    right: 100%;
-    margin-left: 0;
-    margin-right: 3px;
-}
-/* Trailing action button inside a menu row (e.g. the overflow menu's
-   "Show in tab bar" un-hide affordance on each Unlisted-tab row). Sits
-   after the flex:1 label, so it pins to the row's right edge. */
-.dt-tabbar-menu-item-action {
-    appearance: none;
-    background: transparent;
-    border: none;
-    /* `currentColor` and not `--t-text-dim`: the row it sits in is repainted in
-       the accent under the pointer, which is exactly when this button is about
-       to be pressed — a fixed dim grey goes invisible on it. Following the row
-       keeps one contrast in both states. */
-    color: currentColor;
-    opacity: 0.6;
-    cursor: pointer;
-    flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    /* Pulled into the row's 10px right padding so the icon sits at the edge. */
-    margin: 0 -6px 0 4px;
-    border-radius: 5px;
-    transition: opacity 120ms ease-in-out, background-color 120ms ease-in-out;
-}
-.dt-tabbar-menu-item-action svg {
-    width: 14px;
-    height: 14px;
-    display: block;
-}
-.dt-tabbar-menu-item-action:hover {
-    opacity: 1;
-    background: color-mix(in srgb, currentColor 18%, transparent);
 }
 
 /* ── Per-tab `⋯` dot menu (TabBarOverflowMenu.kt#appendTabDotMenu) ──
    A small dots button at each tab's right corner holding that tab's own
-   actions (Rename / Close / Hide / Show). The dropdown list reuses the
-   `.dt-tabbar-menu-list*` styling above. The button stays hidden until the
-   tab is hovered (revealed on hover only — not on the active tab) so dense
-   tab strips read cleanly. */
+   actions (Rename / Close / Hide / Show). What it opens is the shared menu
+   surface, exactly as the overflow `⋮` above does. The button stays hidden
+   until the tab is hovered (revealed on hover only — not on the active tab)
+   so dense tab strips read cleanly. */
 .dt-tab-menu {
     display: inline-flex;
     align-items: center;
@@ -2864,8 +2776,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    allows itself, because a menu is the only thing here that genuinely
    floats. */
 .dt-pane-menu,
-.dt-hover-menu,
-.dt-tabbar-menu-list.dt-open {
+.dt-hover-menu {
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -2878,17 +2789,16 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     box-shadow: 0 14px 34px -12px rgba(0, 0, 0, 0.55);
     user-select: none;
     -webkit-user-select: none;
-    font-family: inherit;
-    font-size: 12.5px;
-}
-/* The tab-bar menus are mounted on `<body>`, outside `.dt-app-frame`, so the
-   `inherit` above resolves to the host page's own font — which in an Electron
-   shell may not be a font at all. They alone spell the chrome stack out.
-   Stated here rather than beside their block so the panel is one rule with one
-   exception, not two panels that happen to agree. */
-.dt-tabbar-menu-list.dt-open {
+    /* Every panel here is mounted on `<body>`, outside `.dt-app-frame` — that
+       is what keeps it clear of the shell's overflow and stacking. So there is
+       nothing above it to inherit a font from but the host page, which in an
+       Electron shell may not have set one at all: `inherit` used to land the
+       tab menus on the platform's default serif while the rest of the chrome
+       was sans. A menu is chrome that happens to float, so it spells out the
+       same stack `.dt-app-frame` does rather than asking the page. */
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
         Ubuntu, sans-serif;
+    font-size: 12.5px;
 }
 .dt-pane-menu {
     /* Historically 1001 to clear `.dt-maximized`'s old `z-index: 1000`. That
@@ -2907,8 +2817,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    object arriving. `flex: 0 0 auto` because the panel scrolls: without it a
    long list squashes its rows to fit instead of overflowing. */
 .dt-pane-menu-item,
-.dt-hover-menu-item,
-.dt-tabbar-menu-item {
+.dt-hover-menu-item {
     appearance: none;
     display: flex;
     align-items: center;
@@ -2917,6 +2826,14 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     width: 100%;
     height: 30px;
     padding: 0 10px;
+    /* `width: 100%` plus a horizontal padding is only the panel's width if the
+       padding is counted inside it. A `<button>` row is border-box by default
+       and a `<div>` row — which is what a row carrying its own trailing button
+       has to be — is not, so without this the div rows are 20px wider than the
+       panel that holds them and the panel grows a horizontal scrollbar along
+       its bottom edge. Stated for every row so the tag stays an implementation
+       detail. */
+    box-sizing: border-box;
     border: 0;
     border-radius: 7px;
     background: transparent;
@@ -2945,8 +2862,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    tint is too close to the panel to read as a selection. */
 .dt-pane-menu-item.dt-pane-menu-item-active,
 .dt-hover-menu-item.dt-menu-selected,
-.dt-hover-menu-item.dt-world-row.dt-active,
-.dt-tabbar-menu-item.dt-active {
+.dt-hover-menu-item.dt-world-row.dt-active {
     background: var(--t-accent-soft, rgba(79, 140, 255, 0.18));
     color: var(--t-accent, #4f8cff);
     font-weight: 600;
@@ -2958,8 +2874,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    apps. Hosts put `.dt-menu-chrome` on the panel; see `MenuZone`. */
 .dt-pane-menu.dt-menu-chrome .dt-pane-menu-item.dt-pane-menu-item-active,
 .dt-hover-menu.dt-menu-chrome .dt-hover-menu-item.dt-menu-selected,
-.dt-hover-menu.dt-menu-chrome .dt-hover-menu-item.dt-world-row.dt-active,
-.dt-tabbar-menu-list.dt-menu-chrome .dt-tabbar-menu-item.dt-active {
+.dt-hover-menu.dt-menu-chrome .dt-hover-menu-item.dt-world-row.dt-active {
     background: var(--t-chrome-accent-soft, var(--t-accent-soft, rgba(79, 140, 255, 0.18)));
     color: var(--t-chrome-accent, var(--t-accent, #4f8cff));
 }
@@ -2971,14 +2886,12 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    the fill rather than staying on its tint, and the zone-scoped hover clears
    the zone-scoped selection too. */
 .dt-pane-menu-item:hover:not(:disabled),
-.dt-hover-menu-item:hover:not(.dt-disabled),
-.dt-tabbar-menu-item:hover:not(.dt-disabled) {
+.dt-hover-menu-item:hover:not(.dt-disabled) {
     background: var(--t-accent, #4f8cff);
     color: var(--t-accent-on, #000000);
 }
 .dt-pane-menu.dt-menu-chrome .dt-pane-menu-item:hover:not(:disabled),
-.dt-hover-menu.dt-menu-chrome .dt-hover-menu-item:hover:not(.dt-disabled),
-.dt-tabbar-menu-list.dt-menu-chrome .dt-tabbar-menu-item:hover:not(.dt-disabled) {
+.dt-hover-menu.dt-menu-chrome .dt-hover-menu-item:hover:not(.dt-disabled) {
     background: var(--t-chrome-accent, var(--t-accent, #4f8cff));
     color: var(--t-chrome-accent-on, var(--t-accent-on, #000000));
 }
@@ -2999,8 +2912,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 /* The 14px gutter, reserved by every row whether or not it has an icon, so
    labels line up down the menu and a check can land in it. */
 .dt-pane-menu-item-icon,
-.dt-hover-menu-icon,
-.dt-tabbar-menu-item-icon {
+.dt-hover-menu-icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -3015,21 +2927,17 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 .dt-pane-menu-item:hover:not(:disabled) .dt-pane-menu-item-icon,
 .dt-hover-menu-item.dt-menu-selected .dt-hover-menu-icon,
 .dt-hover-menu-item.dt-world-row.dt-active .dt-hover-menu-icon,
-.dt-hover-menu-item:hover .dt-hover-menu-icon,
-.dt-tabbar-menu-item.dt-active .dt-tabbar-menu-item-icon,
-.dt-tabbar-menu-item:hover .dt-tabbar-menu-item-icon {
+.dt-hover-menu-item:hover .dt-hover-menu-icon {
     color: currentColor;
 }
 .dt-pane-menu-item-icon svg,
-.dt-hover-menu-icon svg,
-.dt-tabbar-menu-item-icon svg {
+.dt-hover-menu-icon svg {
     display: block;
     width: 14px;
     height: 14px;
 }
 .dt-pane-menu-item-label,
-.dt-hover-menu-label,
-.dt-tabbar-menu-item-label {
+.dt-hover-menu-label {
     flex: 1 1 auto;
     min-width: 0;
     white-space: nowrap;
@@ -3049,11 +2957,62 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     opacity: 0.55;
 }
 
+/* A section heading over a group of rows ("Unlisted tabs", in the tab strip's
+   overflow menu). Not a row — it is the one thing in a panel that the row
+   geometry above does not cover — so it states its own size, and nothing else. */
+.dt-menu-heading {
+    /* The panel is a column flex box; without this the heading is stretched by
+       the rows around it instead of taking its own text height. */
+    flex: 0 0 auto;
+    padding: 6px 10px 2px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--t-text-dim, #b8b8b8);
+    user-select: none;
+    pointer-events: none;
+}
+
+/* A trailing icon button inside a row — a second, narrower verb the row
+   offers (the overflow menu's "Show in tab bar" un-hide affordance). Sits
+   after the flex:1 label, so it pins to the row's right edge. */
+.dt-menu-row-action {
+    appearance: none;
+    background: transparent;
+    border: none;
+    /* `currentColor` and not `--t-text-dim`: the row it sits in is repainted in
+       the accent under the pointer, which is exactly when this button is about
+       to be pressed — a fixed dim grey goes invisible on it. Following the row
+       keeps one contrast in both states. */
+    color: currentColor;
+    opacity: 0.6;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    /* Pulled into the row's 10px right padding so the icon sits at the edge. */
+    margin: 0 -6px 0 4px;
+    border-radius: 5px;
+    transition: opacity 120ms ease-in-out, background-color 120ms ease-in-out;
+}
+.dt-menu-row-action svg {
+    width: 14px;
+    height: 14px;
+    display: block;
+}
+.dt-menu-row-action:hover {
+    opacity: 1;
+    background: color-mix(in srgb, currentColor 18%, transparent);
+}
+
 /* Inset 4px so the rule stops short of the rows' rounded ends, and sitting
    in the same 2px rhythm as the gaps around it. */
 .dt-pane-menu-separator,
-.dt-hover-menu-separator,
-.dt-tabbar-menu-separator {
+.dt-hover-menu-separator {
     flex: 0 0 auto;
     height: 1px;
     margin: 5px 4px;
@@ -6945,11 +6904,12 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
 .dt-world-row:hover .dt-tab-menu-button {
     opacity: 1;
 }
-/* The dot dropdown mounts on document.body, same as the world popover
-   (.dt-hover-menu, z-index 1000) — but the popover is appended *after* it, so at
-   equal z-index the popover would paint over an open dropdown. Lift the dropdown
-   one above the popover so it's fully visible and clickable. */
-.dt-world-row-menu-list {
+/* The dot panel mounts on document.body, and IS a `.dt-hover-menu` like the
+   world popover it was opened from (z-index 1000) — two panels at one depth,
+   where the one that must win is the one opened last only if the DOM says so.
+   Lift it one above the popover so it is fully visible and clickable whatever
+   the append order. */
+.dt-world-row-menu-panel {
     z-index: 1001;
 }
 .dt-hover-menu-item.dt-destructive {

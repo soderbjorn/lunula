@@ -316,7 +316,12 @@ fun attachHoverMenu(
 
     fun openMenu() {
         cancelShow(); cancelHide()
-        // Only one menu open at a time — tear down any stale instance.
+        // Only one menu open at a time — tear down any stale instance. The tab
+        // bar's click-opened menus are the same surface (`.dt-hover-menu`), so
+        // the sweep below would take their panel and leave the rest of them
+        // standing: a pressed-looking ⋮ and a full-viewport backdrop eating
+        // every press on the page. Close those through their own owner first.
+        closeTabBarMenus()
         val existing = document.querySelectorAll(".dt-hover-menu")
         for (i in 0 until existing.length) (existing.item(i) as HTMLElement).remove()
 
