@@ -9,7 +9,8 @@
  * appeared because a cursor passed over a button must not take the keyboard
  * with it. Only a deliberate open — a click, a command-palette entry — or
  * the pointer actually entering the grid may focus a tile or answer an
- * arrow key.
+ * arrow key — and that the trigger's click stays a bare toggle, since
+ * unlike the "+" this button has no default action to commit.
  *
  * These run in the karma browser environment (`:lunula-web:jsBrowserTest`)
  * against the real DOM: each test mounts a trigger, dispatches synthetic
@@ -253,6 +254,28 @@ class LayoutDropdownHoverTest {
                 grid(),
                 "only what hover revealed may take itself away again",
             )
+            m.cleanup()
+        }
+    }
+
+    /**
+     * The one place this button is deliberately *not* the "+": clicking it
+     * shows or hides the grid and commits nothing. LNA-11 asks for the "+"
+     * hover behaviour without the "+"'s default action, so a click that
+     * quietly applied a preset would be the bug the ticket names.
+     */
+    @Test
+    fun clicking_the_trigger_never_commits_a_preset() {
+        var picked: LayoutPreset? = null
+        val m = mount(onSelect = { picked = it })
+        try {
+            m.trigger.click() // opens
+            assertNotNull(grid(), "the click opened the grid")
+            assertNull(picked, "…and applied no layout on the way")
+            m.trigger.click() // closes
+            assertNull(grid(), "the second click put it away")
+            assertNull(picked, "…still without picking anything")
+        } finally {
             m.cleanup()
         }
     }

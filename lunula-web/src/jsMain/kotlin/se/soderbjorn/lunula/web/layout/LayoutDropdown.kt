@@ -15,7 +15,11 @@
  *   "+" menu has — see [se.soderbjorn.lunula.web.shell.attachHoverMenu] —
  *   down to the shared show/hide delays, because two buttons sitting side
  *   by side in one chrome should not disagree about what a hover means.
- * - Click the trigger to open / close.
+ * - Click the trigger to open / close — and nothing more. Where the "+"
+ *   commits a default action on click and offers the menu as the way to
+ *   ask for something else, this button has no default: there is no
+ *   layout it could sensibly pick on your behalf, so the click is purely
+ *   show/hide.
  * - Click a tile to pick.
  * - Arrow keys navigate the grid; mouse-move tracks focus too.
  * - Enter / Space invoke the focused tile.
@@ -138,10 +142,20 @@ class LayoutDropdown(
     fun isOpen(): Boolean = gridEl != null
 
     /**
-     * Open the popover anchored under [anchor], with the first tile
-     * focused so arrow keys are immediately useful. Idempotent —
-     * calling while already open re-anchors and re-focuses.
+     * Open the popover anchored under [anchor]. Idempotent — calling
+     * while already open re-anchors and re-focuses.
      *
+     * By default the first tile is focused so arrow keys are immediately
+     * useful; pass `takeFocus = false` for an open the user did not ask
+     * for outright, which comes up as a passive preview instead.
+     *
+     * Called by the trigger's own click handler, by the hover reveal
+     * ([scheduleHoverOpen], with `takeFocus = false`), and by hosts that
+     * raise the grid from elsewhere — e.g. a command-palette "Layout"
+     * entry anchoring to [triggerButton].
+     *
+     * @param anchor the element the grid is positioned under; its
+     *   bottom-right corner is where the grid hangs from.
      * @param takeFocus whether this open may claim the keyboard: focus the
      *   first tile, paint the focus ring, and answer arrow keys / Enter.
      *   `true` for the deliberate opens (a click on the trigger, a command
@@ -273,6 +287,11 @@ class LayoutDropdown(
      *
      * The delay is what keeps a cursor merely passing over the topbar from
      * flinging the grid open behind it.
+     *
+     * @param anchor the element to hang the grid under when the timer
+     *   fires — always [triggerButton] in practice, passed rather than read
+     *   so the timer cannot resolve it differently than the hover did.
+     * @see cancelHoverOpen
      */
     private fun scheduleHoverOpen(anchor: HTMLElement) {
         cancelHoverOpen()
@@ -310,6 +329,17 @@ class LayoutDropdown(
         hideTimerId = null
     }
 
+    /**
+     * Builds the topbar icon button behind [triggerButton], wired for both
+     * gestures: hover reveals the grid and leaving puts it away, click
+     * toggles it.
+     *
+     * Called once, lazily, the first time a host reads [triggerButton].
+     *
+     * @return the trigger element, not yet mounted; the host appends it.
+     * @see se.soderbjorn.lunula.web.shell.attachHoverMenu the "+" button's
+     *   equivalent, whose hover contract and delays this matches.
+     */
     private fun buildTrigger(): HTMLElement {
         val btn = document.createElement("button") as HTMLElement
         btn.setAttribute("type", "button")
@@ -318,6 +348,12 @@ class LayoutDropdown(
         btn.innerHTML = ICON_LAYOUT
         btn.addEventListener("click", { _: Event ->
             cancelHoverOpen()
+            // Open or close, and nothing else. Unlike the "+" next to it,
+            // this button has no default action to commit — there is no
+            // "the layout you probably meant", so a click that quietly
+            // applied one would be picking for the user. The grid is the
+            // whole offer, and the click is only how you ask for it or
+            // take the question back.
             if (isOpen()) close() else openAnchoredTo(btn)
             // Whichever way that went, the user has just decided something
             // with a click, and the cursor is now parked on the button.
