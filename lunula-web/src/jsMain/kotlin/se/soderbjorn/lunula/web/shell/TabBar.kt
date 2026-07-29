@@ -387,13 +387,13 @@ object TabBarClassNames {
  * @return a fresh tab-bar [HTMLElement] ready to be appended to the host
  */
 fun renderTabBar(spec: TabBarSpec): HTMLElement {
-    // Each tab's dot menu and the far-right overflow menu mount their
-    // dropdown list on `document.body` (so the strip's overflow-x scroll
-    // can't clip it). Re-rendering builds fresh lists, so purge any from a
-    // prior render first — otherwise they accumulate as orphans, one per
-    // tab per render.
-    val staleLists = document.querySelectorAll(".dt-tabbar-menu-list")
-    for (i in 0 until staleLists.length) (staleLists.item(i) as HTMLElement).remove()
+    // Each tab's dot menu and the far-right overflow menu mount their panel on
+    // `document.body` (so the strip's overflow-x scroll can't clip it). A panel
+    // now exists only while it is open, but the strip it was opened from is
+    // about to be replaced — so close whatever is up, rather than leave a menu
+    // floating over a tab that no longer exists with its dismissal backdrop
+    // still swallowing every press on the page.
+    closeTabBarMenus()
 
     val bar = document.createElement("div") as HTMLElement
     bar.className = TabBarClassNames.BAR +

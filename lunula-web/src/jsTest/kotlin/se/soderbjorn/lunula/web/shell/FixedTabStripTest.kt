@@ -77,7 +77,7 @@ class FixedTabStripTest {
      */
     @Test
     fun fixedStripRendersNoOverflowMenu() {
-        assertEquals(0, render(isFixed = true).querySelectorAll(".dt-tabbar-menu").length)
+        assertEquals(0, render(isFixed = true).querySelectorAll(".dt-tabbar-overflow").length)
     }
 
     /**

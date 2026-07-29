@@ -7,9 +7,10 @@
  * (wrapping past the end), while **hovering** it opens — after a short dwell
  * — a popover listing the worlds (a checkmark marks the active one). Each
  * popover row carries a per-world "⋮" **dot menu**, revealed on row hover, that
- * offers Rename and Close — the very same pattern (and shared [wireMenuToggle]
+ * offers Rename and Close — the very same pattern (and shared [wireDotMenu]
  * / [menuRow] helpers + `.dt-tab-menu*` chrome) the tab bar uses for its
- * per-tab dot menu ([appendTabDotMenu]), so the two read identically.
+ * per-tab dot menu ([appendTabDotMenu]), so the two read identically: one
+ * panel, opened from a globe row or from a tab, drawn the same either way.
  * New worlds are created from the topbar "+" button's "New world" row, so the
  * switcher popover intentionally has no create action of its own. Rename and
  * Close reuse the toolkit's own name-prompt and confirmation-dialog chrome so
@@ -159,12 +160,13 @@ private fun cancelWorldHoverHide() {
 
 /** Schedule the hover popover to close after [WORLD_HOVER_HIDE_MS] unless re-entered. */
 private fun scheduleWorldHoverHide() {
-    // While a per-world ⋮ dropdown is open, keep the popover chain alive — closing
-    // it would yank away the menu the pointer is heading for. (The dropdown mounts
+    // While a per-world ⋮ panel is open, keep the popover chain alive — closing
+    // it would yank away the menu the pointer is heading for. (The panel mounts
     // on document.body with a full-viewport backdrop, so the popover gets no stray
     // hover events meanwhile; this only guards the leave that fired as the pointer
-    // crossed from the row toward the dropdown.)
-    if (document.querySelector(".dt-world-row-menu-list.dt-open") != null) return
+    // crossed from the row toward the panel. A panel exists only while it is
+    // open, so its presence is the whole test.)
+    if (document.querySelector(".${TabMenuClassNames.WORLD_PANEL}") != null) return
     cancelWorldHoverHide()
     worldHoverHideTimer = window.setTimeout({ closeAllWorldPopovers() }, WORLD_HOVER_HIDE_MS)
 }
@@ -275,14 +277,10 @@ private fun closeAllWorldPopovers() {
     worldPopoverDismiss = null
     val open = document.querySelectorAll(".dt-world-popover")
     for (i in 0 until open.length) (open.item(i) as HTMLElement).remove()
-    // The per-world ⋮ dropdowns (the tab-menu pattern) mount their list on
-    // document.body, so removing the popover rows above doesn't take them down —
-    // sweep any world dot-menu list, plus any stray menu backdrop wireMenuToggle
-    // left up, so a hover-driven close leaks nothing.
-    val dotLists = document.querySelectorAll(".dt-world-row-menu-list")
-    for (i in 0 until dotLists.length) (dotLists.item(i) as HTMLElement).remove()
-    val backdrops = document.querySelectorAll(".dt-menu-backdrop")
-    for (i in 0 until backdrops.length) (backdrops.item(i) as HTMLElement).remove()
+    // The per-world ⋮ panels (the tab-menu pattern) mount on document.body, so
+    // removing the popover rows above doesn't take them down — hand that to the
+    // owner, which also clears the dismissal backdrop and the pressed trigger.
+    closeTabBarMenus()
 }
 
 /**
@@ -358,10 +356,12 @@ private fun buildWorldRow(
 /**
  * Appends the per-world "⋮" **dot menu** to a world row — the exact pattern the
  * tab bar uses for its per-tab actions ([appendTabDotMenu]): a small "⋮" button
- * the CSS reveals on row hover, opening a body-mounted dropdown (via the shared
- * [wireMenuToggle], with the shared [menuRow] rows + `.dt-tab-menu*` /
- * `.dt-tabbar-menu-*` chrome) that holds Rename and Close. Reusing the tab
- * helpers keeps the two menus pixel- and behaviour-identical.
+ * the CSS reveals on row hover, opening a body-mounted panel (via the shared
+ * [wireDotMenu], with the shared [menuRow] rows on the shared `.dt-hover-menu`
+ * surface + `.dt-tab-menu*` button chrome) that holds Rename and Close. Reusing
+ * the tab helpers keeps the two menus pixel- and behaviour-identical — and the
+ * surface is the one the world popover this row sits in is drawn on, so the
+ * menu-out-of-a-menu is the same object twice rather than two lookalikes.
  *
  * Rename opens the modal name prompt seeded with the current name; Close opens
  * the destructive confirm dialog. The last remaining world's Close row is
@@ -369,13 +369,14 @@ private fun buildWorldRow(
  * lone world's menu shows only Rename; when neither action is available the
  * button isn't rendered at all.
  *
- * @param rowEl    the `.dt-world-row` to attach the "⋮" button to (its dropdown
- *   list mounts on `document.body`, tagged `.dt-world-row-menu-list`).
+ * @param rowEl    the `.dt-world-row` to attach the "⋮" button to (its panel
+ *   mounts on `document.body` when pressed, tagged
+ *   [TabMenuClassNames.WORLD_PANEL] so it paints above the popover).
  * @param world    the world this menu acts on.
  * @param snapshot the current world list (for the last-world Close guard).
  * @param source   the host's world callbacks.
  * @see appendTabDotMenu
- * @see wireMenuToggle
+ * @see wireDotMenu
  */
 private fun appendWorldRowDotMenu(
     rowEl: HTMLElement,
@@ -398,40 +399,36 @@ private fun appendWorldRowDotMenu(
     menuBtn.setAttribute("aria-label", "Workspace options")
     menuBtn.textContent = "⋮"
 
-    val menuList = document.createElement("div") as HTMLElement
-    menuList.className = "dt-tabbar-menu-list dt-tab-menu-list dt-world-row-menu-list ${MenuTriggerClassNames.CHROME}"
-
-    val closeMenu = wireMenuToggle(menuWrap, menuBtn, menuList)
-
-    source.onRename?.let { onRename ->
-        menuList.appendChild(menuRow("Rename", ICON_RENAME) {
-            closeMenu()
-            closeAllWorldPopovers()
-            promptWorldName(title = "Rename workspace", initial = world.label) { name ->
-                onRename(world.id, name)
-            }
-        })
-    }
-    if (canClose) {
-        val onClose = source.onClose!!
-        menuList.appendChild(menuRow("Close", ICON_CLOSE_TAB) {
-            closeMenu()
-            closeAllWorldPopovers()
-            showConfirmDialog(
-                title = "Close workspace",
-                message = "Close <strong>${escapeHtmlForConfirm(world.label)}</strong>? " +
-                    "This deletes every tab and session inside it.",
-                confirmLabel = "Close workspace",
-                destructive = true,
-                messageIsHtml = true,
-                onConfirm = { onClose(world.id) },
-            )
-        })
+    wireDotMenu(menuWrap, menuBtn, extraPanelClass = TabMenuClassNames.WORLD_PANEL) { panel, closeMenu ->
+        source.onRename?.let { onRename ->
+            panel.appendChild(menuRow("Rename", ICON_RENAME) {
+                closeMenu()
+                closeAllWorldPopovers()
+                promptWorldName(title = "Rename workspace", initial = world.label) { name ->
+                    onRename(world.id, name)
+                }
+            })
+        }
+        if (canClose) {
+            val onClose = source.onClose!!
+            panel.appendChild(menuRow("Close", ICON_CLOSE_TAB) {
+                closeMenu()
+                closeAllWorldPopovers()
+                showConfirmDialog(
+                    title = "Close workspace",
+                    message = "Close <strong>${escapeHtmlForConfirm(world.label)}</strong>? " +
+                        "This deletes every tab and session inside it.",
+                    confirmLabel = "Close workspace",
+                    destructive = true,
+                    messageIsHtml = true,
+                    onConfirm = { onClose(world.id) },
+                )
+            })
+        }
     }
 
     menuWrap.appendChild(menuBtn)
     rowEl.appendChild(menuWrap)
-    document.body?.appendChild(menuList)
 }
 
 /** Positions [box] under the anchor rect [a], clamped to the viewport. */
