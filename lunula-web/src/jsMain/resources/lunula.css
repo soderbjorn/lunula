@@ -2917,6 +2917,14 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     width: 100%;
     height: 30px;
     padding: 0 10px;
+    /* `width: 100%` plus a horizontal padding is only the panel's width if the
+       padding is counted inside it. A `<button>` row is border-box by default
+       and a `<div>` row — which is what a row carrying its own trailing button
+       has to be — is not, so without this the div rows are 20px wider than the
+       panel that holds them and the panel grows a horizontal scrollbar along
+       its bottom edge. Stated for every row so the tag stays an implementation
+       detail. */
+    box-sizing: border-box;
     border: 0;
     border-radius: 7px;
     background: transparent;
