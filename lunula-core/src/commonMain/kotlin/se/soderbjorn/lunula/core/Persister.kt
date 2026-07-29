@@ -170,6 +170,25 @@ object PersistKeys {
     const val SIDEBAR_STATE: String = "darkness.sidebarState"
 
     /**
+     * Serialized left-sidebar width, as the user last dragged it:
+     * `{"leftPx": 210}`. A missing (or malformed) key means "no width of
+     * this user's own", and the shell falls back to the app's
+     * `AppShellSpec.defaultSidebarWidthPx` and then to the toolkit's own
+     * default.
+     *
+     * Its own key rather than a field on [SIDEBAR_STATE] (a JSON *array*
+     * of collapsed section ids, so there is no room for one) and rather
+     * than a field on [LAYOUT_STATE]: that blob is written per *world* in
+     * world-aware apps, and a chrome width is a property of the person at
+     * the browser, not of the world they happen to be looking at.
+     *
+     * A JSON object rather than a bare number so a second measurement (the
+     * right sidebar, a collapsed flag) can join it without a second key or
+     * a format break — a reader that does not understand a field ignores it.
+     */
+    const val SIDEBAR_WIDTH: String = "darkness.sidebarWidth"
+
+    /**
      * Serialized custom hotkey bindings: a JSON object mapping action id
      * → array of chord specs (e.g. `{"toolkit.pane.focusLeft":
      * ["ctrl+alt+ArrowLeft"]}`). A present action id fully *replaces* the

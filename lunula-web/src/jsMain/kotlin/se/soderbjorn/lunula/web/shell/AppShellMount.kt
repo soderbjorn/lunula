@@ -310,6 +310,49 @@ internal fun decodeCollapsedSectionsJson(json: String): Set<String> = try {
     emptySet()
 }
 
+/**
+ * The width the left sidebar opens at when neither the user nor the app
+ * has named one. The historical toolkit default, kept as a named constant
+ * now that two other tiers ([AppShellSpec.defaultSidebarWidthPx] and the
+ * persisted width) sit above it.
+ */
+const val DEFAULT_LEFT_SIDEBAR_WIDTH_PX: Int = 240
+
+/**
+ * Encodes the user's dragged left-sidebar width for
+ * [PersistKeys.SIDEBAR_WIDTH].
+ *
+ * @param widthPx the width in CSS pixels, as released by the drag handle.
+ * @return the blob string, `{"leftPx":<widthPx>}`.
+ * @see decodeSidebarWidthJson
+ */
+internal fun encodeSidebarWidthJson(widthPx: Int): String {
+    val obj = js("({})")
+    obj.leftPx = widthPx
+    return js("JSON.stringify(obj)") as String
+}
+
+/**
+ * Parses what [encodeSidebarWidthJson] produced.
+ *
+ * Total, and deliberately strict about what counts as an answer: null for
+ * missing, malformed or non-positive input, so the caller falls back to
+ * the app's seed rather than mounting a sidebar at zero (or at some
+ * value a future field's typo produced).
+ *
+ * @param json the stored blob, or null when the key was never written.
+ * @return the stored width in CSS pixels, or null when there is none to have.
+ */
+internal fun decodeSidebarWidthJson(json: String?): Int? {
+    if (json == null) return null
+    return try {
+        val parsed = js("JSON.parse(json)")
+        (parsed.leftPx as? Number)?.toInt()?.takeIf { it > 0 }
+    } catch (_: Throwable) {
+        null
+    }
+}
+
 /** Parses what [encodeShellLayoutJson] produced. Returns null on malformed input. */
 internal fun decodeShellLayoutJson(json: String): PersistedShellLayout? {
     return try {
@@ -499,6 +542,30 @@ fun mountAppShell(
         //     array of strings (or empty / missing — defaults to all open).
         val sidebarRaw = spec.persister.read(PersistKeys.SIDEBAR_STATE)
         if (sidebarRaw != null) state.applyCollapsedSections(decodeCollapsedSectionsJson(sidebarRaw))
+
+        // 1b''. Restore the width the user last dragged the left sidebar to.
+        //       Read before the first rerender below, so the bar is simply
+        //       there at that width rather than mounting at the app's seed
+        //       and jumping a frame later.
+        //
+        //       The app's `defaultSidebarWidthPx` is a *seed*: it applies
+        //       only where this read comes back empty, which is exactly the
+        //       browser that has never touched the handle. Anyone who has
+        //       keeps their width, whatever the app would have opened at —
+        //       an app narrowing its default (Lunicle, embedded in another
+        //       site) must not undo a choice someone already made.
+        //
+        //       `open` is carried from the controller rather than re-derived
+        //       from the spec: a toggle between mount and this read is
+        //       unlikely but the visibility is not this line's business.
+        val storedSidebarWidth = decodeSidebarWidthJson(spec.persister.read(PersistKeys.SIDEBAR_WIDTH))
+        if (storedSidebarWidth != null) {
+            leftSidebarController.setInitial(
+                open = leftSidebarController.isOpen,
+                widthPx = storedSidebarWidth,
+            )
+        }
+        state.markSidebarWidthPersisted(storedSidebarWidth)
 
         // 1b'. Restore the user's custom hotkey bindings and install the
         //      write-back hook. `applyCustomBindingsJson` rebinds every
@@ -944,7 +1011,17 @@ private class ShellState(
         // out of the sidebar entirely (`showSidebar = false`) seed it
         // closed — the slot is never mounted, but a coherent controller
         // state costs nothing and guards any stray isOpen reads.
-        leftSidebarController.setInitial(open = spec.showSidebar, widthPx = 240)
+        //
+        // The width here is the app's seed, not the user's: the stored
+        // width lives behind an async persister read and lands a moment
+        // later in the init job (see the SIDEBAR_WIDTH restore there),
+        // still before the first rerender. Seeding the app's value rather
+        // than the toolkit's means an app that asks for a narrower sidebar
+        // gets one even if that read never answers.
+        leftSidebarController.setInitial(
+            open = spec.showSidebar,
+            widthPx = spec.defaultSidebarWidthPx ?: DEFAULT_LEFT_SIDEBAR_WIDTH_PX,
+        )
     }
 
     fun attach(
@@ -1515,6 +1592,49 @@ private class ShellState(
     }
 
     /**
+     * The left-sidebar width currently believed to be in the persister,
+     * or `null` when nothing has been stored for this user yet. Compared
+     * against before every write, so a gesture that ends where it started
+     * — a nudge and a release, or a collapsed bar dragged back to the
+     * width it collapsed from — does not spend a round-trip on news.
+     *
+     * @see markSidebarWidthPersisted
+     * @see persistSidebarWidth
+     */
+    private var persistedSidebarWidthPx: Int? = null
+
+    /**
+     * Records what the boot read found under [PersistKeys.SIDEBAR_WIDTH],
+     * so the very first drag that lands on that same width is recognised
+     * as a no-op. Called once from [mountAppShell]'s init job.
+     *
+     * @param widthPx the stored width, or null when the key was absent.
+     */
+    fun markSidebarWidthPersisted(widthPx: Int?) {
+        persistedSidebarWidthPx = widthPx
+    }
+
+    /**
+     * Persists a left-sidebar width the user just dragged to, under
+     * [PersistKeys.SIDEBAR_WIDTH]. Wired as the left sidebar's `onResize`,
+     * which the resize handle fires once on mouseup — so this is one write
+     * per gesture, not one per frame.
+     *
+     * Zero and negative widths are dropped: a drag-to-collapse is a
+     * *visibility* gesture, and storing its 0 would mean the sidebar
+     * re-opened at nothing on the next load. The controller keeps the
+     * last good width for exactly that reason, and so does this key.
+     *
+     * @param widthPx the width in CSS pixels as released by the handle.
+     */
+    private fun persistSidebarWidth(widthPx: Int) {
+        if (widthPx <= 0 || widthPx == persistedSidebarWidthPx) return
+        persistedSidebarWidthPx = widthPx
+        val json = encodeSidebarWidthJson(widthPx)
+        scope.launch { spec.persister.write(PersistKeys.SIDEBAR_WIDTH, json) }
+    }
+
+    /**
      * Subscribes to the app's world push channel. Each push replaces
      * [worldSnapshot] and re-renders so the globe switcher reflects the
      * new world list / active world. Called from mount when
@@ -1806,6 +1926,11 @@ private class ShellState(
                     // is still available via the topbar button.
                     minWidthPx = 8,
                     maxWidthPx = 600,
+                    // Remember the width the user chose. Fires once on
+                    // mouseup (and once more when a collapsed bar is
+                    // dragged back open), so the whole of a drag costs one
+                    // persister write.
+                    onResize = ::persistSidebarWidth,
                 ),
                 onLeft = true,
                 requestRebuild = ::rerender,
