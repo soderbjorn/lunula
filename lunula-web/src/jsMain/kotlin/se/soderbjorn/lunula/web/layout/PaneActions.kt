@@ -109,21 +109,35 @@ object PaneActions {
             "<path d=\"M6 6l12 12M18 6L6 18\"/></svg>"
 
     /**
-     * Three dots in a row — the canonical overflow ("kebab") glyph.
+     * Three stacked dots — the canonical overflow ("kebab") glyph, `⋮`.
      *
      * Filled rather than stroked, because three 1.8-weight rings at 14px read
      * as noise where three solid dots read as three dots.
      *
-     * The toolkit renders no kebab of its own — the overflow button is the
-     * host's, since only the host knows what belongs in the menu (see
-     * [PaneMenuItem]). This constant exists so that the hosts which do build
-     * one stop each inventing a slightly different glyph for the same control.
+     * The glyph the toolkit's own pane overflow button wears: a host opts a
+     * pane in through
+     * [se.soderbjorn.lunula.web.shell.AppShellSpec.paneOverflowMenu] and the
+     * shell appends a `⋮` [PaneAction] carrying this icon to the trailing
+     * edge of the action strip. It stays public because the same glyph is
+     * the right one for any *other* kebab a host draws itself, and because
+     * hosts had each invented a slightly different one for the same control
+     * before there was a shared answer.
+     *
+     * Vertical, not horizontal: the constant has always been named and
+     * documented as a kebab, but it drew the *meatball* (three dots in a
+     * row) — which is a different control in every icon vocabulary, and is
+     * not the `⋮` the pane titlebar shows in either consuming app or in the
+     * design. Nothing in the toolkit or its consumers referenced it before
+     * the overflow button did, so the drawing was corrected rather than
+     * duplicated.
+     *
+     * @see se.soderbjorn.lunula.web.shell.PaneOverflowSpec
      */
     const val ICON_MENU: String =
         "<svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"currentColor\">" +
-            "<circle cx=\"5\" cy=\"12\" r=\"1.7\"/>" +
+            "<circle cx=\"12\" cy=\"5\" r=\"1.7\"/>" +
             "<circle cx=\"12\" cy=\"12\" r=\"1.7\"/>" +
-            "<circle cx=\"19\" cy=\"12\" r=\"1.7\"/></svg>"
+            "<circle cx=\"12\" cy=\"19\" r=\"1.7\"/></svg>"
 
     /** Empty rectangle — "make this pane fill the container". */
     const val ICON_MAXIMIZE: String =
