@@ -358,6 +358,30 @@ class TabSource(
     val onPaneClose: ((tabId: String, paneId: String) -> Unit)? = null,
     val onPaneAdd: ((tabId: String) -> Unit)? = null,
     /**
+     * Fires when the user picks a destination from the pane overflow
+     * menu's **Move to tab ▸** submenu. The host moves the pane from
+     * [tabId] to `targetTabId` in its own model and pushes a fresh
+     * snapshot; the toolkit does **not** mutate the tab tree itself, for
+     * exactly the reason it does not on [onPaneClose] or [onPaneAdd] —
+     * the host owns the tree in source mode, and a toolkit that moved the
+     * pane optimistically would fight the snapshot that follows.
+     *
+     * `null` (the default) suppresses the Move to tab row entirely rather
+     * than rendering it disabled: a row that can never do anything is
+     * worse than no row.
+     *
+     * Carries the **source** tab id as well as the target, matching
+     * [onPaneClose]'s `(tabId, paneId)` shape. It is load-bearing rather
+     * than decorative for hosts whose pane ids are derived from what the
+     * pane *shows* rather than minted per placement — Lunicle's `board-7`
+     * names the same board in every tab that holds it — where "which copy
+     * moved" has no other answer.
+     *
+     * @see AppShellSpec.paneOverflowMenu
+     * @see PaneOverflowSpec.includeMoveToTab
+     */
+    val onPaneMove: ((tabId: String, paneId: String, targetTabId: String) -> Unit)? = null,
+    /**
      * Optional secondary actions for the topbar "New pane" button. When
      * non-null, the toolkit renders the button as a split-button: the
      * icon click still routes to [onPaneAdd] (the host's default
@@ -459,6 +483,10 @@ class TabSource(
          * @param onPaneSelect see [TabSource.onPaneSelect].
          * @param onPaneClose see [TabSource.onPaneClose].
          * @param onPaneAdd see [TabSource.onPaneAdd].
+         * @param onPaneMove see [TabSource.onPaneMove]. Accepted for the
+         *   same reason as the other pane callbacks: moving a window
+         *   between two app-defined tabs rearranges the *panes*, which stay
+         *   user-owned, and says nothing about the tab set itself.
          * @param paneAddMenuItems see [TabSource.paneAddMenuItems].
          * @return a [TabSource] with [isFixed] set and every tab-mutation
          *   callback left `null`.
@@ -469,6 +497,7 @@ class TabSource(
             onPaneSelect: ((tabId: String, paneId: String) -> Unit)? = null,
             onPaneClose: ((tabId: String, paneId: String) -> Unit)? = null,
             onPaneAdd: ((tabId: String) -> Unit)? = null,
+            onPaneMove: ((tabId: String, paneId: String, targetTabId: String) -> Unit)? = null,
             paneAddMenuItems: ((tabId: String) -> List<PaneAddMenuItem>)? = null,
         ): TabSource = TabSource(
             subscribe = subscribe,
@@ -476,6 +505,7 @@ class TabSource(
             onPaneSelect = onPaneSelect,
             onPaneClose = onPaneClose,
             onPaneAdd = onPaneAdd,
+            onPaneMove = onPaneMove,
             paneAddMenuItems = paneAddMenuItems,
             isFixed = true,
         )
@@ -589,6 +619,9 @@ class WorldSource(
  *   toolkit so apps that don't supply one still get a visible icon.
  *   Apps can return per-pane content-type icons (file/note/terminal/
  *   git/...) to mirror notegrow's pattern.
+ * @property paneOverflowMenu per-pane opt-in to the toolkit's `⋮`
+ *   overflow menu (Rename window / Move to tab, plus the host's own
+ *   rows). `null` — the default — means no pane gets a kebab.
  * @property paneActions per-pane trailing-action buttons, prepended to
  *   the toolkit's standard window controls (maximize/close) in the
  *   pane chrome header. Apps return a fresh `List<PaneAction>` per
@@ -746,6 +779,36 @@ data class AppShellSpec(
     val paneLabel: (tabId: String, paneId: String) -> String = { _, paneId -> paneId },
     val paneIcon: (tabId: String, paneId: String) -> String? = { _, _ -> DefaultPaneGlyph },
     val paneActions: (tabId: String, paneId: String) -> List<PaneAction> = { _, _ -> emptyList() },
+    /**
+     * Opt a pane into the toolkit's `⋮` overflow menu — the trailing kebab
+     * in the pane titlebar, with **Rename window** and **Move to tab ▸**
+     * built in and the host's own rows spliced around them.
+     *
+     * Return a [PaneOverflowSpec] for a pane that should have the button,
+     * `null` (the default for every pane, since this whole property
+     * defaults to `null`) for one that should not. The button is appended
+     * *after* [paneActions] so it stays at the trailing edge of the strip,
+     * before the toolkit's own maximize/close cluster.
+     *
+     * **Invoked twice, for two different questions.** Once per pane-header
+     * render, purely to decide whether the pane gets a kebab at all; and
+     * again each time the menu is opened, to build the rows. That second
+     * call is what makes the menu live: the host's own state and the tab
+     * list are both read at open time, never cached from a render that may
+     * be seconds old. Keep the callback cheap and side-effect free.
+     *
+     * Both built-ins are dropped silently when the thing they act on is not
+     * wired — Rename window needs [paneRename], Move to tab needs
+     * [TabSource.onPaneMove] — so a host cannot ship a menu row that does
+     * nothing. When nothing survives that filter and [PaneOverflowSpec.extraItems]
+     * is empty, no button is rendered.
+     *
+     * @see PaneOverflowSpec
+     * @see TabSource.onPaneMove
+     * @see paneRename
+     * @see AppShellHandle.beginPaneRename
+     */
+    val paneOverflowMenu: ((tabId: String, paneId: String) -> PaneOverflowSpec?)? = null,
     /**
      * Optional per-pane breadcrumb segments rendered in the chrome title
      * in place of the joined-string title from [paneLabel]. When the

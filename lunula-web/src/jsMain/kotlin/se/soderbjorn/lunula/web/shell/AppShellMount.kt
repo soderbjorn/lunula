@@ -31,8 +31,12 @@ import se.soderbjorn.lunula.web.layout.LayoutController
 import se.soderbjorn.lunula.web.layout.LayoutDropdown
 import se.soderbjorn.lunula.web.layout.LayoutPreset
 import se.soderbjorn.lunula.web.layout.LayoutRenderer
+import se.soderbjorn.lunula.web.layout.PaneAction
+import se.soderbjorn.lunula.web.layout.PaneActions
 import se.soderbjorn.lunula.web.layout.PaneCallbacks
 import se.soderbjorn.lunula.web.layout.PaneHeaderSpec
+import se.soderbjorn.lunula.web.layout.PaneMenuSpec
+import se.soderbjorn.lunula.web.layout.openPaneMenu
 import se.soderbjorn.lunula.web.layout.triggerPaneRename
 import se.soderbjorn.lunula.web.layout.PaneLayout
 import se.soderbjorn.lunula.web.applyMonoFontFamily
@@ -2036,7 +2040,12 @@ private class ShellState(
                             titleAlignRight = titleSegments.isEmpty(),
                             leadingIcon = spec.paneIcon(activeTab, paneId),
                             leadingBadge = spec.paneHeaderBadge(activeTab, paneId),
-                            actions = spec.paneActions(activeTab, paneId),
+                            // The host's own buttons first, then — when the
+                            // host opts this pane in — the toolkit's `⋮`
+                            // overflow trigger at the trailing edge of the
+                            // strip. See [paneOverflowAction].
+                            actions = spec.paneActions(activeTab, paneId) +
+                                listOfNotNull(paneOverflowAction(activeTab, paneId)),
                             onRename = renameCb,
                             allowEmptyRename = spec.allowEmptyPaneRename,
                             paneIndex = spec.paneIndex(activeTab, paneId),
@@ -3669,6 +3678,124 @@ private class ShellState(
         persistLocalLayout()
     }
 
+    /**
+     * Moves [paneId] out of the active tab and into [targetTabId], keeping
+     * its persisted title. Local mode only — the source-mode counterpart is
+     * [TabSource.onPaneMove], which the host answers by pushing a snapshot.
+     *
+     * Local mode is the one place the toolkit *is* the model, which is why
+     * the pane-move row can be honoured here at all rather than being
+     * suppressed with the callback. Routes through [applyLocalLayout] so
+     * both tabs' presets re-tile around their new membership — the same
+     * re-tile a source-mode host gets from the snapshot that follows its
+     * own move.
+     *
+     * @param paneId      the pane to relocate.
+     * @param targetTabId the destination tab; a no-op when it is unknown or
+     *   is the pane's own tab.
+     * @see paneOverflowAction
+     */
+    private fun moveLocalPane(paneId: String, targetTabId: String) {
+        val current = local ?: return
+        val sourceTab = current.activeTabId ?: return
+        if (sourceTab == targetTabId || targetTabId !in current.tabs) return
+        val panes = current.panesByTab[sourceTab].orEmpty()
+        val moved = panes.firstOrNull { it.id == paneId } ?: return
+        val remaining = panes.filterNot { it.id == paneId }
+        val destination = current.panesByTab[targetTabId].orEmpty() + moved
+        applyLocalLayout(
+            current.copy(
+                panesByTab = current.panesByTab +
+                    (sourceTab to remaining) +
+                    (targetTabId to destination),
+            ),
+        )
+        persistLocalLayout()
+    }
+
+    /**
+     * Builds the trailing `⋮` [PaneAction] for a pane whose host opted in
+     * through [AppShellSpec.paneOverflowMenu], or `null` when it did not
+     * (or when nothing in the returned spec can be honoured).
+     *
+     * Called from the `paneHeader` factory on every pane-header render, so
+     * it must stay cheap: it resolves the host's spec once purely to answer
+     * "does this pane get a button". The **rows** are built later, inside
+     * [PaneAction.handlerWithAnchor], which the toolkit invokes at click
+     * time with the rendered button — so the tab list, the host's spec and
+     * the wired-ness of the two built-ins are all read fresh when the menu
+     * opens, and the popover anchors under the exact button pressed.
+     *
+     * @param tabId  the tab whose header is being rendered — the pane's own
+     *   tab, and therefore the one excluded from the move targets.
+     * @param paneId the pane the kebab belongs to.
+     * @return the action to append to the pane's strip, or `null` for no
+     *   kebab.
+     * @see buildPaneOverflowItems
+     * @see openPaneMenu
+     */
+    private fun paneOverflowAction(tabId: String, paneId: String): PaneAction? {
+        val provider = spec.paneOverflowMenu ?: return null
+        val probe = provider(tabId, paneId) ?: return null
+        if (!paneOverflowHasRows(probe, canRenamePane(), canMovePane())) return null
+        return PaneAction(
+            iconHtml = PaneActions.ICON_MENU,
+            tooltip = "More",
+            // Unused: `handlerWithAnchor` wins when both are set, and it is
+            // the anchor that puts the popover under this exact button.
+            handler = {},
+            handlerWithAnchor = { anchor ->
+                val overflow = provider(tabId, paneId)
+                if (overflow != null) {
+                    val items = buildPaneOverflowItems(
+                        overflow = overflow,
+                        tabs = lastSnapshot.tabs,
+                        ownTabId = tabId,
+                        canRename = canRenamePane(),
+                        canMove = canMovePane(),
+                        onRename = { triggerPaneRename(paneId) },
+                        onMove = { targetTabId ->
+                            val src = spec.tabSource
+                            if (src != null) {
+                                src.onPaneMove?.invoke(tabId, paneId, targetTabId)
+                            } else {
+                                moveLocalPane(paneId, targetTabId)
+                            }
+                        },
+                    )
+                    if (items.isNotEmpty()) {
+                        openPaneMenu(anchor = anchor, spec = PaneMenuSpec(items = items))
+                    }
+                }
+            },
+            extraClass = "dt-pane-action-more",
+        )
+    }
+
+    /**
+     * Whether the built-in **Rename window** row can do anything — i.e.
+     * whether the host wired [AppShellSpec.paneRename], which is what the
+     * toolkit's inline rename commits through.
+     *
+     * @return `true` when the row should be offered.
+     * @see paneOverflowAction
+     */
+    private fun canRenamePane(): Boolean = spec.paneRename != null
+
+    /**
+     * Whether the built-in **Move to tab** row can do anything.
+     *
+     * Source mode: only when the host wired [TabSource.onPaneMove], since
+     * the host owns the tab tree there and the toolkit will not mutate it.
+     * Local mode: always, because the toolkit *is* the model and can
+     * perform the move itself — see [moveLocalPane].
+     *
+     * @return `true` when the row should be offered.
+     * @see paneOverflowAction
+     */
+    private fun canMovePane(): Boolean =
+        if (spec.tabSource != null) spec.tabSource.onPaneMove != null else local != null
+
     private fun persistLocalLayout() {
         val current = local ?: return
         val json = encodeShellLayoutJson(current)
@@ -4219,6 +4346,14 @@ private class ShellState(
                     label = l.tabLabels[tabId] ?: tabId,
                     panes = l.panesByTab[tabId].orEmpty().map { PaneSnapshotEntry(id = it.id) },
                     activePaneId = null,
+                    // Carried through so consumers of the snapshot see the same
+                    // visibility the strip does. The pane overflow menu's "Move
+                    // to tab" reads it to mark a strip-hidden destination, which
+                    // in source mode arrives on the host's own snapshot — local
+                    // mode has to fill it in from `local` or the row would offer
+                    // a hidden tab without saying so.
+                    isHidden = tabId in l.tabsHidden,
+                    isHiddenFromSidebar = tabId in l.tabsHiddenFromSidebar,
                 )
             },
             activeTabId = l.activeTabId,

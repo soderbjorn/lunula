@@ -12,13 +12,32 @@ package se.soderbjorn.lunula.demo
 
 import kotlinx.browser.document
 import org.w3c.dom.HTMLElement
+import se.soderbjorn.lunula.web.shell.AppShellHandle
 import se.soderbjorn.lunula.web.shell.AppShellSpec
+import se.soderbjorn.lunula.web.shell.PaneOverflowSpec
 import se.soderbjorn.lunula.web.shell.mountAppShell
 import se.soderbjorn.lunula.demo.di.createJsAppGraph
+
+/**
+ * Pane titles the user has typed, keyed by pane id.
+ *
+ * The demo has no model of its own — the toolkit owns the tabs and panes in
+ * local mode — so the one thing a host must still own for the overflow
+ * menu's **Rename window** row to mean anything is *where the committed
+ * label goes*. This map is that, in its smallest honest form: written by
+ * [AppShellSpec.paneRename], read by [AppShellSpec.paneLabel]. It is
+ * deliberately not persisted; the demo exists to show the seam, and a
+ * label that survives a reload is the consuming app's job (see Lunicle's
+ * `WorkspaceTab.paneLabels`).
+ */
+private val paneTitles: MutableMap<String, String> = mutableMapOf()
 
 fun main() {
     val graph = createJsAppGraph()
     val root = document.getElementById("app") as HTMLElement
+
+    // Set once mountAppShell returns; nothing reads it before then.
+    var handle: AppShellHandle? = null
 
     // `darknessApi` is the preload-injected IPC bridge. Its presence is
     // also the toolkit's signal to expose the "Custom title bar" toggle
@@ -32,12 +51,28 @@ fun main() {
     // autoWireMacFullscreenBodyClass) so the toolkit's 80 px traffic-light
     // reservation on `.dt-topbar` activates and relaxes for fullscreen
     // automatically — no per-app wiring required.
-    mountAppShell(
+    handle = mountAppShell(
         AppShellSpec(
             rootContainer = root,
             title = "LunulaDemo",
             persister = graph.persister,
             paneContent = ::buildPaneContent,
+            // Every pane gets the `⋮`, and gets nothing in it the toolkit
+            // does not already own — which is the point: the demo is a pure
+            // consumer, so a Rename window / Move to tab menu that appears
+            // here with no menu-building code is the shortest proof that
+            // both rows are the toolkit's rather than an app's.
+            paneOverflowMenu = { _, _ -> PaneOverflowSpec() },
+            paneLabel = { _, paneId -> paneTitles[paneId] ?: "Pane $paneId" },
+            // Committing the label is the host's half of the rename, and the
+            // only half. An empty commit clears the override back to the
+            // derived title, which is what `allowEmptyPaneRename` exists
+            // for — see the flag's own docs.
+            paneRename = { _, paneId, newLabel ->
+                if (newLabel.isBlank()) paneTitles.remove(paneId) else paneTitles[paneId] = newLabel
+                handle?.refresh()
+            },
+            allowEmptyPaneRename = true,
             isElectron = isElectron,
         ),
         scope = graph.coroutineScope,
