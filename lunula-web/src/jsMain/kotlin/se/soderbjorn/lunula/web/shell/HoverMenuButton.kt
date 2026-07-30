@@ -235,6 +235,40 @@ internal fun armHoverOpenSuppression(anchor: HTMLElement) {
 }
 
 /**
+ * How to close the hover menu that is currently on screen, if one is.
+ *
+ * Module-level because "only one menu open at a time" is a rule *between*
+ * [attachHoverMenu] instances, and each instance's close lives in its own
+ * closure: an instance that is about to open has no other way to reach the one
+ * that is already open. Set as the last act of opening, cleared by the close it
+ * points at.
+ *
+ * ── Why this exists rather than a DOM sweep (LNL-208) ───────────────────────
+ *
+ * Opening used to enforce the rule by removing **every** `.dt-hover-menu` in
+ * the document. That class is the toolkit's menu *surface* — a paint — and
+ * consuming apps wear it on menus of their own: Lunicle's account corner builds
+ * one at mount and opens it in pure CSS on `:hover`, which is exactly the
+ * arrangement the sweep destroys. One hover over the topbar "+" deleted that
+ * menu from the document for the rest of the session, and the corner silently
+ * stopped opening — the app's own code kept writing rows into an element no
+ * longer attached to anything.
+ *
+ * Nothing on screen says who owns an element, so a class is the wrong thing to
+ * take ownership from. This variable is the right thing: only a menu this file
+ * opened can be here, and closing through its own function also cancels its
+ * timers, drops its document listeners and restores its anchor — none of which
+ * the sweep did, so an evicted menu used to leave an Escape handler and an
+ * outside-click handler behind for the rest of the page's life.
+ *
+ * It survives the case the sweep was really there for, too: the topbar is
+ * rebuilt wholesale on re-render, which detaches an open menu's anchor without
+ * firing the `mouseleave` that would have closed it. That orphan cannot close
+ * itself, but its closure is still here, and the next open invokes it.
+ */
+private var openHoverMenuCloser: (() -> Unit)? = null
+
+/**
  * Attaches a hover-revealed menu to [anchor].
  *
  * Behaviour:
@@ -247,8 +281,9 @@ internal fun armHoverOpenSuppression(anchor: HTMLElement) {
  * - Clicking a row fires the item's `onSelect`, closes the menu, and
  *   stops the click from propagating to [anchor]'s click handler.
  * - Pressing Escape or clicking outside both anchor and menu closes.
- * - Only one hover-menu is open at a time; opening a new one tears down
- *   any existing `.dt-hover-menu` first.
+ * - Only one hover-menu is open at a time; opening a new one closes
+ *   whichever one this file already has open — through its own owner, never
+ *   by sweeping the document for the surface class. See [openHoverMenuCloser].
  *
  * The menu lives directly under `document.body` (not nested inside the
  * topbar) so its `position: fixed` rect isn't clipped by overflow on
@@ -299,9 +334,16 @@ fun attachHoverMenu(
     }
 
     fun closeMenu() {
+        // Whether this instance was the one on screen, decided before the
+        // teardown clears it. Only that instance may drop the module-level
+        // registration: `closeMenu` also runs as a hide-timer no-op on an
+        // instance that never opened, and letting *that* clear it would leave
+        // whichever menu genuinely is open unreachable by the next open.
+        val wasOpen = menu != null
         cancelShow(); cancelHide()
         closeFlyout()
         menu?.remove(); menu = null
+        if (wasOpen) openHoverMenuCloser = null
         // The anchor stops looking pressed. Same attribute the menu triggers
         // use (see MenuTrigger.kt), so one stylesheet rule paints both and the
         // accessibility tree cannot drift away from the paint.
@@ -316,14 +358,20 @@ fun attachHoverMenu(
 
     fun openMenu() {
         cancelShow(); cancelHide()
-        // Only one menu open at a time — tear down any stale instance. The tab
-        // bar's click-opened menus are the same surface (`.dt-hover-menu`), so
-        // the sweep below would take their panel and leave the rest of them
-        // standing: a pressed-looking ⋮ and a full-viewport backdrop eating
-        // every press on the page. Close those through their own owner first.
+        // Only one menu open at a time, and every one of them is closed through
+        // its own owner rather than by sweeping the document for
+        // `.dt-hover-menu` — see [openHoverMenuCloser] for what that sweep cost
+        // the apps that share the surface class (LNL-208).
+        //
+        // Three owners, because three things raise a menu onto this surface:
+        // the tab bar's click-opened ⋮ panels (which also own a full-viewport
+        // dismissal backdrop and a pressed-looking trigger — removing the panel
+        // alone would leave the backdrop eating every press on the page), the
+        // world switcher's popover chain, and this file. Anything else wearing
+        // the class belongs to the host app and is none of our business.
         closeTabBarMenus()
-        val existing = document.querySelectorAll(".dt-hover-menu")
-        for (i in 0 until existing.length) (existing.item(i) as HTMLElement).remove()
+        closeAllWorldPopovers()
+        openHoverMenuCloser?.invoke()
 
         val items = itemsProvider()
         if (items.isEmpty()) return
@@ -514,6 +562,9 @@ fun attachHoverMenu(
         document.addEventListener("keydown", onEsc)
 
         menu = box
+        // Last, so a return above (an empty item list) leaves no registration
+        // pointing at a menu that was never built.
+        openHoverMenuCloser = { closeMenu() }
     }
 
     anchor.addEventListener("mouseenter", { ev: Event ->
