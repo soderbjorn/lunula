@@ -291,6 +291,14 @@ enum class LayoutPreset {
      * layout dropdowns draw each distinct miniature once and skip the
      * presets that would repeat it.
      *
+     * Equal boxes are not equal *behaviour*, though, and [Auto] is the
+     * case where the difference is the whole point: it is the only preset
+     * that recomputes this as panes are added and removed, and the only
+     * one under which the drag separators are hidden. [Grid] returning the
+     * same rectangles at six panes describes one instant, not what either
+     * will do at the seventh. The dropdowns exempt Auto from the skipping
+     * for exactly that reason.
+     *
      * @param paneCount how many panes the active tab currently contains;
      *   `0` returns an empty list, `1` collapses to a single full-bleed box.
      * @param grid optional snap grid. When `null` or [GridSpec.NONE],
@@ -431,11 +439,19 @@ enum class LayoutPreset {
          * what exists; the skipping is the renderers' business and each
          * one does it against its own markup.
          *
-         * Leads with [Auto] and excludes [Custom], which is a mode rather
-         * than something a user can pick. Auto leading matters to the
-         * skipping rule: the first entry of a group of look-alikes is the
-         * one that survives, so Auto is guaranteed a tile at every pane
-         * count.
+         * Leads with [Auto] and excludes [Custom], which is a sentinel for
+         * hand-tweaked geometry rather than something a user can pick.
+         *
+         * Auto leading is presentation only. It is *not* what keeps Auto
+         * on screen: Auto is a mode rather than a geometry — the only
+         * preset that re-tiles as panes come and go, and the only one
+         * under which the drag separators are hidden — so the toolkit's
+         * dropdowns exempt it from the skipping in both directions and
+         * draw it as a wand rather than as a shape. Auto is therefore
+         * guaranteed a tile at every pane count, and wherever a caller's
+         * own list happens to put it. What the ordering does decide is
+         * which member of a group of genuine look-alikes survives — the
+         * first of them — which is why both grids walk this same list.
          *
          * @see computeBoxes
          * @see se.soderbjorn.lunula.web.layout.LayoutDropdown
