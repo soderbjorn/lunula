@@ -898,6 +898,24 @@ data class AppShellSpec(
      */
     val showSidebar: Boolean = true,
     /**
+     * The width the left sidebar opens at when this browser has no width
+     * of its own, in CSS pixels. `null` (the default) keeps the toolkit's
+     * own [DEFAULT_LEFT_SIDEBAR_WIDTH_PX].
+     *
+     * A **seed, not an override**: a width the user dragged is persisted
+     * under [se.soderbjorn.lunula.core.PersistKeys.SIDEBAR_WIDTH] and
+     * always wins, so an app naming this is choosing the starting point
+     * for someone who has never touched the handle rather than dictating a
+     * width to everyone. Apps use it when the shell runs somewhere
+     * narrower than a window of its own — Lunicle seeds a tighter sidebar
+     * when the tracker is embedded in another site's page, where every
+     * pixel the chrome takes is one the host's slot does not have to give.
+     *
+     * Read once per mount, on the same boot path that reads the stored
+     * width; it is not consulted again on rerender.
+     */
+    val defaultSidebarWidthPx: Int? = null,
+    /**
      * Whether the tab strip is rendered in the topbar's middle slot.
      * When `true` (the default) the full tab bar renders as before. Set
      * to `false` for apps whose tab model is a single implicit tab: the
