@@ -269,8 +269,17 @@ private var worldPopoverDismiss: (() -> Unit)? = null
  * Removes any open world-switcher popover / sub-menu currently in the DOM and
  * tears down the timers and outside-click / Escape listeners that fed it, so a
  * hover-driven close leaks nothing.
+ *
+ * `internal` rather than file-private because the topbar's hover menu closes
+ * this chain when it takes over (LNL-208). It used to do that by removing every
+ * `.dt-hover-menu` in the document, which took the popover's *panel* and left
+ * this file's timers and listeners standing — and took host-owned menus wearing
+ * the same surface class with it. Reaching the owner is the fix; the owner has
+ * to be reachable.
+ *
+ * @see attachHoverMenu
  */
-private fun closeAllWorldPopovers() {
+internal fun closeAllWorldPopovers() {
     cancelWorldHoverShow()
     cancelWorldHoverHide()
     worldPopoverDismiss?.invoke()
