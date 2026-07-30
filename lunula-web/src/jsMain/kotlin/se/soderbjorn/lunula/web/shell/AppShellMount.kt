@@ -1008,6 +1008,37 @@ private class ShellState(
         for (id in stale) paneContentCache.remove(id)
     }
 
+    /**
+     * The element [AppShellSpec.emptyTabContent] last produced, while it is
+     * on screen — held so the next rerender can take it back down.
+     *
+     * Deliberately NOT cached the way [paneContentCache] is: a pane body
+     * carries state a teardown would lose, and an empty-tab message carries
+     * none while depending on app state that changes underneath it ("still
+     * loading" becoming "nothing to show"). Rebuilding it per rerender is
+     * what keeps it true.
+     */
+    private var emptyTabEl: HTMLElement? = null
+
+    /**
+     * Put the host's empty-tab content in the main slot, or take it away.
+     *
+     * Mounted as a sibling of the [LayoutRenderer]'s pane area rather than
+     * in place of it: the renderer appends its own children to the main
+     * element and never clears it, so the two coexist and an appearing pane
+     * does not have to rebuild the renderer. Called from [rerender] after
+     * the render pass, when the pane area is known to be empty.
+     */
+    private fun renderEmptyTabContent(mainEl: HTMLElement, shown: Boolean) {
+        emptyTabEl?.let { it.parentElement?.removeChild(it) }
+        emptyTabEl = null
+        if (!shown) return
+        val factory = spec.emptyTabContent ?: return
+        val el = factory() ?: return
+        mainEl.appendChild(el)
+        emptyTabEl = el
+    }
+
     init {
         // Seed the SidebarController so it's "open" by default; the very
         // first rerender then mounts the sidebar at its target width
@@ -2371,7 +2402,17 @@ private class ShellState(
         // tab switch is recognised as a fresh-render boundary —
         // otherwise the renderer would animate every pane in the new
         // tab as a "newly added" pop-in.
-        renderer!!.render(buildPaneLayout(), contextKey = viewActiveTabId())
+        val paneLayout = buildPaneLayout()
+        renderer!!.render(paneLayout, contextKey = viewActiveTabId())
+        // A tab with no panes leaves the renderer with nothing to draw, and
+        // the host is the only one who knows what that means — see
+        // [AppShellSpec.emptyTabContent]. Gated on there being an active tab
+        // at all: with none there is no tab to say anything about, and an
+        // "this tab is empty" line under no tab reads as a bug.
+        renderEmptyTabContent(
+            mainEl,
+            shown = viewActiveTabId() != null && paneLayout.floatingPanes.isEmpty(),
+        )
         // Make sure exactly one pane in the active tab is the focused
         // one — on initial mount and on every tab switch. The renderer
         // auto-falls-back its internal focus to the first visible pane

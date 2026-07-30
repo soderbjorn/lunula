@@ -740,6 +740,28 @@ data class AppShellSpec(
     val title: String,
     val persister: Persister,
     val paneContent: PaneContentFactory,
+    /**
+     * What to put in the main slot when the active tab holds no panes at
+     * all — the state a host reaches by closing the last pane in a tab, or
+     * by opening on a tab it had nothing to seed (an app whose default
+     * layout is one pane per document, on an account with no documents).
+     *
+     * The toolkit owns the main slot, so this is the only seam through
+     * which a host can speak in it: [paneContent] is asked per pane, and a
+     * tab with no panes asks nothing, which left the app painting a blank
+     * container over an empty [LayoutRenderer]. Invoked on each shell
+     * rerender while the tab is empty and the returned element mounted
+     * beside the renderer, so a message that depends on app state (loading,
+     * signed out, nothing to show) repaints with it — call
+     * [AppShellHandle.refresh] when the state behind it changes. Torn down
+     * the moment a pane appears.
+     *
+     * Returning `null` (the default) keeps the toolkit's own behaviour: an
+     * empty tab shows an empty main area. Hosts that just want the family's
+     * standard affordance build it with
+     * [se.soderbjorn.lunula.web.layout.renderEmptyTabPlaceholder].
+     */
+    val emptyTabContent: (() -> HTMLElement?)? = null,
     val tabSource: TabSource? = null,
     /**
      * Optional push-based source of the app's **world** list. When
