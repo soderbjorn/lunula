@@ -283,11 +283,20 @@ enum class LayoutPreset {
      * snapped to the grid so auto-tiled panes are visually
      * indistinguishable from hand-placed, snap-aligned panes.
      *
+     * Note that different presets legitimately return **equal** lists at
+     * some pane counts — every preset collapses to one full-bleed box at
+     * `paneCount == 1`, [Auto] and [AutoBigTwo] agree at three panes, and
+     * [Auto] and [Grid] agree from six panes upwards and can no longer
+     * diverge. That is not a bug in the geometry; it is why the toolkit's
+     * layout dropdowns draw each distinct miniature once and skip the
+     * presets that would repeat it.
+     *
      * @param paneCount how many panes the active tab currently contains;
      *   `0` returns an empty list, `1` collapses to a single full-bleed box.
      * @param grid optional snap grid. When `null` or [GridSpec.NONE],
      *   boxes are returned with their raw fractional coordinates.
      * @return a list of [paneCount] rectangles, slot 0 first.
+     * @see Companion.DROPDOWN_ORDER
      */
     fun computeBoxes(paneCount: Int, grid: GridSpec? = null): List<LayoutBox> {
         val raw = computeLayoutBoxes(this, paneCount)
@@ -408,7 +417,29 @@ enum class LayoutPreset {
         fun fromKey(key: String): LayoutPreset? =
             entries.firstOrNull { it.key == key }
 
-        /** Subset of presets shown in the layout dropdown, in display order. */
+        /**
+         * Every preset a layout dropdown may offer, in display order.
+         *
+         * This is the **unfiltered** catalogue and the single source of
+         * truth for ordering — it never varies with pane count. What a
+         * dropdown actually *draws* is generally shorter: several presets
+         * arrange panes identically at some counts (see [computeBoxes]),
+         * and the toolkit's dropdowns skip a preset whose miniature they
+         * have already drawn for an earlier entry, so the same tile is
+         * never offered twice. Read this list when you want the catalogue
+         * itself — serialization, tooling, a settings screen enumerating
+         * what exists; the skipping is the renderers' business and each
+         * one does it against its own markup.
+         *
+         * Leads with [Auto] and excludes [Custom], which is a mode rather
+         * than something a user can pick. Auto leading matters to the
+         * skipping rule: the first entry of a group of look-alikes is the
+         * one that survives, so Auto is guaranteed a tile at every pane
+         * count.
+         *
+         * @see computeBoxes
+         * @see se.soderbjorn.lunula.web.layout.LayoutDropdown
+         */
         val DROPDOWN_ORDER: List<LayoutPreset> = listOf(
             Auto,
             AutoBigTwo, AutoBigTwoRight, AutoBigTwoTop, AutoBigTwoBottom,
@@ -422,6 +453,7 @@ enum class LayoutPreset {
             LShape, LShapeTopRight, LShapeBottomLeft, LShapeBottomRight,
             BigTwoStack, BigTwoStackRight, BigTwoStackBottom,
         )
+
     }
 }
 

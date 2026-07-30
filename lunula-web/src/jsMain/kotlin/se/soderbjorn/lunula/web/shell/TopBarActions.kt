@@ -21,6 +21,7 @@ import org.w3c.dom.HTMLElement
 import org.w3c.dom.events.Event
 import se.soderbjorn.lunula.web.layout.LayoutBox
 import se.soderbjorn.lunula.web.layout.LayoutPreset
+import se.soderbjorn.lunula.web.layout.ONE_PANE_LAYOUT_NOTE
 import se.soderbjorn.lunula.web.layout.PaneMenuItem
 import se.soderbjorn.lunula.web.layout.PaneMenuSpec
 import se.soderbjorn.lunula.web.layout.openPaneMenu
@@ -463,6 +464,15 @@ fun buildLayoutPresetButton(
  * @param paneCount number of panes the active tab currently contains;
  *   each tile's miniature renders that many boxes so the preview matches
  *   what the user will actually get on apply. `0` shows an "empty" hint.
+ *   It also decides *which* presets get a tile at all: a preset whose
+ *   miniature repeats one already drawn would arrange the panes the same
+ *   way, so it is skipped. `1` therefore shows a single tile plus
+ *   [ONE_PANE_LAYOUT_NOTE], where the grid used to come up as 32 copies
+ *   of one full-bleed rectangle (LNA-13).
+ * @see se.soderbjorn.lunula.web.layout.LayoutDropdown the supported
+ *   dropdown, which this predates; it adds hover reveal, keyboard
+ *   navigation and an active-preset marker, and skips duplicates by the
+ *   same rule against its own (rank-aware) miniatures.
  */
 private fun openLayoutPresetGrid(
     anchor: HTMLElement,
@@ -485,13 +495,13 @@ private fun openLayoutPresetGrid(
         empty.textContent = "No panes in this tab"
         grid.appendChild(empty)
     } else {
-        fun tile(preset: LayoutPreset) {
+        fun tile(preset: LayoutPreset, miniature: String) {
             val cell = document.createElement("button") as HTMLElement
             cell.setAttribute("type", "button")
             cell.className = "dt-layout-preset-tile"
             cell.title = preset.label
             cell.setAttribute("aria-label", preset.label)
-            cell.innerHTML = renderPresetMiniatureSvg(preset.computeBoxes(paneCount))
+            cell.innerHTML = miniature
             cell.addEventListener("click", { ev: Event ->
                 ev.stopPropagation()
                 closeGrid()
@@ -499,14 +509,47 @@ private fun openLayoutPresetGrid(
             })
             grid.appendChild(cell)
         }
-        // Skip `Custom` — that's a sentinel for "user has hand-tweaked
-        // geometry, no preset driving"; its `computeBoxes` returns an
-        // empty list, so a tile would render as a blank cell. Apps
-        // already enter Custom mode automatically when the user drags
-        // a pane; the dropdown is for picking a preset to leave it.
-        for (preset in LayoutPreset.values()) {
-            if (preset == LayoutPreset.Custom) continue
-            tile(preset)
+        // Miniatures already drawn. A preset whose miniature repeats one
+        // above it arranges the panes identically, so a second tile
+        // showing the same picture offers the user nothing — that is
+        // LNA-13, filed from a screenshot of this very grid at one pane,
+        // where all 32 tiles were the same full-bleed rectangle.
+        //
+        // Keyed on the markup rather than on the box list because the
+        // markup is what the eye compares, and because this grid's
+        // renderer — unlike LayoutDropdown's — takes no `emphasized`
+        // argument, so presets that differ only in how many ranks they
+        // privilege do draw the same tile here and legitimately collapse
+        // into one.
+        val drawn = LinkedHashSet<String>()
+        // `LayoutPreset.DROPDOWN_ORDER` rather than the enum's own order,
+        // which this predated. Same 32 presets either way — the list is
+        // exactly `entries` minus `Custom` — but the orders disagree
+        // about which member of a look-alike group comes first and so
+        // survives. Walking the same list as LayoutDropdown means the two
+        // grids keep the same tile for the same shape instead of showing
+        // `BigTwoStack` in one and `AutoBigTwo` in the other.
+        //
+        // Dropping `Custom` is the other thing that list does for us: it
+        // is a sentinel for "user has hand-tweaked geometry, no preset
+        // driving" and its `computeBoxes` returns an empty list, so a
+        // tile would render as a blank cell. Apps enter Custom mode
+        // automatically when the user drags a pane; the dropdown is for
+        // picking a preset to leave it.
+        for (preset in LayoutPreset.DROPDOWN_ORDER) {
+            val miniature = renderPresetMiniatureSvg(preset.computeBoxes(paneCount))
+            if (!drawn.add(miniature)) continue
+            tile(preset, miniature)
+        }
+        if (paneCount == 1) {
+            // One tile survives, because at one pane there is only one
+            // arrangement. Say so rather than leaving a popover that
+            // looks like it failed to draw — same wording as the
+            // toolkit's supported dropdown.
+            val note = document.createElement("div") as HTMLElement
+            note.className = "dt-layout-preset-note"
+            note.textContent = ONE_PANE_LAYOUT_NOTE
+            grid.appendChild(note)
         }
     }
 

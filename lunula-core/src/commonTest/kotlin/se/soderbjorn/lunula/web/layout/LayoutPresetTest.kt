@@ -2,6 +2,11 @@
  * Tests for the platform-free layout primitives — [LayoutPreset.Auto]
  * geometry, [GridSpec] snapping, [LayoutPreset.Custom] semantics, and
  * the per-preset edge cases callers depend on.
+ *
+ * Which presets arrange panes *identically* at a given count follows
+ * from this geometry, but is asserted where it is acted on:
+ * `lunula-web`'s `LayoutPresetDedupeTest`, which compares the miniatures
+ * the dropdowns actually draw rather than the boxes alone.
  */
 package se.soderbjorn.lunula.web.layout
 
@@ -416,3 +421,4 @@ class MultiSlotPresetGeometryTest {
         }
     }
 }
+
