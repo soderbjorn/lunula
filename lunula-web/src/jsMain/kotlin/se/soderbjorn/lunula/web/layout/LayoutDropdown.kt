@@ -42,6 +42,32 @@
  * (`.dt-layout-preset-*`, `.dt-layout-preview-*`) so the dropdown
  * looks identical across apps without per-app styling.
  *
+ * A miniature is drawn at most once. Presets that arrange the panes
+ * identically at the current count — and there are always some, because
+ * the catalogue is written for the general case — would otherwise give
+ * the user several tiles carrying the same picture and the same result,
+ * which is a choice that isn't one. The first of each such group in
+ * [presets] keeps the tile and the rest are skipped.
+ *
+ * [LayoutPreset.Auto] is exempt from that, in both directions: it never
+ * claims a picture and is never skipped for one. Auto is a *mode* rather
+ * than a geometry — it is the only preset that re-tiles as panes come and
+ * go, and the only one that hides the drag separators — so its boxes
+ * coinciding with another preset's at some count is a coincidence of
+ * shape and not evidence that the two offer the same thing. `Grid` from
+ * six panes up is exactly that case: same picture as Auto, but a static
+ * grid that keeps its separators and stays put when a pane spawns. The
+ * exemption is also what makes the Auto tile a guarantee of this class
+ * rather than of the order of [presets] — a caller whose list does not
+ * lead with Auto still gets it, and so still gets the active marker and
+ * the toggle-off click that go with it.
+ *
+ * The de-duplication is done per open rather than per instance, because
+ * it depends entirely on a pane count that changes underneath the
+ * dropdown: 32 tiles from three panes up, and two at one pane — Auto,
+ * plus the single full-bleed box that every layout in the catalogue
+ * really does collapse to there.
+ *
  * @see LayoutPreset
  * @see LayoutPreset.DROPDOWN_ORDER
  * @see LayoutController.setPreset
@@ -78,9 +104,18 @@ import se.soderbjorn.lunula.web.shell.isHoverOpenSuppressed
  *   decide which tile, if any, gets the `is-active` accent. Return
  *   `null` (or [LayoutPreset.Custom]) when no preset is currently
  *   driving the tab. Default returns `null`.
- * @param presets The presets to show, in display order. Defaults to
- *   [LayoutPreset.DROPDOWN_ORDER] which starts with [LayoutPreset.Auto]
- *   and excludes [LayoutPreset.Custom] (a sentinel mode, not a target).
+ * @param presets The presets this dropdown may offer, in display order.
+ *   Defaults to [LayoutPreset.DROPDOWN_ORDER] which starts with
+ *   [LayoutPreset.Auto] and excludes [LayoutPreset.Custom] (a sentinel
+ *   mode, not a target). This is the *candidate* list rather than the
+ *   rendered one — membership and order are honoured exactly, but an
+ *   entry whose miniature repeats an earlier one at the current pane
+ *   count is skipped, so a caller that passes its own list still never
+ *   shows the same tile twice. [LayoutPreset.Auto] is the one entry
+ *   guaranteed to survive wherever it sits in the list: it draws a wand
+ *   glyph rather than a miniature and takes no part in the skipping, so
+ *   a caller is free to order it — or omit it — deliberately, and does
+ *   not have to lead with it to keep it.
  */
 class LayoutDropdown(
     private val paneCount: () -> Int,
@@ -96,6 +131,19 @@ class LayoutDropdown(
 
     private var gridEl: HTMLElement? = null
     private var tiles: List<HTMLElement> = emptyList()
+
+    /**
+     * The presets the current open actually drew a tile for, index-parallel
+     * to [tiles].
+     *
+     * Shorter than [presets] whenever two of them would have drawn the same
+     * miniature at this pane count, so the keyboard activation path must
+     * index into this and not into [presets] — otherwise Enter on the tile
+     * under the ring would apply whichever preset happened to sit at that
+     * position in the unfiltered catalogue.
+     */
+    private var visiblePresets: List<LayoutPreset> = emptyList()
+
     private var focusedIndex: Int = 0
     /** Active preset captured at the moment the popover opened. Drives
      *  both the `is-active` tile marker and the click-to-toggle-off
@@ -196,6 +244,25 @@ class LayoutDropdown(
         // mislead users into thinking the layout is still being held.
         activeAtOpen = activePreset()?.takeIf { it == LayoutPreset.Auto }
 
+        // Miniatures already drawn by this open. A preset whose miniature
+        // repeats one above it is skipped: it would arrange the panes the
+        // same way, so a second tile carrying the same picture is a
+        // choice that isn't one. That is very literally the bug LNA-13
+        // reported — at a single pane every preset in the catalogue is one
+        // full-bleed box, so the grid came up as 32 copies of the same
+        // rectangle.
+        //
+        // Auto takes no part in this — see the exemption in the loop
+        // below — so this set holds geometry tiles only.
+        //
+        // Rebuilt on every open rather than cached, because the pane count
+        // is read fresh above and decides the whole thing: at one pane the
+        // 31 geometry presets are one box between them, at four they are
+        // 31 distinct pictures, and shapes merge and separate again at
+        // every count in between as panes open and close.
+        val drawn = LinkedHashSet<String>()
+        val shown = mutableListOf<LayoutPreset>()
+
         val tileList = mutableListOf<HTMLElement>()
         if (n <= 0) {
             val empty = document.createElement("div") as HTMLElement
@@ -204,10 +271,53 @@ class LayoutDropdown(
             grid.appendChild(empty)
         } else {
             for (preset in presets) {
+                // Auto is exempt from the whole de-duplication, in both
+                // directions: it neither claims a key nor is skipped by
+                // one. Auto is a *mode*, not a geometry — it is the only
+                // preset that re-tiles when panes are added or removed
+                // (see AppShellMount's `presetIsAuto`) and the only one
+                // that hides the drag separators (see PaneSeparators) —
+                // so the fact that its boxes coincide with some other
+                // preset's at a given count says nothing about whether
+                // the two offer the same thing. Grid at six panes is the
+                // case that matters: it draws what Auto draws, but it is
+                // a *static* grid that keeps its separators and does not
+                // re-tile, so suppressing it would make a genuinely
+                // different option unreachable from six panes up.
+                //
+                // Exempting it in the other direction too is what keeps
+                // Auto's tile a property of this code rather than of
+                // DROPDOWN_ORDER's ordering: a caller passing a `presets`
+                // list that does not lead with Auto still gets the Auto
+                // tile, and so still gets the `is-active` marker and the
+                // toggle-off click that `activeAtOpen` depends on.
+                //
+                // Auto also never draws a miniature — its tile paints
+                // AUTO_TILE_GLYPH — so there is nothing of its to compare
+                // in the first place.
+                val isAuto = preset == LayoutPreset.Auto
+                // The miniature is both what the tile shows and what
+                // decides whether the tile is drawn at all, so identical
+                // markup means identical rendering by construction — no
+                // separate notion of "same layout" to keep in step, and no
+                // float tolerance to pick. That invariant holds only for
+                // the presets that actually draw one, which is why Auto
+                // sits outside it.
+                val miniature = if (isAuto) {
+                    null
+                } else {
+                    renderPresetMiniatureSvg(
+                        preset.computeBoxes(n),
+                        preset.emphasizedSlotCount,
+                    )
+                }
+                if (miniature != null && !drawn.add(miniature)) continue
+                shown += preset
+
                 val tile = document.createElement("button") as HTMLElement
                 tile.setAttribute("type", "button")
                 tile.className = "dt-layout-preset-tile"
-                if (preset == LayoutPreset.Auto) tile.classList.add("dt-layout-preset-tile-auto")
+                if (isAuto) tile.classList.add("dt-layout-preset-tile-auto")
                 if (preset == activeAtOpen) {
                     tile.classList.add("is-active")
                     // aria-pressed lets screen readers announce the
@@ -220,11 +330,7 @@ class LayoutDropdown(
                 // Auto gets a distinctive magic-wand glyph so it can't be
                 // confused with the geometry-preview tiles around it.
                 // Other presets render their per-pane-count miniature.
-                tile.innerHTML = if (preset == LayoutPreset.Auto) {
-                    AUTO_TILE_GLYPH
-                } else {
-                    renderPresetMiniatureSvg(preset.computeBoxes(n), preset.emphasizedSlotCount)
-                }
+                tile.innerHTML = miniature ?: AUTO_TILE_GLYPH
                 tile.addEventListener("click", { e: Event ->
                     e.stopPropagation()
                     selectOrToggleAndClose(preset, activeAtOpen)
@@ -245,7 +351,25 @@ class LayoutDropdown(
                 grid.appendChild(tile)
                 tileList += tile
             }
+            if (n == 1) {
+                // One pane is one full-bleed box whichever geometry you
+                // pick, so exactly one geometry tile survives the skip —
+                // and Auto's wand sits beside it, two tiles in all. That
+                // is the honest answer, but two tiles in an otherwise
+                // empty popover read as a rendering fault rather than as
+                // a statement, so say out loud why there is nothing else
+                // here. Auto stays offered because it is a mode rather
+                // than a shape: arming it before splitting the pane is a
+                // reasonable thing to want at one pane, and it is the one
+                // thing on offer here that will still be doing something
+                // at the second pane.
+                val note = document.createElement("div") as HTMLElement
+                note.className = "dt-layout-preset-note"
+                note.textContent = ONE_PANE_LAYOUT_NOTE
+                grid.appendChild(note)
+            }
         }
+        visiblePresets = shown
 
         document.body?.appendChild(grid)
         gridEl = grid
@@ -274,6 +398,7 @@ class LayoutDropdown(
         gridEl?.let { it.parentNode?.removeChild(it) }
         gridEl = null
         tiles = emptyList()
+        visiblePresets = emptyList()
         focusedIndex = 0
         activeAtOpen = null
         keyboardActive = false
@@ -487,7 +612,10 @@ class LayoutDropdown(
                 }
                 "Enter", " " -> {
                     if (tiles.isEmpty()) return@handler
-                    val preset = presets.getOrNull(focusedIndex) ?: return@handler
+                    // Indexes the rendered list, not the candidate list —
+                    // they differ whenever the pane count collapsed a
+                    // duplicate group away.
+                    val preset = visiblePresets.getOrNull(focusedIndex) ?: return@handler
                     ke.preventDefault()
                     selectOrToggleAndClose(preset, activeAtOpen)
                 }
@@ -520,31 +648,66 @@ class LayoutDropdown(
     companion object {
         /** Matches the toolkit's `.dt-layout-preset-grid`'s 3-column grid. */
         private const val GRID_COLUMNS = 3
-
-        /**
-         * Magic-wand + sparkles glyph used in place of the geometry
-         * miniature on the Auto preset tile. Drawn with the same stroke
-         * weight and viewBox as the trigger icon so the dropdown reads
-         * as a single visual family. The wand says "the toolkit picks
-         * for you" without committing to a specific tiling shape.
-         */
-        private const val AUTO_TILE_GLYPH: String =
-            "<svg viewBox=\"0 0 36 24\" width=\"36\" height=\"24\" " +
-                "class=\"dt-layout-preview dt-layout-preview-auto\" aria-hidden=\"true\">" +
-                // Wand body, lower-left to upper-right
-                "<line x1=\"6\" y1=\"19\" x2=\"22\" y2=\"7\" stroke=\"currentColor\" " +
-                "stroke-width=\"1.6\" stroke-linecap=\"round\"/>" +
-                // Wand tip diamond (filled with primary accent)
-                "<path d=\"M22 5 L25 8 L22 11 L19 8 Z\" class=\"dt-layout-preview-primary\"/>" +
-                // Sparkle 1: small star top-right
-                "<path d=\"M30 4 L31 6 L33 7 L31 8 L30 10 L29 8 L27 7 L29 6 Z\" " +
-                "class=\"dt-layout-preview-primary\"/>" +
-                // Sparkle 2: tiny star middle-right
-                "<path d=\"M28 14 L28.6 15.2 L29.8 15.8 L28.6 16.4 L28 17.6 L27.4 16.4 " +
-                "L26.2 15.8 L27.4 15.2 Z\" class=\"dt-layout-preview-other\"/>" +
-                "</svg>"
     }
 }
+
+/**
+ * Magic-wand + sparkles glyph painted on the `Auto` tile in place of a
+ * geometry miniature. Drawn with the same stroke weight and viewBox as
+ * the trigger icon so the dropdown reads as a single visual family. The
+ * wand says "the toolkit picks for you" without committing to a specific
+ * tiling shape.
+ *
+ * That distinction is not decoration. `Auto` is the only preset that
+ * re-tiles when panes are added or removed and the only one that hides
+ * the drag separators, so it is a mode rather than a shape — and drawing
+ * it as one of the shapes invites the reading that picking it is picking
+ * a tiling. It is also what lets `Auto` sit outside the dropdowns'
+ * de-duplication without putting two identical pictures on screen: the
+ * wand can never repeat a miniature.
+ *
+ * Shared by both of the toolkit's preset grids — [LayoutDropdown] and
+ * the topbar's older
+ * [se.soderbjorn.lunula.web.shell.buildLayoutPresetButton] — so `Auto`
+ * reads the same wherever it is offered. `internal` for that reason
+ * alone; consumers have no business painting toolkit tiles themselves.
+ *
+ * @see LayoutDropdown.openAnchoredTo
+ */
+internal const val AUTO_TILE_GLYPH: String =
+    "<svg viewBox=\"0 0 36 24\" width=\"36\" height=\"24\" " +
+        "class=\"dt-layout-preview dt-layout-preview-auto\" aria-hidden=\"true\">" +
+        // Wand body, lower-left to upper-right
+        "<line x1=\"6\" y1=\"19\" x2=\"22\" y2=\"7\" stroke=\"currentColor\" " +
+        "stroke-width=\"1.6\" stroke-linecap=\"round\"/>" +
+        // Wand tip diamond (filled with primary accent)
+        "<path d=\"M22 5 L25 8 L22 11 L19 8 Z\" class=\"dt-layout-preview-primary\"/>" +
+        // Sparkle 1: small star top-right
+        "<path d=\"M30 4 L31 6 L33 7 L31 8 L30 10 L29 8 L27 7 L29 6 Z\" " +
+        "class=\"dt-layout-preview-primary\"/>" +
+        // Sparkle 2: tiny star middle-right
+        "<path d=\"M28 14 L28.6 15.2 L29.8 15.8 L28.6 16.4 L28 17.6 L27.4 16.4 " +
+        "L26.2 15.8 L27.4 15.2 Z\" class=\"dt-layout-preview-other\"/>" +
+        "</svg>"
+
+/**
+ * Footer line rendered under the two-tile grid at one pane, where every
+ * geometry preset in the catalogue draws the same full-bleed box and so
+ * exactly one of them survives the duplicate skip — leaving that box and
+ * the `Auto` wand, which never takes part in the skip.
+ *
+ * Explains the short grid rather than leaving it looking like a
+ * half-drawn popover, and says what `Auto` will do once there is more
+ * than one pane to arrange. Shared with the topbar's older preset grid
+ * ([se.soderbjorn.lunula.web.shell.buildLayoutPresetButton]) so the two
+ * dropdowns say the same thing in the same situation.
+ *
+ * @see LayoutDropdown.openAnchoredTo
+ * @see AUTO_TILE_GLYPH
+ */
+internal const val ONE_PANE_LAYOUT_NOTE: String =
+    "One pane fills the tab, so every layout looks the same. " +
+        "Auto keeps tiling as you add panes."
 
 /**
  * Renders a tile-sized SVG miniature for [boxes]. Mirrors the

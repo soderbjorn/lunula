@@ -942,6 +942,27 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     color: var(--t-text-dim, #888);
     text-align: center;
 }
+/* Explanatory footer under the tiles. Only rendered at one pane, where
+   every geometry preset draws the same full-bleed box, so exactly one of
+   them survives the duplicate skip and the grid is that box plus the
+   Auto wand — two tiles, which without a word of explanation read as a
+   popover that failed to draw.
+
+   Spans every column. The explicit width is load-bearing rather than
+   cosmetic: the grid's tracks are `min-content`, and in the one case
+   this note appears there are two tiles, so the tracks are two tiles
+   wide between them and the sentence would wrap to a word or two per
+   line. Giving the note a definite width makes it the tracks'
+   min-content contribution instead, and the popover comes up a readable
+   column wide. */
+.dt-layout-preset-note {
+    grid-column: 1 / -1;
+    width: 200px;
+    padding: 6px 8px 2px;
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--t-text-dim, #888);
+}
 .dt-tab.dt-dragging {
     opacity: 0.5;
 }

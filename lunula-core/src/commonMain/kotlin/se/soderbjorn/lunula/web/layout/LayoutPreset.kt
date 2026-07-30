@@ -283,11 +283,28 @@ enum class LayoutPreset {
      * snapped to the grid so auto-tiled panes are visually
      * indistinguishable from hand-placed, snap-aligned panes.
      *
+     * Note that different presets legitimately return **equal** lists at
+     * some pane counts — every preset collapses to one full-bleed box at
+     * `paneCount == 1`, [Auto] and [AutoBigTwo] agree at three panes, and
+     * [Auto] and [Grid] agree from six panes upwards and can no longer
+     * diverge. That is not a bug in the geometry; it is why the toolkit's
+     * layout dropdowns draw each distinct miniature once and skip the
+     * presets that would repeat it.
+     *
+     * Equal boxes are not equal *behaviour*, though, and [Auto] is the
+     * case where the difference is the whole point: it is the only preset
+     * that recomputes this as panes are added and removed, and the only
+     * one under which the drag separators are hidden. [Grid] returning the
+     * same rectangles at six panes describes one instant, not what either
+     * will do at the seventh. The dropdowns exempt Auto from the skipping
+     * for exactly that reason.
+     *
      * @param paneCount how many panes the active tab currently contains;
      *   `0` returns an empty list, `1` collapses to a single full-bleed box.
      * @param grid optional snap grid. When `null` or [GridSpec.NONE],
      *   boxes are returned with their raw fractional coordinates.
      * @return a list of [paneCount] rectangles, slot 0 first.
+     * @see Companion.DROPDOWN_ORDER
      */
     fun computeBoxes(paneCount: Int, grid: GridSpec? = null): List<LayoutBox> {
         val raw = computeLayoutBoxes(this, paneCount)
@@ -408,7 +425,37 @@ enum class LayoutPreset {
         fun fromKey(key: String): LayoutPreset? =
             entries.firstOrNull { it.key == key }
 
-        /** Subset of presets shown in the layout dropdown, in display order. */
+        /**
+         * Every preset a layout dropdown may offer, in display order.
+         *
+         * This is the **unfiltered** catalogue and the single source of
+         * truth for ordering — it never varies with pane count. What a
+         * dropdown actually *draws* is generally shorter: several presets
+         * arrange panes identically at some counts (see [computeBoxes]),
+         * and the toolkit's dropdowns skip a preset whose miniature they
+         * have already drawn for an earlier entry, so the same tile is
+         * never offered twice. Read this list when you want the catalogue
+         * itself — serialization, tooling, a settings screen enumerating
+         * what exists; the skipping is the renderers' business and each
+         * one does it against its own markup.
+         *
+         * Leads with [Auto] and excludes [Custom], which is a sentinel for
+         * hand-tweaked geometry rather than something a user can pick.
+         *
+         * Auto leading is presentation only. It is *not* what keeps Auto
+         * on screen: Auto is a mode rather than a geometry — the only
+         * preset that re-tiles as panes come and go, and the only one
+         * under which the drag separators are hidden — so the toolkit's
+         * dropdowns exempt it from the skipping in both directions and
+         * draw it as a wand rather than as a shape. Auto is therefore
+         * guaranteed a tile at every pane count, and wherever a caller's
+         * own list happens to put it. What the ordering does decide is
+         * which member of a group of genuine look-alikes survives — the
+         * first of them — which is why both grids walk this same list.
+         *
+         * @see computeBoxes
+         * @see se.soderbjorn.lunula.web.layout.LayoutDropdown
+         */
         val DROPDOWN_ORDER: List<LayoutPreset> = listOf(
             Auto,
             AutoBigTwo, AutoBigTwoRight, AutoBigTwoTop, AutoBigTwoBottom,
@@ -422,6 +469,7 @@ enum class LayoutPreset {
             LShape, LShapeTopRight, LShapeBottomLeft, LShapeBottomRight,
             BigTwoStack, BigTwoStackRight, BigTwoStackBottom,
         )
+
     }
 }
 
