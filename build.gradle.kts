@@ -4,11 +4,12 @@ plugins {
     alias(libs.plugins.composeCompiler) apply false
     alias(libs.plugins.kotlinMultiplatform) apply false
     alias(libs.plugins.kotlinSerialization) apply false
+    alias(libs.plugins.mavenPublish) apply false
 }
 
 allprojects {
     group = "se.soderbjorn.lunula"
-    version = "0.2.71"
+    version = "0.2.72"
 }
 
 // The toolkit publishes to a single file-Maven-repo whose location is supplied
@@ -34,6 +35,61 @@ subprojects {
                     name = "LibsRepo"
                     url = uri(resolveRepo("lunula.publishTarget", publishTargetDefault))
                 }
+            }
+        }
+    }
+}
+
+// Maven Central publishing. The vanniktech plugin generates what Central
+// requires and a hand-rolled `maven-publish` setup does not: sources and
+// javadoc jars for every Kotlin Multiplatform target, the root module metadata
+// that ties the platform variants together, and PGP signatures on all of it.
+// Credentials (`mavenCentralUsername`/`Password`) and the signing key
+// (`signingInMemoryKey`/`Password`) come from ~/.gradle/gradle.properties and
+// are deliberately absent from this repo.
+//
+// Applied only to `lunula-*` modules. The demo modules under demo/ must never
+// be published, which today is enforced by them not applying `maven-publish`;
+// the name filter below preserves that guarantee independently.
+val toolkitPomDescriptions: Map<String, String> = mapOf(
+    "lunula-core" to "Lunula UI toolkit — themes, appearance and persistence primitives shared across platforms.",
+    "lunula-store" to "Lunula UI toolkit — observable layout, world and settings state.",
+    "lunula-web" to "Lunula UI toolkit — the web implementation: layout, tabs, windows, theming and DOM helpers.",
+    "lunula-compose" to "Lunula UI toolkit — Compose Multiplatform components and palette.",
+)
+
+subprojects {
+    if (!name.startsWith("lunula-")) return@subprojects
+    apply(plugin = "com.vanniktech.maven.publish")
+
+    extensions.configure<com.vanniktech.maven.publish.MavenPublishBaseExtension> {
+        publishToMavenCentral()
+        signAllPublications()
+        pom {
+            name.set(this@subprojects.name)
+            description.set(
+                toolkitPomDescriptions[this@subprojects.name]
+                    ?: "Lunula UI toolkit — ${this@subprojects.name}.",
+            )
+            inceptionYear.set("2026")
+            url.set("https://github.com/soderbjorn/lunula")
+            licenses {
+                license {
+                    name.set("MIT License")
+                    url.set("https://github.com/soderbjorn/lunula/blob/main/LICENSE")
+                }
+            }
+            developers {
+                developer {
+                    id.set("soderbjorn")
+                    name.set("Robert Söderbjörn")
+                    url.set("https://www.soderbjorn.se")
+                }
+            }
+            scm {
+                url.set("https://github.com/soderbjorn/lunula")
+                connection.set("scm:git:git://github.com/soderbjorn/lunula.git")
+                developerConnection.set("scm:git:ssh://git@github.com/soderbjorn/lunula.git")
             }
         }
     }
