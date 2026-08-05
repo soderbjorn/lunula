@@ -15,6 +15,7 @@ Wherever a step below says *each consumer*, it means every row of this table. Pa
 | lunamux | `../../lunamux/main` |
 | lunicle | `../../lunicle/main` |
 | lunapin | `../../lunapin/main` |
+| treefacts | `../../treefacts/main` |
 
 Each one owns three things this command depends on: a `lunula = "…"` pin in `gradle/libs.versions.toml`, a committed `libs-repo/`, and a `refreshLunula` task in its `build.gradle.kts`. If a consumer is missing any of them, or its checkout is not on disk, **say so and stop** rather than bumping the rest.
 
@@ -29,6 +30,7 @@ Do not quietly skip one. A consumer left on the old pin still builds for anybody
    - `./gradlew refreshLunula` from `../../lunamux/main`
    - `./gradlew refreshLunula` from `../../lunicle/main`
    - `./gradlew refreshLunula` from `../../lunapin/main`
+   - `./gradlew refreshLunula` from `../../treefacts/main`
 
    Do **not** run `./gradlew publishAllToLibsRepo` here on its own. With no `-Plunula.publishTarget` it publishes into the throwaway `build/local-libs-repo` in this repo, so it reports success while leaving every consumer on the old version (see the comment at the top of `build.gradle.kts`). Standing in the toolkit makes that the tempting command — it is the wrong one.
 5. Clean **each consumer's** libs-repo so it holds only the new version. In that consumer's `libs-repo/se/soderbjorn/lunula/`, for every `lunula-*` module, delete every version subdirectory except the new version's:
