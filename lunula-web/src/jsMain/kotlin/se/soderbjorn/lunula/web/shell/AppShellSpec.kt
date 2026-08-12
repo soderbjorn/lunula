@@ -1063,6 +1063,31 @@ data class AppShellSpec(
      */
     val defaultDisplayFontFamily: () -> String? = { null },
     /**
+     * App-supplied fallback for the MONOSPACED content font, as a
+     * [FontPreset.key], evaluated on every host-font application alongside the
+     * three seams above.
+     *
+     * Drives `--dt-font-mono` — terminals, code panes, anything an app binds to
+     * `var(--dt-font-mono)`. When the user has picked no monospaced font of
+     * their own, the resolved key is applied; the user's own pick wins as the
+     * `?:` above it, exactly as for chrome, prose and display.
+     *
+     * The only one of the four that does **not** fall through to a sibling, and
+     * that asymmetry is deliberate: chrome → prose → display share a chain
+     * because they are all proportional faces answering one question, and an app
+     * that names a brand face means it for all of them. A monospaced surface is
+     * a different question — code stays code — so a brand's proportional face
+     * must never leak into it. Null therefore means what it always has here: the
+     * variable is removed and `lunula.css`'s own
+     * `var(--dt-font-mono, ui-monospace, …)` fallback chain paints.
+     *
+     * Its arrival closes a gap rather than adding a feature: the size half
+     * ([defaultMonoFontSizePx]) has always existed, so a deployment could ask
+     * for 15px code without saying which face rendered it. Defaults to `null`,
+     * so an app that names nothing is byte-identical to before.
+     */
+    val defaultMonoFontFamily: () -> String? = { null },
+    /**
      * App-supplied fallbacks for the shell's shape settings — corner roundness,
      * spacing density and selection language — evaluated on every host
      * application alongside the font seams above.

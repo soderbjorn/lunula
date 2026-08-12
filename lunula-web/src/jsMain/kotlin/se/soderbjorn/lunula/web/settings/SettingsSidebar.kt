@@ -115,6 +115,15 @@ data class SettingsSidebarSpec(
     /** Effective display (heading) default key when the user picked none, or null. */
     val displayDefaultKey: () -> String? = { null },
     /**
+     * Effective monospaced default key when the user picked none, or null.
+     *
+     * Unlike the three above, this one has no sibling to fall through to — a
+     * proportional brand font must not letter a terminal — so it is null unless
+     * the app names a mono face of its own. Null rings "System Default", which is
+     * what `lunula.css`'s `var(--dt-font-mono, ui-monospace, …)` chain paints.
+     */
+    val monoDefaultKey: () -> String? = { null },
+    /**
      * Corner-radius pill values, in render order.
      *
      * A short, opinionated ladder rather than a range: 0 is square, 18 is the
@@ -473,6 +482,7 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
         hint = "Used by terminals and code panes.",
         kind = FontKind.Mono,
         currentKey = { spec.host.monoFontFamily },
+        appDefaultKey = { spec.monoDefaultKey() },
         onPick = { key ->
             spec.host.setMonoFontFamily(key)
             applyMonoFontFamily(key)

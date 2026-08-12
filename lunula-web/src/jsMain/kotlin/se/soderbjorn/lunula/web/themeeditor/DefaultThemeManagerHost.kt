@@ -67,6 +67,19 @@ class DefaultThemeManagerState(
     var tabbarFontFamily: String? = null,
     /** Tab strip font size override (px; falls back to sidebar). */
     var tabbarFontSizePx: Int? = null,
+    /**
+     * Window-title (pane header) font family override (falls back to sidebar).
+     *
+     * Held here like every other row the Settings sidebar offers. Before this
+     * field existed the "Window title font" pills called through to
+     * [ThemeManagerHost.setPaneHeaderFontFamily]'s empty default: the pick
+     * repainted the DOM, was never stored even in memory, and fired no
+     * `onChange` — so it could not be persisted and vanished on the next
+     * rebuild of the shell, not merely on reload.
+     */
+    var paneHeaderFontFamily: String? = null,
+    /** Window-title font size override (px; falls back to sidebar). */
+    var paneHeaderFontSizePx: Int? = null,
     /** Display (heading) font family override (falls back to prose). */
     var displayFontFamily: String? = null,
     /** Display (heading) font size override (px). */
@@ -112,6 +125,8 @@ open class DefaultThemeManagerHost(
     override val sidebarFontSizePx: Int? get() = state.sidebarFontSizePx
     override val tabbarFontFamily: String? get() = state.tabbarFontFamily
     override val tabbarFontSizePx: Int? get() = state.tabbarFontSizePx
+    override val paneHeaderFontFamily: String? get() = state.paneHeaderFontFamily
+    override val paneHeaderFontSizePx: Int? get() = state.paneHeaderFontSizePx
     override val displayFontFamily: String? get() = state.displayFontFamily
     override val displayFontSizePx: Int? get() = state.displayFontSizePx
     override val cornerRadiusPx: Int? get() = state.cornerRadiusPx
@@ -150,6 +165,8 @@ open class DefaultThemeManagerHost(
     override fun setSidebarFontSizePx(value: Int?) { state.sidebarFontSizePx = value; onChange() }
     override fun setTabbarFontFamily(value: String?) { state.tabbarFontFamily = value; onChange() }
     override fun setTabbarFontSizePx(value: Int?) { state.tabbarFontSizePx = value; onChange() }
+    override fun setPaneHeaderFontFamily(value: String?) { state.paneHeaderFontFamily = value; onChange() }
+    override fun setPaneHeaderFontSizePx(value: Int?) { state.paneHeaderFontSizePx = value; onChange() }
     override fun setDisplayFontFamily(value: String?) { state.displayFontFamily = value; onChange() }
     override fun setDisplayFontSizePx(value: Int?) { state.displayFontSizePx = value; onChange() }
     override fun setCornerRadiusPx(value: Int?) { state.cornerRadiusPx = value; onChange() }
@@ -187,4 +204,59 @@ fun DefaultThemeManagerState.applySnapshotV2(snapshot: se.soderbjorn.lunula.core
     customThemes.addAll(snapshot.customThemes)
     favorites.clear()
     favorites.addAll(snapshot.favorites)
+}
+
+/**
+ * Builds an [se.soderbjorn.lunula.core.AppearanceFonts] mirror of this state's
+ * font fields, for persistence under
+ * [se.soderbjorn.lunula.core.PersistKeys.APPEARANCE_FONTS].
+ *
+ * The counterpart of [toSnapshotV2], and separate from it deliberately: fonts
+ * are not part of [se.soderbjorn.lunula.core.ThemeSnapshotV2] (see its header)
+ * precisely so that persisting a theme choice cannot re-letter the app, and
+ * folding them in here would undo that at the one place both are written.
+ *
+ * @return the user's picks, all-null for a state nobody has touched.
+ */
+fun DefaultThemeManagerState.toAppearanceFonts(): se.soderbjorn.lunula.core.AppearanceFonts =
+    se.soderbjorn.lunula.core.AppearanceFonts(
+        sidebarFontFamily = sidebarFontFamily,
+        sidebarFontSizePx = sidebarFontSizePx,
+        tabbarFontFamily = tabbarFontFamily,
+        tabbarFontSizePx = tabbarFontSizePx,
+        paneHeaderFontFamily = paneHeaderFontFamily,
+        paneHeaderFontSizePx = paneHeaderFontSizePx,
+        monoFontFamily = monoFontFamily,
+        monoFontSizePx = monoFontSizePx,
+        proportionalFontFamily = proportionalFontFamily,
+        proportionalFontSizePx = proportionalFontSizePx,
+        displayFontFamily = displayFontFamily,
+        displayFontSizePx = displayFontSizePx,
+    )
+
+/**
+ * Overwrites this state's font fields with [fonts]. Used at boot to hydrate the
+ * default host from the persisted blob.
+ *
+ * Assignment rather than a null-skipping merge, and that is the whole contract:
+ * an absent field means the user has picked nothing for that surface, which is a
+ * value the shell has to be able to *restore* — a merge could only ever add
+ * picks, so "I set this back to the default" would be unrepresentable and the
+ * old pick would come back on the next load.
+ *
+ * @param fonts the persisted picks to apply.
+ */
+fun DefaultThemeManagerState.applyAppearanceFonts(fonts: se.soderbjorn.lunula.core.AppearanceFonts) {
+    sidebarFontFamily = fonts.sidebarFontFamily
+    sidebarFontSizePx = fonts.sidebarFontSizePx
+    tabbarFontFamily = fonts.tabbarFontFamily
+    tabbarFontSizePx = fonts.tabbarFontSizePx
+    paneHeaderFontFamily = fonts.paneHeaderFontFamily
+    paneHeaderFontSizePx = fonts.paneHeaderFontSizePx
+    monoFontFamily = fonts.monoFontFamily
+    monoFontSizePx = fonts.monoFontSizePx
+    proportionalFontFamily = fonts.proportionalFontFamily
+    proportionalFontSizePx = fonts.proportionalFontSizePx
+    displayFontFamily = fonts.displayFontFamily
+    displayFontSizePx = fonts.displayFontSizePx
 }

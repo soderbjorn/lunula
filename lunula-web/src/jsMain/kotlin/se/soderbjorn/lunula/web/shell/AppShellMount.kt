@@ -17,6 +17,7 @@ import org.w3c.dom.HTMLElement
 import org.w3c.dom.MediaQueryList
 import org.w3c.dom.events.Event
 import se.soderbjorn.lunula.core.Appearance
+import se.soderbjorn.lunula.core.AppearanceFonts
 import se.soderbjorn.lunula.core.AppearanceShape
 import se.soderbjorn.lunula.core.PersistKeys
 import se.soderbjorn.lunula.core.ThemeSnapshotV2
@@ -75,7 +76,9 @@ import se.soderbjorn.lunula.web.settings.toggleNotificationsSidebar
 import se.soderbjorn.lunula.web.settings.toggleSettingsSidebar
 import se.soderbjorn.lunula.web.themeeditor.DefaultThemeManagerHost
 import se.soderbjorn.lunula.web.themeeditor.DefaultThemeManagerState
+import se.soderbjorn.lunula.web.themeeditor.applyAppearanceFonts
 import se.soderbjorn.lunula.web.themeeditor.applySnapshotV2
+import se.soderbjorn.lunula.web.themeeditor.toAppearanceFonts
 import se.soderbjorn.lunula.web.themeeditor.toSnapshotV2
 import se.soderbjorn.lunula.web.themeeditor.buildThemeManagerSidebar
 import se.soderbjorn.lunula.web.themeeditor.closeThemeManager
@@ -502,8 +505,28 @@ fun mountAppShell(
         //    persisted fonts onto `--dt-font-*` on the first frame.
         val selectionRaw = spec.persister.read(PersistKeys.THEME_V2_SELECTION)
         val customRaw = spec.persister.read(PersistKeys.THEME_V2_CUSTOM)
-        val snapshot = ThemeSnapshotV2.fromStrings(selectionRaw, customRaw)
+        // The stars, from their own key. Read here rather than left to default so
+        // the theme manager opens with the user's starred themes hoisted and
+        // filled, which is the whole of what starring is for — the manager reads
+        // `host.favoriteThemeNames` and never re-reads the persister itself.
+        val favoritesRaw = spec.persister.read(PersistKeys.THEME_V2_FAVORITES)
+        val snapshot = ThemeSnapshotV2.fromStrings(selectionRaw, customRaw, favoritesRaw)
         themeState.applySnapshotV2(snapshot)
+
+        // 1a''. The user's font picks, from their own key, and — like the shape
+        //       below — hydrated BEFORE the first applyTheme so the first painted
+        //       frame is already in the face they chose. Getting this order wrong
+        //       is visible: the shell would letter itself in the app default and
+        //       reflow to the user's a frame later.
+        //
+        //       Read unconditionally, exactly as the shape is, and harmless for an
+        //       app supplying its own `settingsHost`: such a host shadows these
+        //       getters, so what lands here is never consulted, while an app
+        //       without one gets working font persistence for free.
+        val storedFonts = spec.persister.read(PersistKeys.APPEARANCE_FONTS)
+        val fonts = AppearanceFonts.fromJson(storedFonts)
+        themeState.applyAppearanceFonts(fonts)
+        state.markFontsPersisted(!fonts.isEmpty)
 
         // 1a'. Shape/density preferences, read from their own key. Hydrated
         //      here — before the first applyTheme below — so the shell's first
@@ -1335,7 +1358,12 @@ private class ShellState(
         val chromeSize = spec.defaultChromeFontSizePx()
         val proseSize = spec.defaultProseFontSizePx()
         val displaySize = spec.defaultDisplayFontSizePx() ?: proseSize
-        applyMonoFontFamily(host.monoFontFamily)
+        // Mono's own deploy-time seam, and the one that does NOT fall through to
+        // `chromeFallback`: a brand's proportional face must not letter a
+        // terminal. Null keeps the historical behaviour exactly — the variable is
+        // removed and lunula.css's own mono chain paints. See
+        // AppShellSpec.defaultMonoFontFamily.
+        applyMonoFontFamily(host.monoFontFamily ?: spec.defaultMonoFontFamily())
         applyMonoFontSizePx(host.monoFontSizePx ?: spec.defaultMonoFontSizePx())
         applyProportionalFontFamily(host.proportionalFontFamily ?: proseFallback)
         applyProportionalFontSizePx(host.proportionalFontSizePx ?: proseSize)
@@ -2015,6 +2043,9 @@ private class ShellState(
                             ?: spec.defaultProseFontFamily()
                             ?: spec.defaultChromeFontFamily()
                     },
+                    // No fallthrough, matching the apply ladder: mono is the one
+                    // surface a proportional brand font must not reach.
+                    monoDefaultKey = { spec.defaultMonoFontFamily() },
                     // …and the same for the shape rows, so a branded instance
                     // rings the pill it is actually painting rather than the
                     // toolkit default it is not.
@@ -4526,6 +4557,26 @@ private class ShellState(
         )
     }
 
+    /**
+     * Whether [PersistKeys.APPEARANCE_FONTS] is live for this user — i.e. the
+     * boot read found a non-empty blob, or [persistUi] has written one.
+     *
+     * Set by [markFontsPersisted] at boot. Read by [persistUi] to tell "this
+     * user has never picked a font" (leave the key alone entirely) from "this
+     * user just cleared their last pick" (store the empty blob, or the pick they
+     * removed comes back on the next load).
+     */
+    private var fontsKeyWritten: Boolean = false
+
+    /**
+     * Records what the boot read found under [PersistKeys.APPEARANCE_FONTS].
+     *
+     * @param stored true when a non-empty blob was already stored.
+     */
+    fun markFontsPersisted(stored: Boolean) {
+        if (stored) fontsKeyWritten = true
+    }
+
     private fun persistUi(snap: ThemeSnapshotV2 = snapshot) {
         scope.launch {
             try {
@@ -4548,6 +4599,59 @@ private class ShellState(
                         themeState.selectionStyle,
                     ).toJson(),
                 )
+                // ── Only what this shell's own host actually owns ────────────
+                //
+                // The two writes below are gated on the app NOT having supplied
+                // a [AppShellSpec.settingsHost], and the gate is load-bearing
+                // rather than tidy. An app that supplies one has said that its
+                // host — not `themeState` — is the source of truth for stars and
+                // fonts, and its setters route around `themeState` entirely. So
+                // what this method can see of those two facts is an empty
+                // mirror, and persisting an empty mirror is not a no-op: it is a
+                // write of "nothing starred, no font chosen" over whatever the
+                // app has stored.
+                //
+                // That is not hypothetical. Lunamux keeps its stars under this
+                // exact key (`ThemeBackingViewModel` writes
+                // `PersistKeys.THEME_V2_FAVORITES` through its own settings
+                // map), and this method runs for it — the topbar's
+                // appearance-cycle button calls [persistUi] regardless of who
+                // owns the host. Ungated, one click of that button in the window
+                // before Lunamux pushes its snapshot would have unstarred every
+                // theme the user had starred, silently and server-side.
+                //
+                // The keys already written above are unconditional because they
+                // predate this rule and are the toolkit's own to write; nothing
+                // here changes them.
+                if (spec.settingsHost == null) {
+                    // The starred themes. Their own key rather than a field on
+                    // the selection, because the two answer different questions:
+                    // the selection is which theme is *on*, the stars are which
+                    // ones the user wants to find again, and starring must not
+                    // be able to repaint the app. Written from `snap` (not
+                    // `themeState`) like the keys above, so a caller passing an
+                    // explicit snapshot persists a consistent set.
+                    spec.persister.write(PersistKeys.THEME_V2_FAVORITES, snap.favoritesJson())
+                    // The font picks, under their own key for the same reason
+                    // the shape is — see PersistKeys.APPEARANCE_FONTS.
+                    //
+                    // Gated a second time on "there is something to say", so an
+                    // app whose users never open the font rows never acquires
+                    // the key at all — an empty blob says exactly what a missing
+                    // key already says, and for a server-backed persister the
+                    // write is a request that buys no information.
+                    //
+                    // `fontsKeyWritten` is what makes clearing work: once a
+                    // non-empty blob exists (written now, or found at boot), the
+                    // key is live and an emptied blob has to be stored, or "put
+                    // this surface back to the default" would be the one pick
+                    // that could not be persisted.
+                    val fonts = themeState.toAppearanceFonts()
+                    if (!fonts.isEmpty || fontsKeyWritten) {
+                        fontsKeyWritten = true
+                        spec.persister.write(PersistKeys.APPEARANCE_FONTS, fonts.toJson())
+                    }
+                }
             } catch (t: Throwable) {
                 kotlinx.browser.window.asDynamic().console.error(
                     "[persistUi] threw: ${t.message}"

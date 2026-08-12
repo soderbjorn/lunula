@@ -149,6 +149,31 @@ object PersistKeys {
     const val APPEARANCE_SHAPE: String = "darkness.appearance.shape"
 
     /**
+     * Serialized [AppearanceFonts] — which face and size the user picked for
+     * each lettered surface: `{"sidebarFontFamily": "systemProp",
+     * "monoFontSizePx": 15}`. Any field may be absent, meaning "this user has
+     * picked nothing for that surface", which is what leaves the app's own
+     * deploy-time default (and beneath it the toolkit's) in charge.
+     *
+     * Its own key rather than a field on [THEME_V2_SELECTION], for the same
+     * reason [APPEARANCE_SHAPE] is: a face is a preference about *reading*,
+     * not about the palette, and it must survive every theme change rather
+     * than travel with one. Storing it alongside would quietly give "switch
+     * theme" the power to re-letter the app.
+     *
+     * One object rather than a key per surface — twelve of them, and each one
+     * a new entry in every consuming app's allowlist. [AppearanceFonts]
+     * carries that argument in full, along with the cost it accepts.
+     *
+     * Per-app, like the selection and the shape: the same person may want a
+     * terminal app monospaced throughout and a bookmark manager not. A missing
+     * key means every surface is at its default.
+     *
+     * @see AppearanceFonts
+     */
+    const val APPEARANCE_FONTS: String = "darkness.appearance.fonts"
+
+    /**
      * Serialized JSON array of theme *names* the user has starred / favorited
      * (e.g. `["Solarized Dark","Ayu Light"]`). Per-app (not shared via
      * `themes.json`): each app remembers its own starred set. A missing key
