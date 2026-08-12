@@ -1,10 +1,11 @@
 /* BuiltinThemes.kt
- * The 82 built-in themes (35 dark-toned, 47 light-toned): 71 transcribed verbatim from
+ * The 84 built-in themes (36 dark-toned, 48 light-toned): 71 transcribed verbatim from
  * the "Termtastic Theme Studio" design's RAW array, plus two hand-tuned
  * retro-computer palettes ("Workbench", "C64") appended at the
- * end of the list and nine hand-tuned light-chrome splits in the light
+ * end of the list, nine hand-tuned light-chrome splits in the light
  * section ("Harbour", "Orchid", "Marmalade", "Cerise", "Fern", "Lagoon",
- * "Peony", "Sunbeam", "Bluebell"). Each theme
+ * "Peony", "Sunbeam", "Bluebell"), and the "Citron" pair transcribed from the
+ * "LunaPin Theme" design. Each theme
  * defines all 20 literal tokens (including 8 dedicated syntax slots); the
  * four the design computes by formula (accentSoft, glow, addBg,
  * chromeAccentSoft) are derived at render time by [Theme.resolve] applying the
@@ -90,11 +91,12 @@ private fun theme(
 )
 
 /**
- * The 82 built-in themes.
+ * The 84 built-in themes.
  *
  * **This list's order is not the display order.** The picker sorts by name
- * ([orderThemesForPicker]), so the grouping below — house block, dark section,
- * light section, retro palettes last — exists for whoever is *editing* this
+ * ([orderThemesForPicker]), so the grouping below — house block, the Citron
+ * pair, dark section, light section, retro palettes last — exists for whoever
+ * is *editing* this
  * file: related palettes sit together, and a new theme has an obvious place to
  * go. Nothing reads the position of an entry.
  *
@@ -158,6 +160,30 @@ val builtinThemes: List<Theme> = listOf(
         chromeBg = "#0c1f16", chromeText = "#c2dccb", chromeTextDim = "#6e9080",
         chromeTextBright = "#ffffff", chromeBorder = "#1c3b2b",
         chromeAccent = "#46e08a", chromeTrack = "#16301f"),
+    // ── Citron ────────────────────────────────────────────────────────
+    // A pair, and contiguous here for the house block's reason rather than
+    // split across the dark and light sections below: the two were drawn as one
+    // theme in two tones, and LunaPin binds both by name as its default slots
+    // (see that app's `DefaultLook.kt`). Reading one without the other is
+    // reading half of it.
+    //
+    // Deliberately NOT added to [HOUSE_THEME_NAMES]. That block leads the
+    // picker in every app on this toolkit, so promoting these would let one
+    // product's default reorder three products' lists.
+    //
+    // Transcribed from the "LunaPin Theme" design, which emits this file's own
+    // `theme(...)` call — so the twenty tokens are the designer's values rather
+    // than an interpretation of a screenshot. It names no chrome tokens and
+    // none are invented here: both take the base-token fallback, so the chrome
+    // is the same surface as the content.
+    theme("Citron Dark", "Highlight", "Deep mulberry ink under a highlighter citron. Warm dark, cold-free.",
+        "#19101a", "#221626", "#2a1c2e", "#45304a", "#d8cadb", "#907f95", "#f6eef7",
+        "#c8e04a", "#f0b64b", "#ff6b7f", "#7ad6a0", "#b9f0cc",
+        "#d9a8ff", "#9ed77a", "#ffcf6a", "#7a6580", "#c8e04a", "#7fd6d0", "#d8cadb", "#ffb3d0"),
+    theme("Citron Light", "Highlight", "Mulberry ink on warm paper, marked in the same citron.",
+        "#f6f1f4", "#fffbfd", "#ece2e8", "#d8c8d2", "#43303f", "#8a7482", "#2a1826",
+        "#8a9a12", "#c48a1e", "#c9435a", "#2f8a6a", "#1d6b50",
+        "#8a3fbf", "#4a7a1e", "#a86a1e", "#9a8a98", "#6b7a0d", "#2f7a8a", "#43303f", "#b03a86"),
     // ---------------------------------- Dark ----------------------------------
     // Renamed from "Obsidian Split". These two open the chrome zone, but both
     // their zones are dark — the split is in value, not between dark chrome and
@@ -711,7 +737,7 @@ private val houseThemeRank: Map<String, Int> =
  *   3. everything else, alphabetically by name
  *
  * Alphabetical is the only order a stranger to the catalog can predict. The
- * list is 82 entries and growing; hand-maintained ordering meant the position
+ * list is 84 entries and growing; hand-maintained ordering meant the position
  * of "Sandstone" was a fact you could only learn by scrolling, and it
  * silently decided which themes got seen. Sorting by name makes a theme
  * findable by the name it is displayed under, which is also the thing the

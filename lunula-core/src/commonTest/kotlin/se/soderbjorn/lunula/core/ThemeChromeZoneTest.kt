@@ -138,6 +138,6 @@ class ThemeChromeZoneTest {
     fun builtinThemeNamesAreUnique() {
         val names = builtinThemes.map { it.name }
         assertEquals(names.size, names.toSet().size, "theme names are the identity key")
-        assertEquals(82, names.size)
+        assertEquals(84, names.size)
     }
 }

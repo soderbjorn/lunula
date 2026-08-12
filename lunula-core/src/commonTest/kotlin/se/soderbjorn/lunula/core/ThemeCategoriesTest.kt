@@ -36,8 +36,8 @@ class ThemeCategoriesTest {
         // The counts the file header has always claimed, now derived rather
         // than declared. A theme whose palette contradicts its former label
         // would move one of these.
-        assertEquals(35, builtinThemes.count { it.isDarkToned }, "dark-toned built-ins")
-        assertEquals(47, builtinThemes.count { !it.isDarkToned }, "light-toned built-ins")
+        assertEquals(36, builtinThemes.count { it.isDarkToned }, "dark-toned built-ins")
+        assertEquals(48, builtinThemes.count { !it.isDarkToned }, "light-toned built-ins")
     }
 
     @Test
