@@ -486,6 +486,15 @@ class LayoutRenderer(
         val minimizingGhosts = HashMap<String, HTMLElement>()
         val minimizingGhostRects = HashMap<String, org.w3c.dom.DOMRect>()
 
+        // Where every scroller inside the panes is scrolled to, read while they are
+        // still in the document. The rebuild below detaches each surviving pane's
+        // content and re-attaches it under a fresh wrapper, and the browser zeroes
+        // `scrollTop` on anything that leaves the document — so without this, a host's
+        // scrolled list silently returns to the top every time the tiling changes.
+        // Restored after the content renderers have re-mounted; see
+        // [capturePaneScrollOffsets].
+        val savedScrollOffsets = capturePaneScrollOffsets()
+
         // Wipe non-ghost, non-departing children. Ghosts (already in
         // mid-animation) stay; departing panes are left in place and
         // marked as ghosts in the next pass so they animate out.
@@ -621,6 +630,10 @@ class LayoutRenderer(
         for ((paneId, contentSlot) in pendingPanes) {
             callbacks.contentRenderer(paneId, contentSlot)
         }
+        // The content is back in the document, so the offsets read before the wipe can
+        // be put back. After the renderers rather than before: until a host has
+        // re-mounted its body there is nothing under the slot to scroll.
+        restorePaneScrollOffsets(savedScrollOffsets)
 
         // Invisible draggable separator bars between adjacent panes —
         // recomputed from scratch every render so the bars always match
@@ -1354,6 +1367,113 @@ class LayoutRenderer(
             }
         }
         return header
+    }
+
+    /**
+     * One element's scroll position, held across a rebuild that would lose it.
+     *
+     * @property el the scroller itself, by reference. That is the whole mechanism:
+     *   a surviving pane's content element is *moved* by the rebuild rather than
+     *   replaced — [PaneCallbacks.contentRenderer] re-mounts the host's cached body —
+     *   so the reference taken before the wipe is still the way back to it after.
+     * @property top its `scrollTop` when it was captured.
+     * @property left its `scrollLeft` when it was captured.
+     * @see capturePaneScrollOffsets
+     * @see restorePaneScrollOffsets
+     */
+    private class ScrollOffsets(
+        val el: HTMLElement,
+        val top: Double,
+        val left: Double,
+    )
+
+    /**
+     * Read the scroll position of every scroller inside the pane content slots.
+     *
+     * **Why this exists.** [render]'s rebuild removes each surviving pane's wrapper
+     * from `paneArea` and builds a fresh one, then hands the new content slot to
+     * [PaneCallbacks.contentRenderer] — which re-mounts the host's cached body under
+     * it. The body survives, but it has been out of the document in between, and a
+     * scroller that leaves the document comes back scrolled to the top. The host is
+     * told nothing: no `scroll` event is fired for a reset, so it cannot detect or
+     * undo this on its own.
+     *
+     * The consequence is worse than a lost reading position for a host that draws
+     * only the rows near the viewport — a virtualised list is left with its rows
+     * positioned for where the reader was and a scroller that believes it is at the
+     * top, which paints an empty pane until something else repaints it.
+     *
+     * This is the same class of loss the `AppShellMount` pane-content cache exists to
+     * prevent, and which [canDoHeaderOnlyUpdate]'s fast path avoids for focus. Those
+     * two cover the cases where nothing has to be rebuilt; this covers the case where
+     * something does.
+     *
+     * **Called before the wipe**, from [render], while the panes are still mounted.
+     *
+     * ── What it costs ────────────────────────────────────────────────────────
+     *
+     * A walk of each pane's subtree. The scroll reads are all taken together with no
+     * writes between them, so the browser lays out once and answers the rest from
+     * that — the cost is the walk itself, on a path that runs when the tiling changes
+     * rather than on every frame. Only elements that are actually scrolled are kept,
+     * so the common case allocates nothing.
+     *
+     * @return the offsets to hand to [restorePaneScrollOffsets] after the rebuild.
+     */
+    private fun capturePaneScrollOffsets(): List<ScrollOffsets> {
+        val saved = mutableListOf<ScrollOffsets>()
+        val slots = paneArea.querySelectorAll(".${LayoutClassNames.PANE_CONTENT}")
+        for (i in 0 until slots.length) {
+            val slot = slots.item(i) as? HTMLElement ?: continue
+            recordIfScrolled(slot, saved)
+            val descendants = slot.querySelectorAll("*")
+            for (j in 0 until descendants.length) {
+                (descendants.item(j) as? HTMLElement)?.let { recordIfScrolled(it, saved) }
+            }
+        }
+        return saved
+    }
+
+    /**
+     * Add [el] to [saved] if it is scrolled anywhere but the origin.
+     *
+     * The filter is what keeps this proportionate: a pane full of unscrolled
+     * elements records none of them, so the list is as long as the number of
+     * scrollers a host actually has rather than the size of its DOM.
+     *
+     * @param el a candidate scroller inside a pane's content slot.
+     * @param saved the list being built by [capturePaneScrollOffsets].
+     */
+    private fun recordIfScrolled(el: HTMLElement, saved: MutableList<ScrollOffsets>) {
+        val top = el.scrollTop
+        val left = el.scrollLeft
+        if (top != 0.0 || left != 0.0) saved += ScrollOffsets(el, top, left)
+    }
+
+    /**
+     * Put back the offsets [capturePaneScrollOffsets] took.
+     *
+     * Called from [render] **after** the content renderers have run, because until a
+     * host has re-mounted its body there is nothing under the new slot to scroll.
+     *
+     * Elements that are no longer in the document are skipped rather than written to:
+     * a host is free to rebuild its own DOM inside `contentRenderer`, in which case
+     * the captured element is a detached orphan and its scroll position is not this
+     * renderer's to restore — nor anybody's, since the element it belonged to is gone.
+     *
+     * Each offset is compared before it is written, so a scroller the rebuild did not
+     * disturb is left alone entirely. That matters beyond saving a write: assigning
+     * `scrollTop` fires a `scroll` event, and a host listening for one would otherwise
+     * be told its reader had moved on every re-tile.
+     *
+     * @param saved what [capturePaneScrollOffsets] returned before the wipe.
+     */
+    private fun restorePaneScrollOffsets(saved: List<ScrollOffsets>) {
+        for (offsets in saved) {
+            if (!document.contains(offsets.el)) continue
+            if (offsets.el.scrollTop != offsets.top) offsets.el.scrollTop = offsets.top
+            if (offsets.el.scrollLeft != offsets.left) offsets.el.scrollLeft = offsets.left
+        }
     }
 
     /**
