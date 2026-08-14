@@ -331,6 +331,31 @@ fun paneAddSeparator(id: String): PaneAddMenuItem =
  * @property onPaneSelect fires when the user clicks a pane in the
  *   default sidebar tree. The app should activate that pane (and its
  *   tab if not already active). `null` makes pane rows non-clickable.
+ * @property onPaneFocused fires when the user focuses a pane from
+ *   *inside the pane area* — a click anywhere in the pane, or
+ *   Ctrl+Opt+Arrow spatial navigation. Never a tab switch: focus can
+ *   only reach a pane in the tab that is showing, which is the whole
+ *   difference from [onPaneSelect].
+ *
+ *   **The confirming half of the optimistic focus hold.** The toolkit
+ *   moves the focus ring itself the moment the gesture happens and
+ *   holds it against in-flight pushes that still carry the old
+ *   `activePaneId`; the hold is released when a pushed snapshot agrees.
+ *   A host that never hears about the click can never agree, so its
+ *   snapshots keep re-asserting the pane the user focused two gestures
+ *   ago — the ring snaps back, and the sidebar highlights the wrong
+ *   window. Wiring this is what closes that loop.
+ *
+ *   Reported **after the pointer gesture that caused it finishes**, not
+ *   from the mousedown itself: a host that pushes synchronously would
+ *   have its snapshot rebuild the pane chrome under a button the user
+ *   is still pressing, and the click that followed would be dropped.
+ *   Keyboard focus moves, which have no gesture to wait for, are
+ *   reported immediately.
+ *
+ *   `null` (the default) is right for hosts that do not model pane
+ *   focus at all — the toolkit persists its own ring position either
+ *   way.
  * @property onPaneClose fires when the user closes a pane via the
  *   pane chrome's × button (after the toolkit's confirm dialog). The
  *   app should drop the pane from its model and push a new snapshot
@@ -355,6 +380,7 @@ class TabSource(
     val onRename: ((id: String, newLabel: String) -> Unit)? = null,
     val onReorder: ((sourceId: String, targetId: String, before: Boolean) -> Unit)? = null,
     val onPaneSelect: ((tabId: String, paneId: String) -> Unit)? = null,
+    val onPaneFocused: ((tabId: String, paneId: String) -> Unit)? = null,
     val onPaneClose: ((tabId: String, paneId: String) -> Unit)? = null,
     val onPaneAdd: ((tabId: String) -> Unit)? = null,
     /**

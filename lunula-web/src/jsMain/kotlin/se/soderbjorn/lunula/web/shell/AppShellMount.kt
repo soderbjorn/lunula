@@ -857,6 +857,103 @@ private class ShellState(
     }
 
     /**
+     * Whether a pointer button is down anywhere in the document right now.
+     *
+     * Read by [announcePaneFocus] to tell a pane focus that came from a press
+     * still in progress from one that came from the keyboard. Tracked rather
+     * than read off the event, because the focus callback is handed no event —
+     * and `window.event`, which would have answered without a listener, is a
+     * deprecated per-browser quirk to depend on for a correctness decision.
+     *
+     * @see trackPointerButtons
+     */
+    private var pointerIsDown: Boolean = false
+
+    /** Whether [trackPointerButtons] has already wired its listeners. */
+    private var pointerTrackingInstalled: Boolean = false
+
+    /**
+     * Start following the pointer button, once.
+     *
+     * Installed from [bindTabSource] rather than lazily on the first focus:
+     * the first press is exactly the one whose answer must already be right,
+     * and a tracker that installed itself on that press would read "no button
+     * down" for it.
+     *
+     * Capture-phase and passive: a pane, a terminal or a drag handler that
+     * stops propagation on its own `pointerdown` must not be able to hide the
+     * press from this, and this never calls `preventDefault`.
+     * `pointercancel` counts as a release — the gesture is over either way,
+     * and a flag left true would defer the next announcement indefinitely.
+     */
+    private fun trackPointerButtons() {
+        if (pointerTrackingInstalled) return
+        pointerTrackingInstalled = true
+        val options = js("({ capture: true, passive: true })")
+        document.addEventListener("pointerdown", { pointerIsDown = true }, options)
+        document.addEventListener("pointerup", { pointerIsDown = false }, options)
+        document.addEventListener("pointercancel", { pointerIsDown = false }, options)
+    }
+
+    /**
+     * The pane focus [TabSource.onPaneFocused] owes the host, held until the
+     * gesture that caused it has finished. Null when nothing is owed.
+     *
+     * @see announcePaneFocus
+     */
+    private var paneFocusToAnnounce: Pair<String, String>? = null
+
+    /** Whether [announcePaneFocus] has a `pointerup` waiting to fire. */
+    private var paneFocusAnnounceArmed: Boolean = false
+
+    /**
+     * Tell the host the user focused [paneId] in [tabId] — **once the gesture is
+     * over**.
+     *
+     * The hold exists because this is reached from the renderer's capture-phase
+     * pane mousedown, with the button still down. A host that pushes a snapshot
+     * synchronously would have that push rebuild the pane chrome under the
+     * pointer: press a pane's Close button and the header carrying it is
+     * replaced between `mousedown` and `mouseup`, so no `click` is ever
+     * dispatched and the button does nothing. It is the same hazard
+     * [PaneCallbacks.onPaneFocused]'s own comment gives for not calling
+     * [rerender] there, arriving by way of the host instead.
+     *
+     * So a focus taken while a button is down is announced from the following
+     * `pointerup`, and from a `setTimeout` after it rather than in the handler:
+     * `click` is dispatched between `pointerup` and the end of that task, and a
+     * rebuild in between would drop it exactly as a rebuild during the press
+     * would. A focus taken with no button down — Ctrl+Opt+Arrow spatial
+     * navigation — has no gesture to wait for and is announced immediately.
+     *
+     * Only the latest focus is owed: a second gesture before the first has been
+     * announced replaces it, because what the host needs is where focus ended
+     * up, not the path it took.
+     *
+     * @param tabId the tab owning the pane.
+     * @param paneId the pane that took focus.
+     * @param notify the host's [TabSource.onPaneFocused].
+     */
+    private fun announcePaneFocus(tabId: String, paneId: String, notify: (String, String) -> Unit) {
+        if (!pointerIsDown) {
+            notify(tabId, paneId)
+            return
+        }
+        paneFocusToAnnounce = tabId to paneId
+        if (paneFocusAnnounceArmed) return
+        paneFocusAnnounceArmed = true
+        var onUp: ((Event) -> Unit)? = null
+        onUp = { _: Event ->
+            onUp?.let { document.removeEventListener("pointerup", it, true) }
+            paneFocusAnnounceArmed = false
+            val owed = paneFocusToAnnounce
+            paneFocusToAnnounce = null
+            if (owed != null) kotlinx.browser.window.setTimeout({ notify(owed.first, owed.second) }, 0)
+        }
+        document.addEventListener("pointerup", onUp, true)
+    }
+
+    /**
      * Reentrancy guard: true only while [rerender]'s reconciliation
      * `focusPane` call (which re-asserts the server/held active pane) is
      * running, so [bindTabSource]'s `onPaneFocused` can tell that focus event
@@ -1723,6 +1820,9 @@ private class ShellState(
     /** Source-mode entry point: subscribes to the app's push channel. */
     fun bindTabSource(source: TabSource) {
         this.local = null
+        // Only for a host that asked to hear about pane focus — everything else
+        // in here is free, and a listener nobody reads is not.
+        if (source.onPaneFocused != null) trackPointerButtons()
         source.subscribe { rawSnapshot ->
             // Hold any pane the user just optimistically focused against the
             // stale `activePaneId` an in-flight push still carries, so a pane
@@ -2192,6 +2292,17 @@ private class ShellState(
                             // round-trip, so there is nothing to hold.
                             if (!reconcilingActivePane && spec.tabSource != null) {
                                 recordPendingActivePane(tabId, paneId)
+                                // …and tell the host, which is the half that
+                                // ends the hold: it holds until a pushed
+                                // snapshot agrees, and a host that never hears
+                                // about the click never has anything to agree
+                                // with. Deferred past the press — see
+                                // [announcePaneFocus], which is where the
+                                // hazard the comment above describes is paid
+                                // for on this path.
+                                spec.tabSource.onPaneFocused?.let { notify ->
+                                    announcePaneFocus(tabId, paneId, notify)
+                                }
                             }
                             persistLayoutState()
                             repaintSidebarActiveMark(tabId, paneId)
