@@ -494,6 +494,10 @@ class LayoutRenderer(
         // Restored after the content renderers have re-mounted; see
         // [capturePaneScrollOffsets].
         val savedScrollOffsets = capturePaneScrollOffsets()
+        // And who had the keyboard, for the same reason and with the same lifetime:
+        // the wipe below blurs whatever is focused inside a pane, and nothing else
+        // would put it back. See [capturePaneFocus].
+        val savedFocus = capturePaneFocus()
 
         // Wipe non-ghost, non-departing children. Ghosts (already in
         // mid-animation) stay; departing panes are left in place and
@@ -634,6 +638,10 @@ class LayoutRenderer(
         // be put back. After the renderers rather than before: until a host has
         // re-mounted its body there is nothing under the slot to scroll.
         restorePaneScrollOffsets(savedScrollOffsets)
+        // Focus last, and after the offsets: it is restored with `preventScroll` so it
+        // cannot move them, and putting it back before them would leave that ordering
+        // to depend on a flag rather than on the sequence here.
+        restorePaneFocus(savedFocus)
 
         // Invisible draggable separator bars between adjacent panes —
         // recomputed from scratch every render so the bars always match
@@ -1473,6 +1481,95 @@ class LayoutRenderer(
             if (!document.contains(offsets.el)) continue
             if (offsets.el.scrollTop != offsets.top) offsets.el.scrollTop = offsets.top
             if (offsets.el.scrollLeft != offsets.left) offsets.el.scrollLeft = offsets.left
+        }
+    }
+
+    /**
+     * Who had the keyboard inside a pane, and where their caret was.
+     *
+     * The same mechanism as [ScrollOffsets], for the same reason: the element is held
+     * by reference, and a surviving pane's content is *moved* by the rebuild rather
+     * than replaced, so a reference taken before the wipe is the way back to it after.
+     *
+     * @property el the element that had DOM focus.
+     * @property selectionStart the caret's start in a text field, or null for anything
+     *   without a selection to speak of.
+     * @property selectionEnd its end. Null with a non-null start is treated as no
+     *   selection at all — half a range is not a range.
+     * @see capturePaneFocus
+     * @see restorePaneFocus
+     */
+    private class PaneFocus(
+        val el: HTMLElement,
+        val selectionStart: Int?,
+        val selectionEnd: Int?,
+    )
+
+    /**
+     * Note what is focused inside the pane area, if anything is.
+     *
+     * **Why this exists.** [canDoHeaderOnlyUpdate] keeps focus alive for the updates
+     * that only touch a header, and says so — but the full rebuild it falls back to
+     * detaches every surviving pane's content, and the browser treats an element
+     * leaving the document as a blur. So a host with a text field in a pane loses the
+     * caret whenever anything makes the tiling change: a sibling pane dragged or
+     * resized, a preset re-applied, a pane restacked. Typing into a field while any of
+     * those happens is the shape people meet it in, and it reads as the app throwing
+     * them out of the field mid-word.
+     *
+     * Restricted to the pane area on purpose. Focus elsewhere — the sidebar, the tab
+     * bar, a menu the host opened — is not this renderer's to move, and the rebuild
+     * does not disturb it either.
+     *
+     * **Called before the wipe**, from [render], while the panes are still mounted.
+     *
+     * @return what to hand to [restorePaneFocus] after the rebuild, or null when the
+     *   keyboard was somewhere this rebuild cannot take it from.
+     */
+    private fun capturePaneFocus(): PaneFocus? {
+        val active = document.activeElement as? HTMLElement ?: return null
+        if (!paneArea.contains(active)) return null
+        // `selectionStart` is a property of the text-ish inputs and of nothing else,
+        // so the absent case is the ordinary one rather than an error. Read through
+        // `dynamic` because the element could be any of them and the alternative is a
+        // cast ladder that has to name every type that has a caret.
+        val d = active.asDynamic()
+        val start = d.selectionStart as? Int
+        val end = d.selectionEnd as? Int
+        return PaneFocus(active, start, end)
+    }
+
+    /**
+     * Put the keyboard back where [capturePaneFocus] found it.
+     *
+     * Called from [render] **after** the content renderers have run and the scroll
+     * offsets are back, for the reason the offsets go back then: until a host has
+     * re-mounted its body the element is not in the document to be focused.
+     *
+     * `preventScroll` matters here. Focusing an element the browser thinks is out of
+     * view scrolls its ancestors to reveal it — which would undo the offsets
+     * [restorePaneScrollOffsets] has just put back, in the one case where they were
+     * most needed. The element is going back where it already was, so there is nothing
+     * to reveal.
+     *
+     * Skipped when the element is gone (a host that rebuilt its own DOM inside
+     * `contentRenderer` — the captured element is an orphan and focusing it would do
+     * nothing) and when it already has focus, so a rebuild that never disturbed it
+     * costs one comparison.
+     *
+     * @param saved what [capturePaneFocus] returned before the wipe.
+     */
+    private fun restorePaneFocus(saved: PaneFocus?) {
+        val focus = saved ?: return
+        if (!document.contains(focus.el)) return
+        if (document.activeElement === focus.el) return
+        focus.el.asDynamic().focus(js("({ preventScroll: true })"))
+        val start = focus.selectionStart
+        val end = focus.selectionEnd
+        // A field restored without its caret is a field whose caret jumped to the end,
+        // which for somebody editing the middle of a word is its own small loss.
+        if (start != null && end != null) {
+            runCatching { focus.el.asDynamic().setSelectionRange(start, end) }
         }
     }
 
