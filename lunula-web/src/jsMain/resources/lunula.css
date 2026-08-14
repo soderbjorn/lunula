@@ -2265,10 +2265,10 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    The strip is chrome, not content: at rest it stays out of the way and a
    titlebar reads as just its icon, its title, and (when set) its pane
    index. Moving the mouse AT ALL, anywhere in the window, brings the strip
-   back on every pane at once (see `body.dt-pointer-active` below); moving
-   the cursor into a titlebar — or into the thin proximity band immediately
-   below it, see `.dt-pane-header-proximity` — holds that one pane's strip
-   revealed for as long as the pointer stays there.
+   back on every pane at once (see `body.dt-pointer-active` below); leaving
+   the cursor in a titlebar — or in the thin band immediately below it, see
+   `.dt-pane-header-proximity` — holds that one pane's strip revealed once
+   the rest have faded.
 
    Only paint changes. The strip keeps its box at `opacity: 0` so revealing
    it never reflows the title beside it; that is the same reasoning as
@@ -2295,16 +2295,18 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
            timer reads as a flicker and pulls the eye back. */
         transition: opacity 320ms ease-in-out;
     }
-    /* Revealed by, in order: the titlebar itself (which includes its
-       proximity band — that band is a sibling of the header, hence the
-       `:has()` hop); either TOP corner resize grip, whose hit box overlays
-       the ends of the titlebar and would otherwise be a dead zone (see
-       below); keyboard focus landing inside the strip, so the buttons are
-       reachable without a mouse; and a menu opened from one of the buttons
-       still being up. That last one matters because the popover mounts on
-       `<body>`: the header stops being hovered the instant the cursor
-       travels into the menu, and without this the strip would fade out
-       underneath an open menu.
+    /* Revealed by, in order: the titlebar itself; the pointer having come to
+       rest just below it, which is `.dt-pane-header-near` and is put on the
+       pane by PointerActivity.kt rather than being a hover (the band that
+       measures the zone takes no pointer events any more — see
+       `.dt-pane-header-proximity` for why); either TOP corner resize grip,
+       whose hit box overlays the ends of the titlebar and would otherwise be
+       a dead zone (see below); keyboard focus landing inside the strip, so
+       the buttons are reachable without a mouse; and a menu opened from one
+       of the buttons still being up. That last one matters because the
+       popover mounts on `<body>`: the header stops being hovered the instant
+       the cursor travels into the menu, and without this the strip would fade
+       out underneath an open menu.
 
        The corner-grip clauses are not a nicety. `.dt-pane-corner-resize-tr`
        is 14×14 at the pane's top-right PLUS an 18px `::before` proximity
@@ -2323,7 +2325,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     body.dt-pointer-active .dt-pane-actions,
     .dt-pane-header:hover .dt-pane-actions,
     .dt-pane-header:focus-within .dt-pane-actions,
-    .dt-pane:has(> .dt-pane-header-proximity:hover) > .dt-pane-header .dt-pane-actions,
+    .dt-pane.dt-pane-header-near > .dt-pane-header .dt-pane-actions,
     .dt-pane:has(> .dt-pane-corner-resize-tl:hover) > .dt-pane-header .dt-pane-actions,
     .dt-pane:has(> .dt-pane-corner-resize-tr:hover) > .dt-pane-header .dt-pane-actions,
     .dt-pane-actions:has(> .dt-pane-action.dt-open) {
@@ -2384,7 +2386,7 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
             box-shadow 120ms ease-in-out;
     }
 }
-/* Invisible band just below the titlebar that counts as hovering it.
+/* The band just below the titlebar that counts as being near it.
    [LayoutRenderer] mounts it as a zero-height flow sibling directly after
    `.dt-pane-header`, so its absolutely-positioned `::before` lands exactly
    under the header whatever height the density tokens give it — no
@@ -2396,22 +2398,27 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
    content, so a press-and-drag on the first terminal row would start moving
    the pane. As a sibling it inherits neither.
 
-   It does overlay the content it covers, and that is the whole cost of
-   making it deeper: the band eats presses meant for the pane's first row
-   (a click on a link, the start of a terminal selection). `--dt-pane-
-   proximity-reach` is where that trade is priced — 26px, roughly a
-   titlebar's own height of lead-in, which catches a cursor well before it
-   arrives without swallowing a meaningful strip of content. A host that
-   wants more (or none) can retune the var on `:root`.
+   `pointer-events: none`, and that is the whole point of the rewrite this
+   comment replaces. The band used to drive the reveal by being hovered, and
+   in CSS being hoverable is being hit-testable: it swallowed every press in
+   the `--dt-pane-proximity-reach` strip below each titlebar — the first row
+   of a terminal, a link at the top of a page, the upper half of a search
+   field mounted right under the header, which is where it was finally
+   noticed. The zone is now measured off this element by PointerActivity.kt
+   when the pointer goes idle and published as `.dt-pane-header-near` on the
+   pane, so the reach still lives here (one var, `--dt-pane-proximity-reach`,
+   still a host's to retune) while the pixels below the titlebar belong to
+   the content again.
 
-   `z-index: 3` puts it under the corner resize grips (4) and the action
-   strip (5) — both of which must keep winning hit-tests — while still
-   landing above the un-positioned pane content below it. */
+   `z-index: 3` no longer decides any hit-test — nothing hit-tests this — but
+   it stays as the band's declared place in the pane's stack, under the
+   corner resize grips (4) and the action strip (5). */
 .dt-pane-header-proximity {
     flex: 0 0 auto;
     height: 0;
     position: relative;
     z-index: 3;
+    pointer-events: none;
 }
 .dt-pane-header-proximity::before {
     content: "";

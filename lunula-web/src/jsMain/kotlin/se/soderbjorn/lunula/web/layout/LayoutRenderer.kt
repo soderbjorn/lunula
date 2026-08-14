@@ -163,13 +163,21 @@ object LayoutClassNames {
 
     /**
      * Zero-height spacer mounted directly after [PANE_HEADER] inside every
-     * pane. Purely a hover target: its stylesheet `::before` reaches
-     * `--dt-pane-proximity-reach` (26px by default) down over the pane's
-     * content, and the toolkit treats hovering it
-     * as hovering the titlebar — which is what un-hides the (otherwise
-     * hidden) `.dt-pane-actions` strip. Carries no gestures of its own, and
-     * deliberately sits OUTSIDE the header so it inherits neither the
-     * drag-to-move nor the HTML5 pane-drag the header carries.
+     * pane. Purely a *measurement*: its stylesheet `::before` declares how far
+     * — `--dt-pane-proximity-reach`, 26px by default — a pointer resting below
+     * the titlebar still counts as being at it, which is what holds the
+     * (otherwise hidden) `.dt-pane-actions` strip revealed once the rest of
+     * the chrome has faded.
+     *
+     * **It takes no pointer events.** Reading the zone off an element that
+     * hit-tests is what made it swallow every press in that strip of the
+     * pane's content; the zone is now read from this element's box by
+     * `PointerActivity.kt` and published as
+     * `se.soderbjorn.lunula.web.PANE_NEAR_HEADER_CLASS` on the pane.
+     *
+     * Carries no gestures of its own, and deliberately sits OUTSIDE the header
+     * so it inherits neither the drag-to-move nor the HTML5 pane-drag the
+     * header carries.
      *
      * @see PaneHeaderClassNames.ACTIONS
      */

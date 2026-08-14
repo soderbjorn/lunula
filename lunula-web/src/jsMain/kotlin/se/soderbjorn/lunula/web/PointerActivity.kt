@@ -39,6 +39,9 @@ package se.soderbjorn.lunula.web
 
 import kotlinx.browser.document
 import kotlinx.browser.window
+import org.w3c.dom.Element
+import org.w3c.dom.HTMLElement
+import org.w3c.dom.events.MouseEvent
 import kotlin.js.Date
 
 /**
@@ -84,11 +87,76 @@ private var idlePoll: Int? = null
 private var idleAfterMs: Int = DEFAULT_POINTER_IDLE_MS
 
 /**
+ * Class put on the ONE pane whose titlebar the pointer came to rest just
+ * below, while the rest of the chrome fades out. The stylesheet reveals that
+ * pane's action strip from it — see the `.dt-pane-header-near` clause beside
+ * `.dt-pane-header:hover`.
+ *
+ * **This used to be a hover.** The band that measures the reach
+ * (`.dt-pane-header-proximity`) was hit-testable and `:hover` on it drove the
+ * reveal, which meant it also swallowed every press in the top 26px of every
+ * pane's content: the first row of a terminal, a link at the top of a page,
+ * the upper half of a field mounted right under the titlebar. Hovering and
+ * hit-testing are the same thing in CSS, so the only way to stop eating the
+ * press was to stop asking the pointer where it is and work it out here.
+ */
+const val PANE_NEAR_HEADER_CLASS: String = "dt-pane-header-near"
+
+/** Where the pointer was last seen, in client coordinates; -1 before any move. */
+private var lastX: Double = -1.0
+private var lastY: Double = -1.0
+
+/** The pane currently carrying [PANE_NEAR_HEADER_CLASS], or null. */
+private var paneNearHeader: Element? = null
+
+/** Take the mark off whatever holds it. A null check when nothing does. */
+private fun clearPaneNearMark() {
+    paneNearHeader?.classList?.remove(PANE_NEAR_HEADER_CLASS)
+    paneNearHeader = null
+}
+
+/**
+ * Mark the pane whose titlebar the pointer is resting just below, if any.
+ *
+ * The zone is read off `.dt-pane-header-proximity` rather than named again
+ * here: that element is a zero-height flow sibling of the header, so its top
+ * *is* the titlebar's bottom whatever the density tokens make of it, and its
+ * `::before` height is the reach — one tunable (`--dt-pane-proximity-reach`),
+ * still in the stylesheet, still the thing a host retunes.
+ *
+ * Costs one hit test and two style reads, once per pointer-goes-idle. The
+ * hit test is what makes "which pane" honest with panes that overlap: the
+ * topmost element at the cursor decides, exactly as `:hover` did.
+ */
+private fun markPaneNearPointer() {
+    clearPaneNearMark()
+    if (lastX < 0) return
+    val under = document.elementFromPoint(lastX, lastY) ?: return
+    val pane = under.closest(".dt-pane") ?: return
+    val band = pane.querySelector(":scope > .dt-pane-header-proximity") as? HTMLElement ?: return
+    val box = band.getBoundingClientRect()
+    if (lastX < box.left || lastX > box.right) return
+    val reach = window.getComputedStyle(band, "::before")
+        .height
+        .removeSuffix("px")
+        .toDoubleOrNull() ?: return
+    if (lastY < box.top || lastY > box.top + reach) return
+    pane.classList.add(PANE_NEAR_HEADER_CLASS)
+    paneNearHeader = pane
+}
+
+/**
  * Drop the active class and stop the poll. Safe to call when already idle.
+ *
+ * The one moment the proximity mark matters, and therefore the only moment it
+ * is computed: while the pointer is moving every strip is revealed anyway, so
+ * a pane resting under the cursor has nothing to say until the movement stops.
+ * See [markPaneNearPointer].
  */
 private fun goIdle() {
     idlePoll?.let { window.clearInterval(it) }
     idlePoll = null
+    markPaneNearPointer()
     document.body?.classList?.remove(POINTER_ACTIVE_BODY_CLASS)
 }
 
@@ -96,8 +164,16 @@ private fun goIdle() {
  * The `mousemove` handler. Hot path — it must stay a timestamp write for
  * every event after the first of a burst.
  */
-private val onPointerMove: (org.w3c.dom.events.Event) -> Unit = {
+private val onPointerMove: (org.w3c.dom.events.Event) -> Unit = { event ->
     lastMoveMs = Date.now()
+    (event as? MouseEvent)?.let {
+        lastX = it.clientX.toDouble()
+        lastY = it.clientY.toDouble()
+    }
+    // The mark belongs to a position the pointer has left. Dropping it here
+    // costs a null check per event in the common case, and leaving it would
+    // strand one pane revealed after the rest had faded.
+    clearPaneNearMark()
     if (idlePoll == null) {
         document.body?.classList?.add(POINTER_ACTIVE_BODY_CLASS)
         idlePoll = window.setInterval(
@@ -147,6 +223,10 @@ fun installPointerActivityTracking(idleMs: Int = DEFAULT_POINTER_IDLE_MS): () ->
             document.removeEventListener("mousemove", onPointerMove, js("({ capture: true })"))
             idleAfterMs = DEFAULT_POINTER_IDLE_MS
             goIdle()
+            // …and then take back the mark [goIdle] just placed: with the
+            // listener gone nothing would ever clear it, leaving one pane
+            // permanently revealed after an uninstall.
+            clearPaneNearMark()
         }
     }
 }

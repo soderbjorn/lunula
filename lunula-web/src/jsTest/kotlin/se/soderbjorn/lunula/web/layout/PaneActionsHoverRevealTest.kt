@@ -264,6 +264,43 @@ class PaneActionsHoverRevealTest {
     }
 
     /**
+     * The band declares the zone; it must not take the presses inside it.
+     *
+     * It used to, because the reveal was a `:hover` on the band and hovering
+     * is hit-testing: every press in the ~26px below a titlebar went to an
+     * invisible element instead of the pane's own content — the first row of a
+     * terminal, a link at the top of a page, the upper half of a field mounted
+     * right under the header. The zone is now measured off this element by
+     * `PointerActivity.kt`, so the pixels belong to the content again.
+     *
+     * Asserted at a point just inside the band's own reach, which is exactly
+     * where the old behaviour differed: anywhere below it always worked.
+     */
+    @Test
+    fun theProximityBandTakesNoPressesInTheContentBelowIt() {
+        val pane = renderOnePane()
+        val proximity = assertNotNull(
+            pane.querySelector(".${LayoutClassNames.PANE_HEADER_PROXIMITY}") as? HTMLElement,
+        )
+        assertEquals(
+            "none",
+            window.getComputedStyle(proximity).getPropertyValue("pointer-events").trim(),
+            "the proximity band hit-tests again — it is swallowing presses meant " +
+                "for the top of the pane's content",
+        )
+        val box = proximity.getBoundingClientRect()
+        val hit = assertNotNull(
+            document.elementFromPoint(box.left + box.width / 2, box.top + 4) as? HTMLElement,
+            "nothing hit-tested just below the titlebar",
+        )
+        assertTrue(
+            hit.closest(".${LayoutClassNames.PANE_CONTENT}") != null,
+            "a press just below the titlebar landed on `${hit.className}` rather " +
+                "than the pane's content",
+        )
+    }
+
+    /**
      * A menu opened from an action button mounts on `<body>`, so the header
      * stops being hovered the moment the cursor travels into it. [openPaneMenu]
      * marks the anchor to hold the strip open; without that the buttons fade
@@ -316,8 +353,10 @@ class PaneActionsHoverRevealTest {
             ".dt-pane-header:hover .dt-pane-actions",
             // keyboard users, who never hover at all
             ".dt-pane-header:focus-within .dt-pane-actions",
-            // the proximity band, which is a sibling of the header
-            ".dt-pane-header-proximity:hover",
+            // the pointer resting below the titlebar, published on the pane
+            // by PointerActivity.kt rather than hovered (see
+            // PANE_NEAR_HEADER_CLASS)
+            ".dt-pane.dt-pane-header-near",
             // the top corner resize grips, which overlay the ends of the
             // titlebar — the trailing one sits on the Close button, so
             // without these two clauses aiming at Close reveals nothing
