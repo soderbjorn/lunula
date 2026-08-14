@@ -2391,8 +2391,9 @@ private class ShellState(
                         }
                     },
                     onFloatingFocused = { paneId ->
-                        // Raise: bump the pane's zIndex to max+1, and mark
-                        // the pane as active on the [LayoutController] so
+                        // Raise: bump the pane's zIndex to max+1 when something
+                        // is above it, and mark the pane as active on the
+                        // [LayoutController] so
                         // the sidebar highlight and any focus-aware UI
                         // pick it up. Active pane is decoupled from layout
                         // importance — paneOrder is only mutated by the
@@ -2410,10 +2411,42 @@ private class ShellState(
                             controllerFor(tabId).setActive(paneId)
                             val current = geometryState.geometryByTab[tabId].orEmpty()
                             val maxZ = current.values.maxOfOrNull { it.zIndex } ?: 0
-                            val newZ = maxZ + 1
-                            updateGeometry(tabId, paneId) { it.copy(zIndex = newZ) }
-                            val live = main?.querySelector("[data-pane-id=\"$paneId\"]") as? HTMLElement
-                            live?.style?.setProperty("--dt-fp-z", "$newZ")
+                            // A pane already in front is left exactly as it is,
+                            // rather than restacked one higher than itself.
+                            //
+                            // The bump looks free — nothing repaints, the var is
+                            // poked live — but it writes a NEW zIndex into the
+                            // persisted geometry, and the next `rerender()` then
+                            // sees a layout that differs from the one the renderer
+                            // last drew. That misses `canDoHeaderOnlyUpdate`'s fast
+                            // path and rebuilds every pane wrapper, which detaches
+                            // whatever the user had focused inside one.
+                            //
+                            // Clicking into a field in the frontmost pane and
+                            // typing is the gesture that exposes it: the click
+                            // raises a pane that was already on top, the first
+                            // keystroke makes the host refresh, and the field the
+                            // user is typing into loses focus mid-word. Then they
+                            // click back in, which arms it again.
+                            //
+                            // "Already in front" means strictly above every
+                            // sibling, not merely equal to the highest: two panes
+                            // that share a zIndex are stacked by DOM order, so a
+                            // tie is exactly the case a click has to break.
+                            val currentZ = current[paneId]?.zIndex
+                            val maxSiblingZ = current
+                                .filterKeys { it != paneId }
+                                .values
+                                .maxOfOrNull { it.zIndex }
+                            // A pane with no sibling has nothing to be raised
+                            // above, and churning its geometry on every click
+                            // costs a one-pane host the same rebuild.
+                            if (maxSiblingZ != null && (currentZ == null || currentZ <= maxSiblingZ)) {
+                                val newZ = maxZ + 1
+                                updateGeometry(tabId, paneId) { it.copy(zIndex = newZ) }
+                                val live = main?.querySelector("[data-pane-id=\"$paneId\"]") as? HTMLElement
+                                live?.style?.setProperty("--dt-fp-z", "$newZ")
+                            }
                         }
                     },
                     // Confirm before closing a pane. The toolkit's
