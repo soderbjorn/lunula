@@ -63,7 +63,17 @@ subprojects {
     apply(plugin = "com.vanniktech.maven.publish")
 
     extensions.configure<com.vanniktech.maven.publish.MavenPublishBaseExtension> {
-        publishToMavenCentral()
+        // `true` is automaticRelease: the deployment is released as soon as Central finishes
+        // validating it, rather than waiting in the portal for somebody to press Publish. The
+        // no-argument form defaults to false, and the resulting silence is what makes it a
+        // trap — `publishToMavenCentral` reports BUILD SUCCESSFUL either way, so a release
+        // looks finished while the artifacts are not actually resolvable. Consuming apps pin
+        // a version at release time and then cannot build until the button is pressed.
+        //
+        // The cost is that there is no longer a point at which a deployment can be inspected
+        // and abandoned, and Central is append-only: a version, once released, is permanent.
+        // The gate this removes was never much of one — its whole content was a click.
+        publishToMavenCentral(true)
         signAllPublications()
         pom {
             name.set(this@subprojects.name)
