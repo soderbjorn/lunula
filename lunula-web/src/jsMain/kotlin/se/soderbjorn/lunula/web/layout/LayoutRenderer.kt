@@ -1098,17 +1098,32 @@ class LayoutRenderer(
     }
 
     /**
-     * Snaps [v] to the nearest 5% step (the same grid termtastic's
-     * `PaneGeometry.SNAP` uses). Integer-arithmetic round-then-divide
-     * avoids floating-point drift across many drags. Used for both the
-     * pane move and resize handlers so apps share termtastic's
-     * "click into a grid cell" feel.
+     * Snaps [v] to the nearest line of [DEFAULT_LAYOUT_GRID] — 5% steps,
+     * the same grid termtastic's `PaneGeometry.SNAP` uses. Round-then-divide
+     * against the grid's division count avoids floating-point drift across
+     * many drags. Used for both the pane move and resize handlers so apps
+     * share termtastic's "click into a grid cell" feel.
+     *
+     * **Read from the grid rather than restated as `20.0`.** It was a literal
+     * here, which meant the manual drag and the presets agreed only by
+     * coincidence and would have parted company the day someone changed
+     * [DEFAULT_LAYOUT_GRID]. A consumer had already drifted onto a lattice of
+     * its own (LunaPin's phone workspace, twelfths, LPN-30) — this is the same
+     * class of mistake in the toolkit itself, fixed while it is still only
+     * latent. The value is unchanged: 20 divisions, as before.
+     *
+     * The grid is square, so the axis is immaterial here; [GridSpec.snap]
+     * wants one, and the pane geometry this feeds is expressed in the same
+     * fractions on both.
      */
-    private fun snapPct(v: Double): Double = kotlin.math.round(v * 20.0) / 20.0
+    private fun snapPct(v: Double): Double = DEFAULT_LAYOUT_GRID.snap(v, horizontal = true)
 
     /** Minimum pane size on either axis, in container fractions.
-     *  Two snap steps — matches termtastic's `PaneGeometry.MIN_SIZE`. */
-    private val FLOATING_MIN_SIZE = 0.10
+     *  Two snap steps of [DEFAULT_LAYOUT_GRID] — 10 %, matching termtastic's
+     *  `PaneGeometry.MIN_SIZE`, and derived rather than written out for the
+     *  same reason as [snapPct]. A floor off the snap lattice would be a size
+     *  a drag could reach and a preset never could. */
+    private val FLOATING_MIN_SIZE = 2 * DEFAULT_LAYOUT_GRID.cellWidth
 
     /**
      * How strongly [focusPaneInDirection] penalises perpendicular offset
