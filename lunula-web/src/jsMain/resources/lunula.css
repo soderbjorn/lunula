@@ -2574,10 +2574,34 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 .dt-pane-header[draggable="true"]:active {
     cursor: grabbing;
 }
-/* Inset the content body 4px from the sides and bottom so the chrome
+/* Inset the content body from the sides and bottom so the chrome
    titlebar colour reads as a frame around it — termtastic-style rounded
    window. The header sits flush at the top so its gradient meets the cell
    edge.
+
+   The thickness is `--dt-pane-content-inset`, and whether that frame is
+   wanted at all is a HOST decision rather than a toolkit one. It suits a
+   pane whose body is a cell with a surface of its own — a terminal, an
+   editor — where the band reads as the window's own edge. It suits a pane
+   whose body is one continuous document surface much less: there the band
+   is a third tone that appears nowhere else on the window, on three sides
+   only (the header covers the fourth), and it reads as the pane's
+   background leaking out from behind the body rather than as a frame. That
+   is LunaPin's bookmark-list window, and it is what LPN-64 reported —
+   `--t-surface` showing as thin pale stripes down the sides and along the
+   bottom of a body painted `--t-bg`. Such a host sets the token to 0 and
+   the body fills the pane, meeting the pane's own `overflow: hidden`
+   rounding at the corners.
+
+   Deliberately NOT declared in the `.dt-app-frame` token block above, and
+   this is load-bearing rather than an oversight. Hosts pick their toolkit
+   stylesheet up from `injectLunulaStyles`, which appends a <style> to
+   <head> at mount — later in the document than a host's own <link>. So a
+   toolkit declaration at `.dt-app-frame` scope would beat a host's
+   declaration at the same scope on source order, and the override
+   documented here would silently do nothing. Leaving the default in the
+   `var()` fallback at the point of use means there is no toolkit
+   declaration to lose the tie to.
 
    `overflow: hidden` because every pane consumer (terminal-inner,
    file browser, git view, notegrow editor, …) manages its own internal
@@ -2614,8 +2638,16 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     min-width: 0;
     min-height: 0;
     overflow: hidden;
-    margin: 0 4px 4px;
-    border-radius: 4px;
+    margin: 0 var(--dt-pane-content-inset, 4px) var(--dt-pane-content-inset, 4px);
+    /* Never rounder than the frame is thick. A corner radius wider than the
+       inset carves a notch out of the body with nothing behind it but the
+       pane's own `--t-surface` — the same artifact the inset is supposed to
+       be, one corner at a time — so the radius is clamped to the inset
+       rather than stated flat. At the default 4px this is exactly the 4px
+       it has always been; at 0 it collapses with the frame and the body's
+       corners are cut by `.dt-pane`'s `--dt-frame-radius` clip instead,
+       which is the window's real outline. */
+    border-radius: min(4px, var(--dt-pane-content-inset, 4px));
     background: var(--t-bg, #1e1e1e);
 }
 
