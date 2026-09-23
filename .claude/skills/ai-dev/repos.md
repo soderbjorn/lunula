@@ -9,6 +9,8 @@ per-repo details live in `config.json`, not here.
 |---|---|---|
 | Lunicle (issue tracker) | `/Users/soderbjorn/repo-private/lunicle/main` | https://github.com/soderbjorn/lunicle |
 | Lunamux (terminal) | `/Users/soderbjorn/repo-private/lunamux/main` | https://github.com/soderbjorn/lunamux |
+| LunaPin (bookmark manager) | `/Users/soderbjorn/repo-private/lunapin/main` | https://github.com/soderbjorn/lunapin |
+| TreeFacts (outliner) | `/Users/soderbjorn/repo-private/treefacts/main` | https://github.com/soderbjorn/treefacts |
 | Lunula (UI toolkit) | `/Users/soderbjorn/repo-private/lunula/main` | https://github.com/soderbjorn/lunula |
 
 Worktrees are **siblings of the main checkout**, never nested inside it:
@@ -24,7 +26,7 @@ every other Lunula consumer benefit.
 - The Lunula change needs its **own PR** in `soderbjorn/lunula`, cross-linked with
   the app PR and linked from the Lunicle issue.
 - It does **not** need its own ticket in the Lunula project.
-- It does **not** normally need a version bump. Lunicle and Lunamux pick Lunula up
+- It does **not** normally need a version bump. The consuming apps pick Lunula up
   **from sources**, via a relative directory path, so a toolkit edit flows into the
   consuming build with no publish step.
 
@@ -40,6 +42,6 @@ a Gradle composite build. Two consequences that matter to `/ai-dev`:
    the build at it with `-Plunula.toolkit.path=…`.
 2. **That path must be relative.** It is resolved with `File(rootDir, path)`, and
    Java re-relativises an absolute child — so an absolute path finds nothing,
-   resolution falls back silently to the committed `libs-repo`, and your toolkit
+   resolution falls back silently to the published artifacts, and your toolkit
    edits are simply not in the build. With a green build to say so. Always pass
    `-Plunula.toolkit.path=../../lunula/<slug>`.
