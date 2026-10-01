@@ -135,17 +135,6 @@ internal const val PANE_OVERFLOW_RENAME_LABEL: String = "Rename window"
 internal const val PANE_OVERFLOW_MOVE_LABEL: String = "Move to tab"
 
 /**
- * Suffix appended to a strip-hidden tab's label in the Move to tab
- * submenu.
- *
- * Hidden tabs are deliberately offered as destinations — they keep their
- * panes (and, in Lunamux, their PTY sessions) and are perfectly valid
- * targets — but a pane that vanishes from the strip on being moved needs
- * to have said so first.
- */
-internal const val PANE_OVERFLOW_HIDDEN_SUFFIX: String = " (hidden)"
-
-/**
  * Whether [overflow] would produce at least one row — i.e. whether the pane
  * should get a `⋮` button at all.
  *
@@ -186,9 +175,9 @@ internal fun paneOverflowHasRows(
  *    [canRename]; omitted rather than shown disabled when the host wired no
  *    rename, because a permanently dead row teaches the user nothing.
  *  - **Move to tab ▸** appears when [PaneOverflowSpec.includeMoveToTab] and
- *    [canMove]. Its submenu is every tab in [tabs] except [ownTabId], in
- *    strip order, with strip-hidden tabs suffixed
- *    [PANE_OVERFLOW_HIDDEN_SUFFIX]. The parent row is *disabled* (not
+ *    [canMove]. Its submenu is every tab in [tabs] except [ownTabId] and
+ *    the strip-hidden ones, in strip order — a window moved into a tab the
+ *    user cannot see would seem to vanish. The parent row is *disabled* (not
  *    omitted) when that leaves nothing: unlike a missing callback, "there is
  *    nowhere to move to" is a state the user can change, and the row says
  *    the capability exists.
@@ -232,10 +221,10 @@ internal fun buildPaneOverflowItems(
         }
         if (overflow.includeMoveToTab && canMove) {
             val targets = tabs
-                .filter { it.id != ownTabId }
+                .filter { it.id != ownTabId && !it.isHidden }
                 .map { tab ->
                     PaneMenuItem(
-                        label = if (tab.isHidden) tab.label + PANE_OVERFLOW_HIDDEN_SUFFIX else tab.label,
+                        label = tab.label,
                         handler = { onMove(tab.id) },
                     )
                 }

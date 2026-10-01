@@ -7,7 +7,7 @@
  * consuming apps and into the toolkit, and every one of them is a decision an
  * app used to make for itself: which built-ins appear, whether an unwired one
  * is hidden or greyed, which tabs are offered as move destinations, how a
- * hidden tab is labelled, and where the host's own rows sit. Asserting them
+ * hidden tab is left out, and where the host's own rows sit. Asserting them
  * here means an app can stop asserting them at all.
  *
  * [buildPaneOverflowItems] and [paneOverflowHasRows] are pure over their
@@ -84,19 +84,21 @@ class PaneOverflowMenuTest {
     }
 
     @Test
-    fun moveTargetsAreEveryOtherTabInStripOrder() {
+    fun moveTargetsAreEveryOtherVisibleTabInStripOrder() {
         val move = items().single { it.label == PANE_OVERFLOW_MOVE_LABEL }
-        assertEquals(listOf("Archive (hidden)", "Scratch"), move.submenu?.map { it.label })
+        assertEquals(listOf("Scratch"), move.submenu?.map { it.label })
         assertTrue(move.isEnabled)
     }
 
     @Test
-    fun hiddenTabsKeepTheirSuffixAndStayValidDestinations() {
-        var moved: String? = null
-        val move = items(onMove = { moved = it }).single { it.label == PANE_OVERFLOW_MOVE_LABEL }
-        val hidden = move.submenu!!.single { it.label.endsWith(PANE_OVERFLOW_HIDDEN_SUFFIX) }
-        hidden.handler()
-        assertEquals("t2", moved)
+    fun hiddenTabsAreNotOfferedAsDestinations() {
+        val onlyHidden = listOf(
+            TabSnapshotEntry(id = "t1", label = "Work"),
+            TabSnapshotEntry(id = "t2", label = "Archive", isHidden = true),
+        )
+        val move = items(tabs = onlyHidden).single { it.label == PANE_OVERFLOW_MOVE_LABEL }
+        assertFalse(move.isEnabled)
+        assertEquals(emptyList(), move.submenu)
     }
 
     @Test
