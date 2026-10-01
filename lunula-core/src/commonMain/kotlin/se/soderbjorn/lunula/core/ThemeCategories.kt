@@ -83,7 +83,8 @@ enum class ThemeCategory(val label: String) {
      * Light in both zones, but still split into two: the shell is as white as
      * the content, and the zones are told apart by hue alone ("Harbour",
      * "Orchid", "Marmalade", "Cerise", "Fern", "Lagoon", "Peony", "Sunbeam",
-     * "Bluebell").
+     * "Bluebell", "Kiwi", "Spearmint", "Dusk", "Sunset", "Cactus", "Pebble",
+     * "Nimbus").
      *
      * The distinction from [Light] is that the theme actually declares a chrome
      * zone *and* paints something differently in it — see

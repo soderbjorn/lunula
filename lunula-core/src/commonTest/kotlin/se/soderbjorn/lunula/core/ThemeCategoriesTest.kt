@@ -37,7 +37,7 @@ class ThemeCategoriesTest {
         // than declared. A theme whose palette contradicts its former label
         // would move one of these.
         assertEquals(36, builtinThemes.count { it.isDarkToned }, "dark-toned built-ins")
-        assertEquals(48, builtinThemes.count { !it.isDarkToned }, "light-toned built-ins")
+        assertEquals(55, builtinThemes.count { !it.isDarkToned }, "light-toned built-ins")
     }
 
     @Test
@@ -92,6 +92,7 @@ class ThemeCategoriesTest {
             listOf(
                 "Harbour", "Orchid", "Marmalade", "Cerise",
                 "Fern", "Lagoon", "Peony", "Sunbeam", "Bluebell",
+                "Kiwi", "Spearmint", "Dusk", "Sunset", "Cactus", "Pebble", "Nimbus",
             ),
             found,
         )
@@ -228,6 +229,7 @@ class ThemeCategoriesTest {
             listOf(
                 "Harbour", "Orchid", "Marmalade", "Cerise",
                 "Fern", "Lagoon", "Peony", "Sunbeam", "Bluebell",
+                "Kiwi", "Spearmint", "Dusk", "Sunset", "Cactus", "Pebble", "Nimbus",
             ).sorted(),
             both.map { it.name }.sorted(),
         )

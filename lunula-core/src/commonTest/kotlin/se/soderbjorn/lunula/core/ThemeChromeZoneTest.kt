@@ -111,6 +111,7 @@ class ThemeChromeZoneTest {
                 "Crimson Split", "Ember Split", "Nord", "Solarized Split", "Sandstone",
                 "Harbour", "Orchid", "Marmalade", "Cerise",
                 "Fern", "Lagoon", "Peony", "Sunbeam", "Bluebell",
+                "Kiwi", "Spearmint", "Dusk", "Sunset", "Cactus", "Pebble", "Nimbus",
             ),
             withChrome,
         )
@@ -138,6 +139,6 @@ class ThemeChromeZoneTest {
     fun builtinThemeNamesAreUnique() {
         val names = builtinThemes.map { it.name }
         assertEquals(names.size, names.toSet().size, "theme names are the identity key")
-        assertEquals(84, names.size)
+        assertEquals(91, names.size)
     }
 }
