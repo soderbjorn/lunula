@@ -791,9 +791,9 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 /* ── Per-tab `⋯` dot menu (TabBarOverflowMenu.kt#appendTabDotMenu) ──
    A small dots button at each tab's right corner holding that tab's own
    actions (Rename / Close / Hide / Show). What it opens is the shared menu
-   surface, exactly as the overflow `⋮` above does. The button stays hidden
-   until the tab is hovered (revealed on hover only — not on the active tab)
-   so dense tab strips read cleanly. */
+   surface, exactly as the overflow `⋮` above does. Only the active tab
+   (`.dt-selected`) ever offers it, and even there it stays hidden until the
+   tab is hovered, so dense tab strips read cleanly. */
 .dt-tab-menu {
     display: inline-flex;
     align-items: center;
@@ -832,15 +832,22 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     transition: color 120ms ease-in-out, background-color 120ms ease-in-out,
         opacity 120ms ease-in-out;
 }
-/* Reveal the ⋮ only while the tab is hovered — not on the active tab — so
-   the strip stays clean. Stays visible while its own menu is open (so it
-   doesn't vanish mid-interaction) and on keyboard focus (a11y). The button
-   keeps its box at opacity 0 the rest of the time, so revealing it never
-   shifts the layout. */
-.dt-tab:hover .dt-tab-menu-button,
+/* Reveal the ⋮ only on the active tab, and only while it is hovered, so the
+   strip stays clean. Stays visible while its own menu is open (so it doesn't
+   vanish mid-interaction) and on keyboard focus (a11y). The button keeps its
+   box at opacity 0 the rest of the time, so revealing it never shifts the
+   layout. */
+.dt-tab.dt-selected:hover .dt-tab-menu-button,
 .dt-tab-menu.dt-open .dt-tab-menu-button,
-.dt-tab-menu-button:focus-visible {
+.dt-tab.dt-selected .dt-tab-menu-button:focus-visible {
     opacity: 1;
+}
+/* An inactive tab keeps the ⋮'s box (no width jump when selection moves) but
+   never shows or accepts it: a click there lands on the tab and selects it,
+   after which the ⋮ is on offer. */
+.dt-tab:not(.dt-selected) .dt-tab-menu:not(.dt-open) .dt-tab-menu-button {
+    pointer-events: none;
+    visibility: hidden;
 }
 /* Reaching the ⋮ brings it to the tab's full foreground, and backs it with a
    wash of that same colour. A fixed `--t-chrome-accent-soft` backing cannot
