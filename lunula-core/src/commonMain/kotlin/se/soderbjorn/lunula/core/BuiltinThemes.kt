@@ -1,12 +1,13 @@
 /* BuiltinThemes.kt
- * The 91 built-in themes (36 dark-toned, 55 light-toned): 71 transcribed verbatim from
+ * The 93 built-in themes (37 dark-toned, 56 light-toned): 71 transcribed verbatim from
  * the "Termtastic Theme Studio" design's RAW array, plus two hand-tuned
  * retro-computer palettes ("Workbench", "C64") appended at the
  * end of the list, sixteen hand-tuned light-chrome splits in the light
  * section ("Harbour", "Orchid", "Marmalade", "Cerise", "Fern", "Lagoon",
  * "Peony", "Sunbeam", "Bluebell", "Kiwi", "Spearmint", "Dusk", "Sunset",
- * "Cactus", "Pebble", "Nimbus"), and the "Citron" pair transcribed from the
- * "LunaPin Theme" design. Each theme
+ * "Cactus", "Pebble", "Nimbus"), the "Citron" pair transcribed from the
+ * "LunaPin Theme" design, and the "Lunarbor" pair drawn from Lunarbor's app
+ * icon. Each theme
  * defines all 20 literal tokens (including 8 dedicated syntax slots); the
  * four the design computes by formula (accentSoft, glow, addBg,
  * chromeAccentSoft) are derived at render time by [Theme.resolve] applying the
@@ -92,7 +93,7 @@ private fun theme(
 )
 
 /**
- * The 91 built-in themes.
+ * The 93 built-in themes.
  *
  * **This list's order is not the display order.** The picker sorts by name
  * ([orderThemesForPicker]), so the grouping below — house block, the Citron
@@ -102,7 +103,7 @@ private fun theme(
  * go. Nothing reads the position of an entry.
  *
  * The one part of this order that does survive into the UI is the house block
- * at the top, and only because [HOUSE_THEME_NAMES] names those six explicitly.
+ * at the top, and only because [HOUSE_THEME_NAMES] names those eight explicitly.
  *
  * Both slot defaults live in that block, but they are bound by name via
  * [DEFAULT_DARK_THEME] / [DEFAULT_LIGHT_THEME], never by list position.
@@ -119,7 +120,7 @@ private fun theme(
 val builtinThemes: List<Theme> = listOf(
     // ── The house themes ──────────────────────────────────────────────
     // Lead the catalog as one block: the three current Lunamux palettes,
-    // then the three "Classic" ones they replaced. Kept contiguous now that
+    // the Lunarbor pair, then the three "Classic" ones Lunamux replaced. Kept contiguous now that
     // the picker no longer forces every dark theme ahead of every light one
     // (see orderThemesForPicker) — under that sort a family spanning both
     // tones could not stay together at any position in this list.
@@ -139,6 +140,26 @@ val builtinThemes: List<Theme> = listOf(
         chromeBg = "#0a1a2e", chromeText = "#c6d6e6", chromeTextDim = "#6e88a2",
         chromeTextBright = "#ffffff", chromeBorder = "#1b3251",
         chromeAccent = "#4dc8f5", chromeTrack = "#16273e"),
+    // Lunarbor: a pair drawn as one theme in two tones, bound by name as
+    // Lunarbor's default slots (that app's `LunarborDefaultLook.kt`). Part of
+    // the house block, listed after the current Lunamux palettes.
+    //
+    // Drawn from Lunarbor's app icon — a red tree glowing on a near-black tile.
+    // Told apart from the catalog's other reds by keeping the base neutral:
+    // charcoal with only a faint warm cast (Crimson is burgundy, Ember and
+    // Oxide are brown-orange), an oxblood red rather than a pink crimson
+    // or an orange-red, ash-white text, and a sage green for additions so the red
+    // is the one hot colour on screen. Light is the same red as ink on warm
+    // paper. No chrome tokens: the chrome is the content surface.
+    theme("Lunarbor Dark", "Glow", "Charcoal night with one tree of glowing deep red. Ash-white text, nothing else hot.",
+        "#080607", "#0e0a0b", "#151011", "#2a1d20", "#d2c3c5", "#806b6e", "#f6eaec",
+        "#8a0a1c", "#efb45a", "#ff6fae", "#86c99a", "#c4ead0",
+        "#d63048", "#e3b48f", "#f0a0aa", "#6f5a5e", "#e04a5c", "#d99ac8", "#d2c3c5", "#f2808e",
+        accentText = "#e64458"),
+    theme("Lunarbor Light", "Glow", "Warm paper inked in the same deep red. Calm daylight, one bright colour.",
+        "#f7f2f0", "#fffbfa", "#efe6e3", "#e0d2ce", "#3a2c2a", "#86706b", "#1e1312",
+        "#b5121f", "#b8761a", "#a3207a", "#2f8a5a", "#1d6b44",
+        "#a8101c", "#8a5a1e", "#b0303f", "#a8928d", "#b5121f", "#8a3f6a", "#3a2c2a", "#b0303f"),
     // Renamed from "Termtastic Dark". "The house look" is now Lunamux Dark's
     // line, so this pair reads as what it is — the look the house used to have.
     // Old selections still resolve; see [legacyBuiltinNames].
@@ -812,7 +833,8 @@ fun allThemes(custom: List<Theme>): List<Theme> {
 
 /**
  * The house themes, in the order they lead the picker: the three current
- * Lunamux palettes, then the three "Classic" ones they replaced.
+ * Lunamux palettes, the Lunarbor pair, then the three "Classic" ones Lunamux
+ * replaced.
  *
  * Spelled out rather than matched on a `"Lunamux"` name prefix, for two
  * reasons. The order is editorial — current before classic — and alphabetical
@@ -824,6 +846,7 @@ fun allThemes(custom: List<Theme>): List<Theme> {
  */
 val HOUSE_THEME_NAMES: List<String> = listOf(
     "Lunamux Dark", "Lunamux Light", "Lunamux Split",
+    "Lunarbor Dark", "Lunarbor Light",
     "Lunamux Classic Dark", "Lunamux Classic Light", "Lunamux Classic Split",
 )
 
@@ -840,7 +863,7 @@ private val houseThemeRank: Map<String, Int> =
  *   3. everything else, alphabetically by name
  *
  * Alphabetical is the only order a stranger to the catalog can predict. The
- * list is 91 entries and growing; hand-maintained ordering meant the position
+ * list is 93 entries and growing; hand-maintained ordering meant the position
  * of "Sandstone" was a fact you could only learn by scrolling, and it
  * silently decided which themes got seen. Sorting by name makes a theme
  * findable by the name it is displayed under, which is also the thing the

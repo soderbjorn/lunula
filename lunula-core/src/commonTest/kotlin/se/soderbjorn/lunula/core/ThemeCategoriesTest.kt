@@ -36,8 +36,8 @@ class ThemeCategoriesTest {
         // The counts the file header has always claimed, now derived rather
         // than declared. A theme whose palette contradicts its former label
         // would move one of these.
-        assertEquals(36, builtinThemes.count { it.isDarkToned }, "dark-toned built-ins")
-        assertEquals(55, builtinThemes.count { !it.isDarkToned }, "light-toned built-ins")
+        assertEquals(37, builtinThemes.count { it.isDarkToned }, "dark-toned built-ins")
+        assertEquals(56, builtinThemes.count { !it.isDarkToned }, "light-toned built-ins")
     }
 
     @Test
@@ -170,16 +170,17 @@ class ThemeCategoriesTest {
         assertEquals(
             listOf(
                 "Lunamux Dark", "Lunamux Light", "Lunamux Split",
+                "Lunarbor Dark", "Lunarbor Light",
                 "Lunamux Classic Dark", "Lunamux Classic Light", "Lunamux Classic Split",
             ),
-            orderThemesForPicker(builtinThemes, emptySet()).take(6).map { it.name },
+            orderThemesForPicker(builtinThemes, emptySet()).take(HOUSE_THEME_NAMES.size).map { it.name },
         )
-        assertEquals(HOUSE_THEME_NAMES, orderThemesForPicker(builtinThemes, emptySet()).take(6).map { it.name })
+        assertEquals(HOUSE_THEME_NAMES, orderThemesForPicker(builtinThemes, emptySet()).take(HOUSE_THEME_NAMES.size).map { it.name })
     }
 
     @Test
     fun everythingBelowTheHouseBlockIsAlphabetical() {
-        val rest = orderThemesForPicker(builtinThemes, emptySet()).drop(6).map { it.name }
+        val rest = orderThemesForPicker(builtinThemes, emptySet()).drop(HOUSE_THEME_NAMES.size).map { it.name }
         assertEquals(rest.sortedBy { it.lowercase() }, rest)
         // And it really is the whole remainder, not a sorted prefix.
         assertEquals(builtinThemes.size - HOUSE_THEME_NAMES.size, rest.size)
@@ -199,7 +200,7 @@ class ThemeCategoriesTest {
         // The old sort put every dark theme ahead of every light one. Nothing
         // should reintroduce that: below the house block, a light theme sorts
         // above a dark one whenever its name does.
-        val rest = orderThemesForPicker(builtinThemes, emptySet()).drop(6)
+        val rest = orderThemesForPicker(builtinThemes, emptySet()).drop(HOUSE_THEME_NAMES.size)
         val paper = rest.indexOfFirst { it.name == "Paper" }        // light
         val phosphor = rest.indexOfFirst { it.name == "Phosphor" }  // dark
         assertTrue(paper < phosphor, "Paper (light) must precede Phosphor (dark) by name")
