@@ -147,15 +147,15 @@ val builtinThemes: List<Theme> = listOf(
     // Drawn from Lunarbor's app icon — a red tree glowing on a near-black tile.
     // Told apart from the catalog's other reds by keeping the base neutral:
     // charcoal with only a faint warm cast (Crimson is burgundy, Ember and
-    // Oxide are brown-orange), an oxblood red rather than a pink crimson
+    // Oxide are brown-orange), a deep blood red rather than a pink crimson
     // or an orange-red, ash-white text, and a sage green for additions so the red
     // is the one hot colour on screen. Light is the same red as ink on warm
     // paper. No chrome tokens: the chrome is the content surface.
     theme("Lunarbor Dark", "Glow", "Charcoal night with one tree of glowing deep red. Ash-white text, nothing else hot.",
         "#080607", "#0e0a0b", "#151011", "#2a1d20", "#d2c3c5", "#806b6e", "#f6eaec",
-        "#8a0a1c", "#efb45a", "#ff6fae", "#86c99a", "#c4ead0",
-        "#d63048", "#e3b48f", "#f0a0aa", "#6f5a5e", "#e04a5c", "#d99ac8", "#d2c3c5", "#f2808e",
-        accentText = "#e64458"),
+        "#b8102a", "#efb45a", "#ff6fae", "#86c99a", "#c4ead0",
+        "#e43a50", "#e3b48f", "#f5a8b2", "#6f5a5e", "#ee5868", "#d99ac8", "#d2c3c5", "#ff8f9c",
+        accentText = "#e8384f"),
     theme("Lunarbor Light", "Glow", "Warm paper inked in the same deep red. Calm daylight, one bright colour.",
         "#f7f2f0", "#fffbfa", "#efe6e3", "#e0d2ce", "#3a2c2a", "#86706b", "#1e1312",
         "#b5121f", "#b8761a", "#a3207a", "#2f8a5a", "#1d6b44",
