@@ -38,12 +38,15 @@ private val shapeJson = Json { ignoreUnknownKeys = true }
  *   the stylesheet's 18px.
  * @property uiDensity       chrome spacing scale; `null` → [UiDensity.Compact].
  * @property selectionStyle  how selection is painted; `null` → [SelectionStyle.Default].
+ * @property surfaceStyle    whether surfaces carry depth (shadows, sheen, glow,
+ *   ambient wash) or stay flat; `null` → [SurfaceStyle.Default] ([SurfaceStyle.Depth]).
  * @see PersistKeys.APPEARANCE_SHAPE
  */
 data class AppearanceShape(
     val cornerRadiusPx: Int? = null,
     val uiDensity: UiDensity? = null,
     val selectionStyle: SelectionStyle? = null,
+    val surfaceStyle: SurfaceStyle? = null,
 ) {
     /**
      * Encodes to the persisted JSON object, omitting unset fields entirely.
@@ -58,6 +61,7 @@ data class AppearanceShape(
         cornerRadiusPx?.let { put("cornerRadiusPx", JsonPrimitive(it)) }
         uiDensity?.let { put("uiDensity", JsonPrimitive(it.cssValue)) }
         selectionStyle?.let { put("selectionStyle", JsonPrimitive(it.cssValue)) }
+        surfaceStyle?.let { put("surfaceStyle", JsonPrimitive(it.cssValue)) }
     }
 
     /** The persisted form as a JSON string, for flat key/value backends. */
@@ -65,7 +69,8 @@ data class AppearanceShape(
 
     /** True when the user has expressed no preference at all. */
     val isEmpty: Boolean
-        get() = cornerRadiusPx == null && uiDensity == null && selectionStyle == null
+        get() = cornerRadiusPx == null && uiDensity == null && selectionStyle == null &&
+            surfaceStyle == null
 
     companion object {
         /**
@@ -90,10 +95,14 @@ data class AppearanceShape(
             val selection = SelectionStyle.fromRaw(
                 (obj["selectionStyle"] as? JsonPrimitive)?.contentOrNull
             )
+            val surface = SurfaceStyle.fromRaw(
+                (obj["surfaceStyle"] as? JsonPrimitive)?.contentOrNull
+            )
             return AppearanceShape(
                 cornerRadiusPx = radius,
                 uiDensity = density,
                 selectionStyle = selection,
+                surfaceStyle = surface,
             )
         }
     }

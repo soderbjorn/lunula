@@ -131,8 +131,9 @@ object PersistKeys {
 
     /**
      * Serialized shell shape/density preferences:
-     * `{"cornerRadiusPx": 18, "uiDensity": "comfortable"}`. Either field may
-     * be absent, meaning "toolkit default".
+     * `{"cornerRadiusPx": 18, "uiDensity": "comfortable", "selectionStyle":
+     * "fill", "surfaceStyle": "flat"}`. Any field may be absent, meaning
+     * "toolkit default" — see [AppearanceShape].
      *
      * Deliberately its own key rather than a field on [THEME_V2_SELECTION].
      * These are preferences about the *shell*, not about the theme, and the
@@ -145,6 +146,7 @@ object PersistKeys {
      * sibling. A missing key means every value is at its default.
      *
      * @see UiDensity
+     * @see SurfaceStyle
      */
     const val APPEARANCE_SHAPE: String = "darkness.appearance.shape"
 

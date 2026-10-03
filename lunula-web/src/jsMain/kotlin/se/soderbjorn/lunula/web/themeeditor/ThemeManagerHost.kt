@@ -20,6 +20,7 @@ package se.soderbjorn.lunula.web.themeeditor
 import se.soderbjorn.lunula.core.Appearance
 import se.soderbjorn.lunula.core.Theme
 import se.soderbjorn.lunula.core.SelectionStyle
+import se.soderbjorn.lunula.core.SurfaceStyle
 import se.soderbjorn.lunula.core.UiDensity
 
 /**
@@ -166,6 +167,23 @@ interface ThemeManagerHost {
      */
     val selectionStyle: SelectionStyle? get() = null
 
+    /**
+     * Whether the shell's surfaces carry depth (shadows, accent sheen and
+     * glow, ambient wash) or stay flat, or `null` for [SurfaceStyle.Default]
+     * ([SurfaceStyle.Depth]).
+     *
+     * A user setting beside [selectionStyle] and [uiDensity], not a theme
+     * property. Read by the Settings sidebar's "Surfaces" row and by
+     * `AppShellMount`'s host-apply pass, which hands it to
+     * [se.soderbjorn.lunula.web.applySurfaceStyle]. The default getter
+     * returns `null`, so a host that never overrides it gets Depth and the
+     * row's picks are not remembered — override it together with
+     * [setSurfaceStyle] to persist the choice.
+     *
+     * @see se.soderbjorn.lunula.web.applySurfaceStyle
+     */
+    val surfaceStyle: SurfaceStyle? get() = null
+
     /** When `true`, the host renders an in-window titlebar drag region
      *  (Electron's `titleBarStyle: hiddenInset` pattern) instead of the
      *  OS-native chrome. Default `false`. */
@@ -215,6 +233,14 @@ interface ThemeManagerHost {
 
     /** Persist a new selection-style preference. `null` clears it. */
     fun setSelectionStyle(value: SelectionStyle?) {}
+
+    /**
+     * Persist a new surface-style preference. `null` clears it (back to
+     * [SurfaceStyle.Default]). Called by the Settings sidebar's "Surfaces" row,
+     * which applies the style itself via
+     * [se.soderbjorn.lunula.web.applySurfaceStyle] right after.
+     */
+    fun setSurfaceStyle(value: SurfaceStyle?) {}
 
     /** Persist the custom-titlebar toggle. */
     fun setUseCustomTitleBar(value: Boolean) {}

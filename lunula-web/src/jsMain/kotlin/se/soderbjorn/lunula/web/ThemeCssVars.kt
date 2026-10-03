@@ -21,6 +21,7 @@ import org.w3c.dom.HTMLElement
 import se.soderbjorn.lunula.core.Appearance
 import se.soderbjorn.lunula.core.ResolvedTheme
 import se.soderbjorn.lunula.core.SelectionStyle
+import se.soderbjorn.lunula.core.SurfaceStyle
 import se.soderbjorn.lunula.core.UiDensity
 import se.soderbjorn.lunula.core.argbToCss
 import se.soderbjorn.lunula.web.themeeditor.allFontPresets
@@ -152,7 +153,49 @@ fun clearCssVars(element: HTMLElement, vars: Map<String, String>) {
  */
 fun applyColorScheme(element: HTMLElement, isDark: Boolean) {
     element.style.setProperty("color-scheme", if (isDark) "dark" else "light")
+    applyCssVars(element, depthTuningVars(isDark))
 }
+
+/**
+ * The light/dark tuning of the Depth surface style ([SurfaceStyle.Depth]), as
+ * the `--dt-depth-*` custom properties `lunula.css` composes its shadows, sheen,
+ * glow and ambient wash from.
+ *
+ * Written by [applyColorScheme] on every theme application, whatever the
+ * surface style — the values are inert under [SurfaceStyle.Flat], where no rule
+ * reads them — so switching Depth on never has to wait for a theme repaint.
+ * Apps may read them in their own CSS to match the toolkit's elevation (e.g.
+ * `box-shadow: 0 8px 18px -6px color-mix(in srgb, var(--dt-depth-shadow)
+ * calc(14% * var(--dt-depth-strength)), transparent)`).
+ *
+ * Why the two sides differ:
+ *  - **Shadow colour** — black on dark; on light a dark tint of the theme's own
+ *    accent hue, so shadows read as warm/olive/blue rather than dirty grey.
+ *  - **Strength** — one multiplier on every shadow alpha, ~2.6× on dark, where
+ *    shadows hardly show against a near-black canvas.
+ *  - **Highlight** — the 1px top edge is what does the lifting on dark (barely
+ *    there, .06) and a crisp white rim on light (.9).
+ *  - **Glow / wash** — accent glows and the corner washes are cut back on light
+ *    grounds, where at dark-theme strength they look like smudges.
+ *
+ * @param isDark whether the dark variant is active.
+ * @return CSS custom property name → value.
+ */
+fun depthTuningVars(isDark: Boolean): Map<String, String> = if (isDark) mapOf(
+    "--dt-depth-shadow" to "#000",
+    "--dt-depth-strength" to "2.6",
+    "--dt-depth-highlight" to "rgb(255 255 255 / 0.06)",
+    "--dt-depth-glow" to "70%",
+    "--dt-depth-wash" to "26%",
+    "--dt-depth-wash-2" to "16%",
+) else mapOf(
+    "--dt-depth-shadow" to "oklch(from var(--t-accent, #4f8cff) 0.3 0.06 h)",
+    "--dt-depth-strength" to "1",
+    "--dt-depth-highlight" to "rgb(255 255 255 / 0.9)",
+    "--dt-depth-glow" to "40%",
+    "--dt-depth-wash" to "15%",
+    "--dt-depth-wash-2" to "11%",
+)
 
 /**
  * Paints a [ResolvedTheme] onto [element] (typically `document.documentElement`):
@@ -374,7 +417,8 @@ fun applyDisplayFontSizePx(px: Int?) {
 //
 // So they live beside the font settings: the toolkit owns the values and the
 // CSS wiring, each app owns persistence (see ThemeManagerHost.cornerRadiusPx /
-// uiDensity), and both are applied on boot the same way the fonts are.
+// uiDensity / surfaceStyle), and all are applied on boot the same way the
+// fonts are.
 
 /**
  * Apply [px] as the corner radius of panes, tabs and sidebar rows.
@@ -411,4 +455,29 @@ fun applyUiDensity(density: UiDensity?) {
     val root = kotlinx.browser.document.documentElement as? HTMLElement ?: return
     if (density == null || density == UiDensity.Compact) root.removeAttribute("data-dt-density")
     else root.setAttribute("data-dt-density", density.cssValue)
+}
+
+/**
+ * Apply [style] as the shell's surface treatment.
+ *
+ * Stamps `data-dt-surface="flat"` on `documentElement` for [SurfaceStyle.Flat]
+ * and removes the attribute otherwise — `null` resolves to
+ * [SurfaceStyle.Default] (Depth). `lunula.css` writes the Depth rules under
+ * `:root:not([data-dt-surface="flat"])`, so the flat look is exactly the base
+ * stylesheet with nothing layered on, and the default needs no attribute.
+ *
+ * Like [applyUiDensity] this is a user setting, not a theme property: it rides
+ * the host-apply pass in `AppShellMount` (restored at boot, re-applied on every
+ * rebuild, untouched by theme changes) and is called directly by the Settings
+ * sidebar's "Surfaces" row. The light/dark tuning it depends on comes from
+ * [depthTuningVars], written by [applyColorScheme].
+ *
+ * @param style the surface style, or `null` for the default.
+ * @see SurfaceStyle
+ * @see se.soderbjorn.lunula.web.themeeditor.ThemeManagerHost.surfaceStyle
+ */
+fun applySurfaceStyle(style: SurfaceStyle?) {
+    val root = kotlinx.browser.document.documentElement as? HTMLElement ?: return
+    if ((style ?: SurfaceStyle.Default) == SurfaceStyle.Flat) root.setAttribute("data-dt-surface", "flat")
+    else root.removeAttribute("data-dt-surface")
 }

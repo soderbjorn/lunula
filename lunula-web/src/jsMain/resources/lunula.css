@@ -7018,3 +7018,198 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     border-color: var(--t-accent, #4a9eff);
     box-shadow: 0 0 0 2px var(--t-accent-soft, rgba(74, 158, 255, 0.28));
 }
+
+/* ── Surface style: Depth (the default) ──────────────────────────────
+   `SurfaceStyle.Depth` gives the shell three layers of depth, from the
+   "Recommended blend" of the Lunula depth study:
+
+     - Layered elevation — panes float above the window on three soft
+       shadows (contact, near, far) under a 1px top highlight; pane headers
+       cast a small shadow onto their content; the sidebar's edge is an inner
+       shadow instead of a hairline; resting tabs get a small lift.
+     - Accent glow and sheen — the solid accent surfaces (focused pane header
+       and active tab / sidebar row under Fill selection, the active topbar
+       button always) become a three-stop vertical gradient with a glossy top
+       edge and a coloured glow underneath. The focused pane carries a faint
+       accent halo composed into the SAME box-shadow as its lift, so focus
+       never costs it its elevation.
+     - Ambient wash — the window background picks up a soft radial accent
+       glow from the top left and a neighbouring hue (accent hue + 35°) from
+       the bottom right. Chrome (topbar, sidebars, bottom bar) goes
+       transparent over it; the canvas behind the panes paints the same wash
+       over its own tone, viewport-anchored (`background-attachment: fixed`)
+       so the two line up seamlessly — and so the nested canvas layers
+       (`.dt-app-frame-main` > `.dt-pane-root`, `.dt-pane-dock`) paint the
+       identical opaque image and never double the wash.
+
+   No translucency or backdrop blur anywhere: every effect is a gradient or a
+   box-shadow on a frame that does not scroll, so scrolling inside a pane
+   costs nothing extra.
+
+   `SurfaceStyle.Flat` is the opt-out, and it is written as the ABSENCE of
+   these rules: `applySurfaceStyle` stamps `data-dt-surface="flat"` on :root,
+   every rule below is gated on `:root:not([data-dt-surface="flat"])`, and so
+   Flat is the base stylesheet exactly as it was before depth existed.
+
+   ── Tuning tokens (reusable from app CSS) ──
+   The light/dark tuning is written onto :root inline by `applyColorScheme`
+   (Kotlin `depthTuningVars`) on every theme application; the values declared
+   here are only fallbacks for hosts that paint themes some other way.
+     --dt-depth-shadow      shadow colour: black on dark, a dark tint of the
+                            accent hue on light (never grey)
+     --dt-depth-strength    multiplier on every shadow alpha (2.6 dark, 1 light)
+     --dt-depth-highlight   1px top-edge highlight colour (.06 / .9 white)
+     --dt-depth-glow        accent share of glows (70% dark, 40% light)
+     --dt-depth-wash        top-left wash strength (26% / 15%)
+     --dt-depth-wash-2      bottom-right wash strength (16% / 11%)
+   Composites, built from those (declared under the depth gate, so they are
+   undefined under Flat — an app rule using them should sit under the same
+   `:root:not([data-dt-surface="flat"])` gate):
+     --dt-depth-shadow-{8,10,14,24,28,30}  the shadow colour at that alpha
+                            (× strength), e.g. `--dt-depth-shadow-14`
+     --dt-depth-elevation   the full pane lift (highlight + three shadows)
+     --dt-depth-lift        a small control's lift (highlight + contact)
+     --dt-depth-wash-image  the two radial washes, as background layers */
+:root {
+    --dt-depth-shadow: #000;
+    --dt-depth-strength: 2.6;
+    --dt-depth-highlight: rgb(255 255 255 / 0.06);
+    --dt-depth-glow: 70%;
+    --dt-depth-wash: 26%;
+    --dt-depth-wash-2: 16%;
+}
+:root:not([data-dt-surface="flat"]) {
+    --dt-depth-shadow-8: color-mix(in srgb, var(--dt-depth-shadow) calc(8% * var(--dt-depth-strength)), transparent);
+    --dt-depth-shadow-10: color-mix(in srgb, var(--dt-depth-shadow) calc(10% * var(--dt-depth-strength)), transparent);
+    --dt-depth-shadow-14: color-mix(in srgb, var(--dt-depth-shadow) calc(14% * var(--dt-depth-strength)), transparent);
+    --dt-depth-shadow-24: color-mix(in srgb, var(--dt-depth-shadow) calc(24% * var(--dt-depth-strength)), transparent);
+    --dt-depth-shadow-28: color-mix(in srgb, var(--dt-depth-shadow) calc(28% * var(--dt-depth-strength)), transparent);
+    --dt-depth-shadow-30: color-mix(in srgb, var(--dt-depth-shadow) calc(30% * var(--dt-depth-strength)), transparent);
+    --dt-depth-elevation:
+        inset 0 1px 0 var(--dt-depth-highlight),
+        0 1px 2px var(--dt-depth-shadow-8),
+        0 8px 18px -6px var(--dt-depth-shadow-14),
+        0 26px 48px -18px var(--dt-depth-shadow-24);
+    --dt-depth-lift:
+        inset 0 1px 0 var(--dt-depth-highlight),
+        0 1px 2px var(--dt-depth-shadow-10);
+    --dt-depth-wash-image:
+        radial-gradient(70% 90% at 0% 0%,
+            color-mix(in srgb, var(--t-accent, #4f8cff) var(--dt-depth-wash), transparent),
+            transparent 70%),
+        radial-gradient(60% 80% at 100% 100%,
+            color-mix(in srgb, oklch(from var(--t-accent, #4f8cff) l c calc(h + 35)) var(--dt-depth-wash-2), transparent),
+            transparent 70%);
+}
+
+/* Ambient wash. The frame paints chrome-bg + wash; the chrome bars that used
+   to repaint chrome-bg over it go transparent (same base colour, so nothing
+   changes but the wash showing through). The canvas keeps its own tone with
+   the wash laid over it. */
+:root:not([data-dt-surface="flat"]) .dt-app-frame {
+    background: var(--dt-depth-wash-image), var(--t-chrome-bg, var(--t-bg, #1e1e1e));
+    background-attachment: fixed;
+}
+:root:not([data-dt-surface="flat"]) .dt-topbar,
+:root:not([data-dt-surface="flat"]) .dt-bottombar,
+:root:not([data-dt-surface="flat"]) .dt-sidebar {
+    background: transparent;
+}
+:root:not([data-dt-surface="flat"]) .dt-app-frame-main,
+:root:not([data-dt-surface="flat"]) .dt-pane-root,
+:root:not([data-dt-surface="flat"]) .dt-pane-dock {
+    background: var(--dt-depth-wash-image), var(--t-canvas, var(--t-bg, #1e1e1e));
+    background-attachment: fixed;
+}
+
+/* Sidebar edge: an inner shadow falling away from the content instead of the
+   hairline. The top border stays — it is what hangs the sidebar below the
+   topbar now that both are transparent over the same wash. */
+:root:not([data-dt-surface="flat"]) .dt-sidebar-left {
+    border-right-color: transparent;
+    box-shadow: inset -12px 0 18px -14px var(--dt-depth-shadow-30);
+}
+:root:not([data-dt-surface="flat"]) .dt-sidebar-right {
+    border-left-color: transparent;
+    box-shadow: inset 12px 0 18px -14px var(--dt-depth-shadow-30);
+}
+
+/* Pane elevation. Selectors mirror the flat rules' shapes one level more
+   specific, so the lift wins over both the Tint glow and Fill's "no halo" and
+   floating drop-shadow rules regardless of source order. */
+:root:not([data-dt-surface="flat"]) .dt-pane,
+:root:not([data-dt-surface="flat"]) .dt-pane.dt-pane-floating {
+    box-shadow: var(--dt-depth-elevation);
+}
+/* Focused pane: lift AND halo in one box-shadow (box-shadow does not stack
+   across rules, so splitting them would let the glow replace the lift). The
+   far shadow gives way to the accent glow, which does its job here. */
+:root:not([data-dt-surface="flat"]) .dt-pane.dt-pane-focused,
+:root:not([data-dt-surface="flat"]) .dt-pane.dt-pane-floating.dt-pane-focused {
+    box-shadow:
+        inset 0 1px 0 var(--dt-depth-highlight),
+        0 0 0 1px color-mix(in srgb, var(--t-accent, #4f8cff) 30%, transparent),
+        0 1px 2px var(--dt-depth-shadow-8),
+        0 8px 18px -6px var(--dt-depth-shadow-14),
+        0 22px 50px -20px color-mix(in srgb, var(--t-accent, #4f8cff) var(--dt-depth-glow), transparent);
+}
+
+/* Pane header: casts a small shadow onto the content below and carries the
+   pane's top highlight (the pane's own inset highlight is painted beneath the
+   header's background, so it has to be restated here to show).
+   `position: relative` WITHOUT a z-index puts the header in the positioned
+   paint layer — above the static content, so the shadow shows — without
+   making it a stacking context, which would trap `.dt-pane-actions`'
+   z-index 5 beneath the corner resize grip and swallow Close clicks. */
+:root:not([data-dt-surface="flat"]) .dt-pane-header {
+    position: relative;
+    box-shadow:
+        inset 0 1px 0 var(--dt-depth-highlight),
+        0 4px 10px -6px var(--dt-depth-shadow-28);
+}
+
+/* Resting tabs: a small lift so they read as objects on the bar. Not the
+   selected tab — Tint's ring lives in its box-shadow, and Fill's gets the
+   sheen below. */
+:root:not([data-dt-surface="flat"]) .dt-tab:not(.dt-selected) {
+    box-shadow: var(--dt-depth-lift);
+}
+
+/* Accent sheen + glow on the solid accent surfaces. `--dt-sheen-base` is the
+   surface's fill: content accent for the pane header, chrome accent for the
+   chrome surfaces (Framna-style themes fill the two differently). The pane
+   header's glow is left to the pane's halo, so it only takes the edges and
+   its content shadow. */
+:root:not([data-dt-surface="flat"])[data-dt-selection="fill"] .dt-pane.dt-pane-focused .dt-pane-header {
+    --dt-sheen-base: var(--t-accent, #4f8cff);
+}
+:root:not([data-dt-surface="flat"])[data-dt-selection="fill"] .dt-tab.dt-selected,
+:root:not([data-dt-surface="flat"])[data-dt-selection="fill"] .dt-sidebar-row.dt-active,
+:root:not([data-dt-surface="flat"]) .dt-topbar-icon-button.dt-active,
+:root:not([data-dt-surface="flat"]) .dt-topbar-icon-button.dt-active:hover {
+    --dt-sheen-base: var(--t-chrome-accent, var(--t-chrome-text, #e6e6e6));
+}
+:root:not([data-dt-surface="flat"])[data-dt-selection="fill"] .dt-pane.dt-pane-focused .dt-pane-header,
+:root:not([data-dt-surface="flat"])[data-dt-selection="fill"] .dt-tab.dt-selected,
+:root:not([data-dt-surface="flat"])[data-dt-selection="fill"] .dt-sidebar-row.dt-active,
+:root:not([data-dt-surface="flat"]) .dt-topbar-icon-button.dt-active,
+:root:not([data-dt-surface="flat"]) .dt-topbar-icon-button.dt-active:hover {
+    background: linear-gradient(180deg,
+        color-mix(in oklab, var(--dt-sheen-base), white 20%),
+        var(--dt-sheen-base) 55%,
+        color-mix(in oklab, var(--dt-sheen-base), black 14%));
+}
+:root:not([data-dt-surface="flat"])[data-dt-selection="fill"] .dt-tab.dt-selected,
+:root:not([data-dt-surface="flat"])[data-dt-selection="fill"] .dt-sidebar-row.dt-active,
+:root:not([data-dt-surface="flat"]) .dt-topbar-icon-button.dt-active {
+    box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / 0.3),
+        inset 0 -1px 0 rgb(0 0 0 / 0.15),
+        0 6px 16px -5px color-mix(in srgb, var(--dt-sheen-base) var(--dt-depth-glow), transparent);
+}
+:root:not([data-dt-surface="flat"])[data-dt-selection="fill"] .dt-pane.dt-pane-focused .dt-pane-header {
+    box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / 0.3),
+        inset 0 -1px 0 rgb(0 0 0 / 0.15),
+        0 4px 10px -6px var(--dt-depth-shadow-28);
+}

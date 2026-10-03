@@ -130,4 +130,18 @@ class StylesheetIntegrityTest {
             ".dt-app-frame must derive its radii from --dt-corner-radius",
         )
     }
+
+    @Test
+    fun theDepthSurfaceRulesSurviveParsing() {
+        // Gated by applySurfaceStyle(): Depth is the absence of
+        // data-dt-surface="flat". Losing these rules would make the default
+        // silently flat — a regression nothing else would notice.
+        val depth = parsedSelectors().filter { it.contains("data-dt-surface=\"flat\"") }
+        for (surface in listOf(".dt-pane", ".dt-pane-header", ".dt-app-frame", ".dt-sidebar-left", ".dt-tab")) {
+            assertTrue(
+                depth.any { it.contains(surface) },
+                "Depth surface style has no rule for $surface — survived: $depth",
+            )
+        }
+    }
 }

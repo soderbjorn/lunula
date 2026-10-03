@@ -1115,7 +1115,8 @@ data class AppShellSpec(
     val defaultMonoFontFamily: () -> String? = { null },
     /**
      * App-supplied fallbacks for the shell's shape settings — corner roundness,
-     * spacing density and selection language — evaluated on every host
+     * spacing density, selection language and surface style (Depth / Flat) —
+     * evaluated on every host
      * application alongside the font seams above.
      *
      * The exact counterpart of [defaultChromeFontFamily], and for the same
@@ -1126,7 +1127,7 @@ data class AppShellSpec(
      *
      *     the user's own pick  >  this app/brand default  >  the toolkit's
      *
-     * The three fields are independent — leaving one `null` puts that single
+     * The fields are independent — leaving one `null` puts that single
      * setting on the toolkit default while the others still apply, so a brand
      * that only wants roomier spacing needn't also restate the corner radius.
      *

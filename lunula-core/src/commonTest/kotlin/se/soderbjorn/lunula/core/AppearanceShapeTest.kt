@@ -1,7 +1,8 @@
 /* AppearanceShapeTest.kt
- * Round-trip and leniency for the shell's shape/density/selection preferences.
+ * Round-trip and leniency for the shell's shape/density/selection/surface
+ * preferences.
  *
- * These three settings are persisted as one hand-editable JSON blob that a
+ * These settings are persisted as one hand-editable JSON blob that a
  * deployment's brand manifest can also seed, so the decoder's failure
  * behaviour is part of its contract rather than an implementation detail: a
  * value this build doesn't recognise must cost the user that ONE setting and
@@ -23,6 +24,7 @@ class AppearanceShapeTest {
             cornerRadiusPx = 4,
             uiDensity = UiDensity.Spacious,
             selectionStyle = SelectionStyle.Fill,
+            surfaceStyle = SurfaceStyle.Flat,
         )
         assertEquals(shape, AppearanceShape.fromJson(shape.toJson()))
     }
@@ -36,6 +38,7 @@ class AppearanceShapeTest {
         assertTrue("cornerRadiusPx" in json)
         assertTrue("uiDensity" !in json, "unset density must not appear: $json")
         assertTrue("selectionStyle" !in json, "unset selection must not appear: $json")
+        assertTrue("surfaceStyle" !in json, "unset surface style must not appear: $json")
     }
 
     @Test
@@ -89,5 +92,34 @@ class AppearanceShapeTest {
         assertEquals(SelectionStyle.Fill, SelectionStyle.fromRaw("Fill"))
         assertNull(SelectionStyle.fromRaw("solid"))
         assertNull(UiDensity.fromRaw(null))
+        assertEquals(SurfaceStyle.Flat, SurfaceStyle.fromRaw("flat"))
+        assertEquals(SurfaceStyle.Depth, SurfaceStyle.fromRaw("Depth"))
+        assertNull(SurfaceStyle.fromRaw("glass"))
+    }
+
+    @Test
+    fun surfaceStyleAloneMakesTheShapeNonEmptyAndRoundTrips() {
+        // Flat is the opt-out from the Depth default, so a shape carrying only
+        // it must persist — an `isEmpty` that ignored it would let a caller
+        // skip the write and hand the user Depth back on the next launch.
+        val shape = AppearanceShape(surfaceStyle = SurfaceStyle.Flat)
+        assertTrue(!shape.isEmpty)
+        assertEquals("{\"surfaceStyle\":\"flat\"}", shape.toJson())
+        assertEquals(SurfaceStyle.Flat, AppearanceShape.fromJson(shape.toJson()).surfaceStyle)
+    }
+
+    @Test
+    fun anUnknownSurfaceStyleCostsOnlyItsOwnField() {
+        val decoded = AppearanceShape.fromJson(
+            """{"surfaceStyle":"glass","uiDensity":"spacious"}"""
+        )
+        assertNull(decoded.surfaceStyle, "an unrecognised surface style degrades to unset")
+        assertEquals(UiDensity.Spacious, decoded.uiDensity)
+    }
+
+    @Test
+    fun theDefaultSurfaceStyleIsDepth() {
+        // Depth is the toolkit default; Flat is the opt-out. Unset must read as Depth.
+        assertEquals(SurfaceStyle.Depth, SurfaceStyle.Default)
     }
 }

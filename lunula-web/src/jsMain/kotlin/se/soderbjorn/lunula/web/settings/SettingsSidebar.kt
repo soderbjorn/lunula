@@ -4,8 +4,8 @@
  *
  * Sections rendered (in order):
  *  1. Custom title bar On/Off (Electron only).
- *  2. Corner roundness + Selection + Spacing — the shell's shape, its
- *     selection language, and its density.
+ *  2. Corner roundness + Selection + Surfaces + Spacing — the shell's
+ *     shape, its selection language, Depth vs Flat surfaces, and its density.
  *  3. Sidebar font face + size pill rows.
  *  4. Tab bar font face + size pill rows.
  *  5. Window title font face + size pill rows.
@@ -59,8 +59,10 @@ import se.soderbjorn.lunula.web.applyDisplayFontSizePx
 import se.soderbjorn.lunula.web.applyCornerRadiusPx
 import se.soderbjorn.lunula.web.applyUiDensity
 import se.soderbjorn.lunula.web.applySelectionStyle
+import se.soderbjorn.lunula.web.applySurfaceStyle
 import se.soderbjorn.lunula.core.AppearanceShape
 import se.soderbjorn.lunula.core.SelectionStyle
+import se.soderbjorn.lunula.core.SurfaceStyle
 import se.soderbjorn.lunula.core.UiDensity
 import se.soderbjorn.lunula.web.shell.SidebarSpec
 import se.soderbjorn.lunula.web.shell.renderRightSidebar
@@ -392,6 +394,17 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
         onPick = { st ->
             spec.host.setSelectionStyle(st)
             applySelectionStyle(document.documentElement as HTMLElement, st)
+        },
+    ))
+    body.appendChild(buildSurfaceStyleSection(
+        currentValue = {
+            spec.host.surfaceStyle
+                ?: spec.appDefaultShape().surfaceStyle
+                ?: SurfaceStyle.Default
+        },
+        onPick = { st ->
+            spec.host.setSurfaceStyle(st)
+            applySurfaceStyle(st)
         },
     ))
     body.appendChild(buildDensitySection(
@@ -770,6 +783,48 @@ private fun buildSelectionStyleSection(
     for ((label, value) in listOf(
         "Tinted" to SelectionStyle.Tint,
         "Filled" to SelectionStyle.Fill,
+    )) {
+        val btn = document.createElement("button") as HTMLElement
+        btn.setAttribute("type", "button")
+        btn.className = "dt-settings-choice-btn" + if (value == current) " dt-selected" else ""
+        btn.textContent = label
+        btn.addEventListener("click", {
+            // Optimistic selection update — see [buildFontFaceSection].
+            val rowChildren = row.children
+            for (i in 0 until rowChildren.length) {
+                (rowChildren.item(i) as? HTMLElement)?.classList?.remove("dt-selected")
+            }
+            btn.classList.add("dt-selected")
+            onPick(value)
+        })
+        row.appendChild(btn)
+    }
+    return section.element
+}
+
+/**
+ * Builds the surface-style pill row ("Surfaces: Depth · Flat").
+ *
+ * Same shape as [buildSelectionStyleSection]: two named states, picked
+ * optimistically, with the caller doing the persist + apply.
+ *
+ * @param currentValue reader for the host's stored style (never null; the
+ *   caller walks the user → app → [SurfaceStyle.Default] ladder).
+ * @param onPick       called with the clicked style.
+ */
+private fun buildSurfaceStyleSection(
+    currentValue: () -> SurfaceStyle,
+    onPick: (SurfaceStyle) -> Unit,
+): HTMLElement {
+    val section = makeSection(
+        "Surfaces",
+        "Depth lifts windows on soft shadows and gives accents a glow; Flat keeps everything on one plane.",
+    )
+    val row = section.row
+    val current = currentValue()
+    for ((label, value) in listOf(
+        "Depth" to SurfaceStyle.Depth,
+        "Flat" to SurfaceStyle.Flat,
     )) {
         val btn = document.createElement("button") as HTMLElement
         btn.setAttribute("type", "button")

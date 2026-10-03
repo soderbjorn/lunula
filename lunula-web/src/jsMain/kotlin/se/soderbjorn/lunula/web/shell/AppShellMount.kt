@@ -55,6 +55,7 @@ import se.soderbjorn.lunula.web.applyDisplayFontSizePx
 import se.soderbjorn.lunula.web.applyCornerRadiusPx
 import se.soderbjorn.lunula.web.applyUiDensity
 import se.soderbjorn.lunula.web.applySelectionStyle
+import se.soderbjorn.lunula.web.applySurfaceStyle
 import se.soderbjorn.lunula.web.setDtCustomTitleBarBodyClass
 import se.soderbjorn.lunula.web.settings.AppSettingsSidebarSpec
 import se.soderbjorn.lunula.web.settings.HotkeysSidebarSpec
@@ -541,6 +542,7 @@ fun mountAppShell(
         themeState.cornerRadiusPx = shape.cornerRadiusPx
         themeState.uiDensity = shape.uiDensity
         themeState.selectionStyle = shape.selectionStyle
+        themeState.surfaceStyle = shape.surfaceStyle
 
         // Seed the custom-titlebar flag from the Electron bridge when present
         // so the renderer's state matches the BrowserWindow's actual
@@ -1489,6 +1491,7 @@ private class ShellState(
         (document.documentElement as? HTMLElement)?.let {
             applySelectionStyle(it, host.selectionStyle ?: shapeFallback.selectionStyle)
         }
+        applySurfaceStyle(host.surfaceStyle ?: shapeFallback.surfaceStyle)
     }
 
     /** Last value pushed to the Electron main process; lets us skip
@@ -4741,6 +4744,7 @@ private class ShellState(
                         themeState.cornerRadiusPx,
                         themeState.uiDensity,
                         themeState.selectionStyle,
+                        themeState.surfaceStyle,
                     ).toJson(),
                 )
                 // ── Only what this shell's own host actually owns ────────────
