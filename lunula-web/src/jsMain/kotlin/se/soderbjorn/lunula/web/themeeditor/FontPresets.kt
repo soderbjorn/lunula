@@ -31,13 +31,16 @@ import org.w3c.dom.HTMLCanvasElement
 
 /**
  * Whether a [FontPreset] is intended for fixed-width content (terminals,
- * code) or proportional content (prose, chrome).
+ * code), proportional content (prose, chrome) or only display text
+ * (headings).
  *
  * The Settings sidebar uses this to partition presets between the
  * Monospaced section and the proportional sections (Proportional /
- * Sidebar / Tab bar).
+ * Sidebar / Tab bar / Window title). [Display] presets — faces too wide
+ * or loud for body text, such as Unbounded — are offered only in the
+ * Display font row.
  */
-enum class FontKind { Mono, Proportional }
+enum class FontKind { Mono, Proportional, Display }
 
 /**
  * A single font preset selectable in the Settings sidebar.
@@ -55,7 +58,7 @@ enum class FontKind { Mono, Proportional }
  * @property bundled      `true` when the host ships the `.woff2` for this
  *   family (e.g. via `@font-face` rules). Bundled families skip the
  *   installed-fonts probe and are always offered to the user.
- * @property kind         monospaced or proportional, see [FontKind].
+ * @property kind         monospaced, proportional or display-only, see [FontKind].
  */
 data class FontPreset(
     val key: String,

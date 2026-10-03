@@ -541,7 +541,8 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
         title = "Display font",
         hint = "Used by headings (falls back to Proportional when unset).",
         kind = FontKind.Proportional,
-        showKinds = setOf(FontKind.Proportional, FontKind.Mono),
+        // Display-only faces (FontKind.Display) are offered here and nowhere else.
+        showKinds = setOf(FontKind.Proportional, FontKind.Display, FontKind.Mono),
         currentKey = { spec.host.displayFontFamily },
         appDefaultKey = { spec.displayDefaultKey() },
         onPick = { key ->
@@ -636,7 +637,8 @@ private fun buildFontFaceSection(
         .filter { it.kind in showKinds }
         .sortedWith(compareBy(
             { if (it.key == systemKey) 0 else 1 },
-            { if (it.kind == kind) 0 else 1 },
+            // Display-only faces follow the primary kind, ahead of monospaced ones.
+            { when { it.kind == kind -> 0; it.kind == FontKind.Display -> 1; else -> 2 } },
         ))
     for (preset in sortedPresets) {
         if (preset.key !in installed) continue
