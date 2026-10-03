@@ -16,6 +16,9 @@
  *    chromeAccentSoft), which the design states as "this colour at N%";
  *  - [contrastRatio] and [onColorFor], which serve the on-fill token pairs and
  *    the contrast lint that guards them.
+ *  - [mix], only for the selection fallback ([Theme.effectiveSelection]) of a
+ *    custom theme saved before the `selection` token existed; every built-in
+ *    states its selection colour.
  *
  * None of these invent a hue. Each one answers a question the theme author has
  * already framed ("this colour, dimmed against that backdrop"), which is why
@@ -178,4 +181,26 @@ fun onColorFor(fill: Long): Long {
     val black = 0xFF000000L
     val white = 0xFFFFFFFFL
     return if (contrastRatio(black, fill) >= contrastRatio(white, fill)) black else white
+}
+
+/**
+ * Blends [over] onto [under], opaque: each RGB channel is
+ * `over * amount + under * (1 - amount)`, rounded. The result is fully opaque.
+ *
+ * Unlike [withAlpha], which only sets transparency, this is a real colour mix.
+ * Its one caller is the legibility fallback [Theme.effectiveSelection] — the
+ * selection colour of a theme that does not declare one.
+ *
+ * @param over the colour blended in (the accent, for the selection).
+ * @param under the colour it is blended into (the background).
+ * @param amount how much of [over], `0.0` (all [under]) … `1.0` (all [over]).
+ * @return the opaque mixed ARGB colour.
+ */
+fun mix(over: Long, under: Long, amount: Double): Long {
+    fun channel(shift: Int): Long {
+        val a = ((over shr shift) and 0xFF).toDouble()
+        val b = ((under shr shift) and 0xFF).toDouble()
+        return kotlin.math.round(a * amount + b * (1 - amount)).toLong().coerceIn(0, 255)
+    }
+    return 0xFF000000L or (channel(16) shl 16) or (channel(8) shl 8) or channel(0)
 }

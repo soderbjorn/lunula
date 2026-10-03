@@ -87,6 +87,7 @@ fun ResolvedTheme.toCssVarMap(): Map<String, String> = buildMap {
     put("--t-accent-soft", argbToCss(accentSoft))
     put("--t-accent-on", argbToCss(accentOn))
     put("--t-accent-text", argbToCss(accentText))
+    put("--t-selection", argbToCss(selection))
     put("--t-glow", argbToCss(glow))
     put("--t-warn", argbToCss(warn))
     put("--t-warn-on", argbToCss(warnOn))

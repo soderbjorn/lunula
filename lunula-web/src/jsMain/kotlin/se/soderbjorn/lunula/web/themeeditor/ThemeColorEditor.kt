@@ -58,6 +58,7 @@ private val TOKEN_LABELS: Map<String, String> = mapOf(
     "accent" to "Accent",
     "accentOn" to "Accent: text on it",
     "accentText" to "Accent: as text",
+    "selection" to "Selected text background",
     "warn" to "Warning",
     "warnOn" to "Warning: text on it",
     "warnText" to "Warning: as text",

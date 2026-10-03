@@ -7,7 +7,8 @@
  *
  * NOTHING here is nullable, even though many of the underlying [Theme] fields
  * are: [Theme.resolve] has already applied every fallback, so a renderer reads
- * a concrete colour and never repeats — or forgets — the fallback logic. That
+ * a concrete colour and never repeats — or forgets — the fallback logic
+ * ([selection] included). That
  * includes the role-split tokens (`…On` / `…Text`), which is what lets a
  * consumer ask for "the type that goes on the accent" without knowing whether
  * the theme declared one.
@@ -93,15 +94,15 @@ data class ResolvedTheme(
     val chromeAccentText: Long,
     /** Sidebar usage-meter track. Falls back to [surfaceAlt]. */
     val chromeTrack: Long,
+    /** Opaque background of selected text. Declared, or [Theme.effectiveSelection]'s fallback. */
+    val selection: Long,
 ) {
     // ----- Structural aliases (direct token references; no colour maths) -----
 
     /** Terminal cursor — uses the [accent] token. */
     val cursor: Long get() = accent
-    /** Terminal selection background — uses the [accentSoft] token. */
-    val selectionBg: Long get() = accentSoft
-    /** Terminal selection text — uses the [bg] token. */
-    val selectionText: Long get() = bg
+    /** Selection background — uses the [selection] token. */
+    val selectionBg: Long get() = selection
     /** Window title-bar fill — uses the [chromeBg] token. */
     val titlebar: Long get() = chromeBg
     /** Window title text — uses the [chromeTextBright] token. */

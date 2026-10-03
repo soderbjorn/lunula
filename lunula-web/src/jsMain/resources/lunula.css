@@ -17,6 +17,15 @@ html, body {
     height: 100%;
 }
 
+/* Selected text, app-wide: the theme's opaque `selection` token, which every
+   built-in states so the highlight stands clearly apart from the page while
+   the text on it stays readable. Only the background is set — text keeps its
+   own colour. An app rule for a subtree (or xterm's own selection setting in
+   a terminal) still wins over this one. */
+::selection {
+    background: var(--t-selection);
+}
+
 /* ── App frame (top-level shell) ─────────────────────────────
    Composed by `renderAppFrame()` in shell/AppFrame.kt. Establishes a
    vertical flex column with the top-bar row on top and a body row that

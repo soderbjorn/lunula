@@ -125,6 +125,9 @@ enum class Appearance { Auto, Dark, Light }
  * @property addOn            optional — type ON a solid [add] field.
  * @property chromeAccentOn   optional — type ON a solid [chromeAccent] field.
  * @property chromeAccentText optional — [chromeAccent] rendered AS type; falls back to [chromeAccent].
+ * @property selection        optional — opaque background of selected text; every built-in
+ *   declares it, and a custom theme saved before it existed gets the legible
+ *   fallback [effectiveSelection].
  * @property tintAlpha        optional — diff-row tint opacity; falls back to the tone default.
  * @property group            **legacy, ignored** — the removed dark/light declaration. Kept
  *   so a `themes.json` written before the removal still decodes; see [ThemeGroup].
@@ -199,6 +202,13 @@ data class Theme(
     @EncodeDefault(EncodeDefault.Mode.NEVER) val addOn: String? = null,
     @EncodeDefault(EncodeDefault.Mode.NEVER) val chromeAccentOn: String? = null,
     @EncodeDefault(EncodeDefault.Mode.NEVER) val chromeAccentText: String? = null,
+    // ---- Optional selected-text background ----
+    // Its own token because no other one fits: [accentSoft] is a 15 % wash
+    // meant for faint tints, which on a near-black theme is barely brighter
+    // than the page. Every built-in states its value; the field stays
+    // nullable and never-encoded so `themes.json` (shared between Lunula
+    // apps) is unchanged for a theme that leaves it out.
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val selection: String? = null,
     // ---- Optional non-colour properties ----
     /**
      * Opacity of the diff-add/remove row tints. `null` → the tone default
@@ -326,6 +336,40 @@ data class Theme(
     /** [chromeAccentOn] if set, else black/white by the chrome accent's luminance. */
     val effectiveChromeAccentOn: Long get() = onFill(chromeAccentOn, effectiveChromeAccent)
 
+    /**
+     * [selection] if set, else a legible default for a custom theme saved
+     * before the token existed: [accent] blended into [bg], at the weakest
+     * strength that stands [SELECTION_TARGET_APART] apart from both [bg] and
+     * [surface] while [text] and [textBright] keep [SELECTION_TEXT_AA] on it.
+     *
+     * Follows the `…On` precedent — there is no earlier selection colour worth
+     * preserving (the old one was the faint [accentSoft] wash), so a legible
+     * default is the only useful one. When no strength reaches the target with
+     * readable text (a palette whose own text has little headroom, like
+     * Solarized), it settles for the most visible blend that keeps the text at
+     * AA, and failing that the first one [SELECTION_LOW_HEADROOM_APART] apart.
+     * `ThemeContrastTest` checks this fallback against every built-in palette.
+     */
+    val effectiveSelection: String get() = selection ?: argbToHex(selectionFallback())
+
+    /** The blend ladder behind [effectiveSelection]; see there. */
+    private fun selectionFallback(): Long {
+        val accentArgb = hexToArgb(accent)
+        val bgArgb = hexToArgb(bg)
+        val surfaceArgb = hexToArgb(surface)
+        val textArgb = hexToArgb(text)
+        val brightArgb = hexToArgb(textBright)
+        val ladder = (10..100).map { mix(accentArgb, bgArgb, it / 100.0) }
+        fun apart(c: Long) = minOf(contrastRatio(c, bgArgb), contrastRatio(c, surfaceArgb))
+        fun textOn(c: Long) = minOf(contrastRatio(textArgb, c), contrastRatio(brightArgb, c))
+        ladder.firstOrNull { apart(it) >= SELECTION_TARGET_APART && textOn(it) >= SELECTION_TEXT_AA }
+            ?.let { return it }
+        ladder.filter { apart(it) >= SELECTION_MIN_APART && textOn(it) >= SELECTION_TEXT_AA }
+            .maxByOrNull { apart(it) }
+            ?.let { return it }
+        return ladder.firstOrNull { apart(it) >= SELECTION_LOW_HEADROOM_APART } ?: ladder.last()
+    }
+
     /** [tintAlpha] if set, else the tone default (0.16 light / 0.18 dark). */
     val effectiveTintAlpha: Double
         get() = tintAlpha ?: if (isDarkToned) DARK_TINT_ALPHA else LIGHT_TINT_ALPHA
@@ -397,6 +441,7 @@ data class Theme(
         chromeAccentOn = effectiveChromeAccentOn,
         chromeAccentText = hexToArgb(effectiveChromeAccentText),
         chromeTrack = hexToArgb(effectiveChromeTrack),
+        selection = hexToArgb(effectiveSelection),
     )
 
     companion object {
@@ -407,14 +452,38 @@ data class Theme(
         const val DARK_TINT_ALPHA: Double = 0.18
 
         /**
-         * The 37 editable token ids in display order, grouped by role. Used by
+         * Contrast [effectiveSelection]'s fallback aims for between the
+         * selection and both [bg] and [surface]: comfortably over
+         * [SELECTION_MIN_APART], so a highlight reads at a glance.
+         */
+        const val SELECTION_TARGET_APART: Double = 1.6
+
+        /**
+         * The least contrast a selection may have against [bg] and [surface]
+         * to count as visible; see `ThemeContrastTest` for why 1.4.
+         */
+        const val SELECTION_MIN_APART: Double = 1.4
+
+        /**
+         * The visibility floor for a palette with little headroom — whose
+         * [text] or [textBright] is under 5:1 on [bg] or [surface] (the
+         * Solarized family, C64) — where no opaque colour is both
+         * [SELECTION_MIN_APART] apart and AA for the text.
+         */
+        const val SELECTION_LOW_HEADROOM_APART: Double = 1.3
+
+        /** WCAG AA for body text: what [text] keeps on the selection. */
+        const val SELECTION_TEXT_AA: Double = 4.5
+
+        /**
+         * The 38 editable token ids in display order, grouped by role. Used by
          * the web editor to render one colour input per token. (The five
          * derived tokens — accentSoft / glow / addBg / removeBgTint /
          * chromeAccentSoft — are not listed; they follow the
          * accent/add/danger/chromeAccent colour automatically.)
          *
-         * The optional ids — the 8 chrome/canvas ones and the 9 role-split ones
-         * — report their *effective* value through [token], so the editor
+         * The optional ids — the 8 chrome/canvas ones, the 9 role-split ones
+         * and `selection` — report their *effective* value through [token], so the editor
          * always shows a real colour rather than an empty swatch, and
          * [withToken] pins an explicit one on edit.
          *
@@ -425,7 +494,7 @@ data class Theme(
         val TOKEN_IDS: List<String> = listOf(
             "bg", "canvas", "surface", "surfaceAlt", "border",
             "text", "textDim", "textBright",
-            "accent", "accentOn", "accentText",
+            "accent", "accentOn", "accentText", "selection",
             "warn", "warnOn", "warnText",
             "danger", "dangerOn", "dangerText",
             "add", "addOn", "addText",
@@ -462,6 +531,7 @@ data class Theme(
         "chromeTrack" -> effectiveChromeTrack
         "accentOn" -> argbToHex(effectiveAccentOn)
         "accentText" -> effectiveAccentText
+        "selection" -> effectiveSelection
         "warnOn" -> argbToHex(effectiveWarnOn)
         "warnText" -> effectiveWarnText
         "dangerOn" -> argbToHex(effectiveDangerOn)
@@ -514,6 +584,7 @@ data class Theme(
         "chromeTrack" -> copy(chromeTrack = hex)
         "accentOn" -> copy(accentOn = hex)
         "accentText" -> copy(accentText = hex)
+        "selection" -> copy(selection = hex)
         "warnOn" -> copy(warnOn = hex)
         "warnText" -> copy(warnText = hex)
         "dangerOn" -> copy(dangerOn = hex)
