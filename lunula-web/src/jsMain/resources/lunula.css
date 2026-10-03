@@ -7025,8 +7025,9 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
 
      - Layered elevation — panes float above the window on three soft
        shadows (contact, near, far) under a 1px top highlight; pane headers
-       cast a small shadow onto their content; the sidebar's edge is an inner
-       shadow instead of a hairline; resting tabs get a small lift.
+       cast a small shadow onto their content; the sidebars lose their
+       hairlines and become part of the window backdrop; resting tabs get a
+       small lift.
      - Accent glow and sheen — the solid accent surfaces (focused pane header
        and active tab / sidebar row under Fill selection, the active topbar
        button always) become a three-stop vertical gradient with a glossy top
@@ -7036,11 +7037,11 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
      - Ambient wash — the window background picks up a soft radial accent
        glow from the top left and a neighbouring hue (accent hue + 35°) from
        the bottom right. Chrome (topbar, sidebars, bottom bar) goes
-       transparent over it; the canvas behind the panes paints the same wash
-       over its own tone, viewport-anchored (`background-attachment: fixed`)
-       so the two line up seamlessly — and so the nested canvas layers
-       (`.dt-app-frame-main` > `.dt-pane-root`, `.dt-pane-dock`) paint the
-       identical opaque image and never double the wash.
+       transparent over it, and so does the canvas behind the panes
+       (`.dt-app-frame-main`, `.dt-pane-root`, `.dt-pane-dock`): the whole
+       window is one backdrop, painted once by `.dt-app-frame`
+       (viewport-anchored, `background-attachment: fixed`), so no tone step
+       or doubled wash can appear between chrome and canvas.
 
    No translucency or backdrop blur anywhere: every effect is a gradient or a
    box-shadow on a frame that does not scroll, so scrolling inside a pane
@@ -7104,8 +7105,8 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
 
 /* Ambient wash. The frame paints chrome-bg + wash; the chrome bars that used
    to repaint chrome-bg over it go transparent (same base colour, so nothing
-   changes but the wash showing through). The canvas keeps its own tone with
-   the wash laid over it. */
+   changes but the wash showing through), and so does the canvas behind the
+   panes: one backdrop for the whole window. */
 :root:not([data-dt-surface="flat"]) .dt-app-frame {
     background: var(--dt-depth-wash-image), var(--t-chrome-bg, var(--t-bg, #1e1e1e));
     background-attachment: fixed;
@@ -7118,20 +7119,32 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
 :root:not([data-dt-surface="flat"]) .dt-app-frame-main,
 :root:not([data-dt-surface="flat"]) .dt-pane-root,
 :root:not([data-dt-surface="flat"]) .dt-pane-dock {
-    background: var(--dt-depth-wash-image), var(--t-canvas, var(--t-bg, #1e1e1e));
-    background-attachment: fixed;
+    /* One backdrop for the whole window: the canvas behind the panes shows
+       the frame's chrome-bg + wash instead of repainting its own tone, so
+       where `--t-canvas` differs from `--t-chrome-bg` (most light themes)
+       there is no colour step along the sidebar's edge. The panes carry
+       their own surface and float on this backdrop. */
+    background: transparent;
 }
 
-/* Sidebar edge: an inner shadow falling away from the content instead of the
-   hairline. The top border stays — it is what hangs the sidebar below the
-   topbar now that both are transparent over the same wash. */
+/* Sidebar edges: none. The sidebars sit on the same backdrop as the canvas
+   (see the wash above), so they are simply part of the window and the
+   panes float above both. A hairline, or an inset shadow (always darkest
+   right at the box edge), would draw a seam across the wash — most visibly
+   between a wash-lit sidebar and the focused pane's halo. */
+:root:not([data-dt-surface="flat"]) .dt-sidebar {
+    border-top-color: transparent;
+}
 :root:not([data-dt-surface="flat"]) .dt-sidebar-left {
     border-right-color: transparent;
-    box-shadow: inset -12px 0 18px -14px var(--dt-depth-shadow-30);
 }
 :root:not([data-dt-surface="flat"]) .dt-sidebar-right {
     border-left-color: transparent;
-    box-shadow: inset 12px 0 18px -14px var(--dt-depth-shadow-30);
+}
+/* Section dividers inside a sidebar at half strength, so they read as
+   grouping rather than as edges. */
+:root:not([data-dt-surface="flat"]) .dt-sidebar-section {
+    border-bottom-color: color-mix(in srgb, var(--t-chrome-border, transparent) 45%, transparent);
 }
 
 /* Pane elevation. Selectors mirror the flat rules' shapes one level more
