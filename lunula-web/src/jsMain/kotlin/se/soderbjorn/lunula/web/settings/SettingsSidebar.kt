@@ -70,6 +70,7 @@ import se.soderbjorn.lunula.web.themeeditor.FontKind
 import se.soderbjorn.lunula.web.themeeditor.ThemeManagerHost
 import se.soderbjorn.lunula.web.themeeditor.detectInstalledFonts
 import se.soderbjorn.lunula.web.themeeditor.allFontPresets
+import se.soderbjorn.lunula.web.themeeditor.fontRowPresets
 
 /**
  * Spec passed to [buildSettingsSidebar].
@@ -422,7 +423,6 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
         title = "Sidebar font",
         hint = "Used by the topbar and sidebars.",
         kind = FontKind.Proportional,
-        showKinds = setOf(FontKind.Proportional, FontKind.Mono),
         currentKey = { spec.host.sidebarFontFamily },
         appDefaultKey = { spec.chromeDefaultKey() },
         onPick = { key ->
@@ -446,7 +446,6 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
         title = "Tab bar font",
         hint = "Used by the tab strip (falls back to Sidebar when unset).",
         kind = FontKind.Proportional,
-        showKinds = setOf(FontKind.Proportional, FontKind.Mono),
         currentKey = { spec.host.tabbarFontFamily },
         appDefaultKey = { spec.chromeDefaultKey() },
         onPick = { key ->
@@ -470,7 +469,6 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
         title = "Window title font",
         hint = "Used by each window's title bar (falls back to Sidebar when unset).",
         kind = FontKind.Proportional,
-        showKinds = setOf(FontKind.Proportional, FontKind.Mono),
         currentKey = { spec.host.paneHeaderFontFamily },
         appDefaultKey = { spec.chromeDefaultKey() },
         onPick = { key ->
@@ -517,7 +515,6 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
         title = "Proportional font",
         hint = "Used by prose / note content.",
         kind = FontKind.Proportional,
-        showKinds = setOf(FontKind.Proportional, FontKind.Mono),
         currentKey = { spec.host.proportionalFontFamily },
         appDefaultKey = { spec.proseDefaultKey() },
         onPick = { key ->
@@ -541,8 +538,6 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
         title = "Display font",
         hint = "Used by titles and headings (falls back to Proportional when unset).",
         kind = FontKind.Proportional,
-        // Display-only faces (FontKind.Display) are offered here and nowhere else.
-        showKinds = setOf(FontKind.Proportional, FontKind.Display, FontKind.Mono),
         currentKey = { spec.host.displayFontFamily },
         appDefaultKey = { spec.displayDefaultKey() },
         onPick = { key ->
@@ -592,11 +587,8 @@ private fun makeSection(title: String, hint: String? = null): Section {
  * @param kind the section's primary kind. Drives the system default
  *   ([FontKind.Mono] → `system`, [FontKind.Proportional] → `systemProp`)
  *   and floats presets of this kind to the front of the row.
- * @param showKinds the kinds whose presets are offered in the row.
- *   Defaults to just [kind]. Proportional chrome sections (Sidebar / Tab
- *   bar / Proportional) pass both kinds so users can also pick a
- *   monospaced face for chrome — the proportional presets stay first,
- *   monospaced ones follow.
+ *   The row offers [fontRowPresets] for this kind: only monospaced faces
+ *   for [FontKind.Mono], every preset otherwise.
  * @param appDefaultKey the preset key the app applies to this surface when the
  *   user has picked none (e.g. a deployment brand font). When [currentKey] is
  *   null/empty the row highlights this key — falling back to the system default
@@ -609,21 +601,18 @@ private fun buildFontFaceSection(
     kind: FontKind,
     currentKey: () -> String?,
     onPick: (String?) -> Unit,
-    showKinds: Set<FontKind> = setOf(kind),
     appDefaultKey: () -> String? = { null },
 ): HTMLElement {
     val section = makeSection(title, hint)
     val row = section.row
     val installed = detectInstalledFonts()
     val current = currentKey()
-    // System default first, regardless of order in [allFontPresets], so
-    // users without a strong opinion always see a familiar label at the
-    // start of the row. When the row offers more than one kind (e.g.
-    // chrome sections that also list monospaced faces), presets matching
-    // the section's primary [kind] are floated ahead of the rest while
-    // preserving each group's declared order (sortedWith is stable).
+    // fontRowPresets puts the system default first, regardless of order in
+    // [allFontPresets], so users without a strong opinion always see a
+    // familiar label at the start of the row; then the section's primary
+    // [kind], Display faces and the rest, each in declared order.
     //
-    // Iterates [allFontPresets] (built-ins + app-injected via
+    // It iterates [allFontPresets] (built-ins + app-injected via
     // [registerFontPresets]) — not just the built-ins — so a deployment's
     // brand font appears as a pickable pill exactly like a built-in, matching
     // how every resolver already walks the merged list. detectInstalledFonts()
@@ -633,13 +622,7 @@ private fun buildFontFaceSection(
     // for this surface (a brand font) if it has one, else the system default —
     // so the highlight tracks what is actually painted, not an empty override.
     val effectiveDefaultKey = appDefaultKey() ?: systemKey
-    val sortedPresets = allFontPresets()
-        .filter { it.kind in showKinds }
-        .sortedWith(compareBy(
-            { if (it.key == systemKey) 0 else 1 },
-            // Display-only faces follow the primary kind, ahead of monospaced ones.
-            { when { it.kind == kind -> 0; it.kind == FontKind.Display -> 1; else -> 2 } },
-        ))
+    val sortedPresets = fontRowPresets(kind)
     for (preset in sortedPresets) {
         if (preset.key !in installed) continue
         val isSelected = preset.key == current ||

@@ -7,7 +7,7 @@
  *
  * These tests pin:
  *   - both presets are built in, with the kinds the Settings sidebar rows
- *     filter on (Unbounded is Display, so only the Display font row lists it);
+ *     order on (Unbounded is Display: every row but Monospaced lists it);
  *   - a family the page declares with `FontFace` makes its preset available,
  *     even before the face has loaded;
  *   - a family nobody declares (and that is not installed) stays hidden;

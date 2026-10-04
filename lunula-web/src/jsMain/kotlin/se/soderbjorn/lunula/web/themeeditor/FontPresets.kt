@@ -14,12 +14,12 @@
  * Each preset declares a [FontPreset.kind]: `Mono` for fixed-width
  * presets (terminals, code panes) and `Proportional` for prose presets
  * (notegrow's editor, sidebar/topbar/tabbar chrome). The Settings
- * sidebar uses [FontPreset.kind] to order each font row: the Monospaced
- * section offers only [FontKind.Mono] presets, while the chrome sections
- * (Proportional / Sidebar / Tab bar) list the proportional presets first
- * and then the monospaced ones, so a user can pick a fixed-width face for
- * chrome if they want. `Display` presets (faces too wide for body text,
- * such as Unbounded) are offered only in the Display font row.
+ * sidebar uses [FontPreset.kind] to filter and order each font row
+ * ([fontRowPresets]): the Monospaced section offers only [FontKind.Mono]
+ * presets, while every other row (Proportional / Sidebar / Tab bar /
+ * Window title / Display) offers every preset — its own kind first, then
+ * `Display` presets (faces meant for headings, such as Unbounded), then the
+ * monospaced ones — so a user can pick any face for any surface but code.
  *
  * @see ThemeManagerHost.setMonoFontFamily
  * @see ThemeManagerHost.setProportionalFontFamily
@@ -36,11 +36,10 @@ import org.w3c.dom.HTMLCanvasElement
  * code), proportional content (prose, chrome) or only display text
  * (headings).
  *
- * The Settings sidebar uses this to partition presets between the
- * Monospaced section and the proportional sections (Proportional /
- * Sidebar / Tab bar / Window title). [Display] presets — faces too wide
- * or loud for body text, such as Unbounded — are offered only in the
- * Display font row.
+ * The Settings sidebar uses this to order each font row and to keep the
+ * Monospaced row to [Mono] presets; every other row offers every kind (see
+ * [fontRowPresets]). [Display] presets — faces meant for headings, such as
+ * Unbounded — follow a row's own kind, ahead of the monospaced ones.
  */
 enum class FontKind { Mono, Proportional, Display }
 
@@ -76,10 +75,9 @@ data class FontPreset(
 )
 
 /**
- * Ordered list of font presets. The Settings sidebar partitions this by
- * [FontPreset.kind]: the Monospaced section uses [FontKind.Mono]; the
- * Proportional / Sidebar / Tab bar sections use [FontKind.Proportional];
- * [FontKind.Display] presets appear in the Display font row only.
+ * Ordered list of font presets. The Settings sidebar filters this by
+ * [FontPreset.kind] only for the Monospaced section ([FontKind.Mono]); every
+ * other font row lists all of them, its own kind first (see [fontRowPresets]).
  *
  * The `system` mono and `systemProp` proportional presets are the
  * defaults when no preset is persisted for the corresponding kind.
@@ -148,6 +146,44 @@ val fontPresets: List<FontPreset> = listOf(
         "'Unbounded', system-ui, sans-serif", "Unbounded",
         kind = FontKind.Display),
 )
+
+/**
+ * The preset kinds a Settings sidebar font row offers: [FontKind.Mono] only
+ * for the Monospaced row (`kind == Mono`), every kind for any other row — so
+ * a kind added later is offered there without touching the rows.
+ *
+ * Called by [fontRowPresets].
+ *
+ * @param kind the row's primary kind ([FontKind.Mono] for the Monospaced row,
+ *   [FontKind.Proportional] for every other row).
+ */
+fun offeredFontKinds(kind: FontKind): Set<FontKind> =
+    if (kind == FontKind.Mono) setOf(FontKind.Mono) else FontKind.entries.toSet()
+
+/**
+ * The presets one Settings sidebar font row lists, in order: the row's system
+ * default (`system` for a Mono row, `systemProp` otherwise) first, then presets
+ * of the row's own [kind], then [FontKind.Display] ones, then the rest — each
+ * group in [presets]' declared order. Kinds outside [offeredFontKinds] are left
+ * out. Availability ([detectInstalledFonts]) is not checked here.
+ *
+ * Called by the Settings sidebar's `buildFontFaceSection` for every font row.
+ *
+ * @param kind the row's primary kind, see [offeredFontKinds].
+ * @param presets the candidates; defaults to [allFontPresets] (built-ins plus
+ *   app-registered presets).
+ * @return the offered presets, sorted for display.
+ */
+fun fontRowPresets(kind: FontKind, presets: List<FontPreset> = allFontPresets()): List<FontPreset> {
+    val systemKey = if (kind == FontKind.Mono) "system" else "systemProp"
+    val kinds = offeredFontKinds(kind)
+    return presets
+        .filter { it.kind in kinds }
+        .sortedWith(compareBy(
+            { if (it.key == systemKey) 0 else 1 },
+            { when { it.kind == kind -> 0; it.kind == FontKind.Display -> 1; else -> 2 } },
+        ))
+}
 
 /** The `system` mono stack — used when a host returns `null`/empty for mono. */
 private val systemMonoStack: String =
