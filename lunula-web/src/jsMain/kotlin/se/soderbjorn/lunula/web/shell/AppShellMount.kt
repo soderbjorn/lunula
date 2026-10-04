@@ -930,7 +930,9 @@ private class ShellState(
      *
      * Only the latest focus is owed: a second gesture before the first has been
      * announced replaces it, because what the host needs is where focus ended
-     * up, not the path it took.
+     * up, not the path it took. A host that opens and focuses a new pane in
+     * answer to the gesture (on its press or its click) cancels what is owed
+     * ([yieldToHostOpenedPanes]).
      *
      * @param tabId the tab owning the pane.
      * @param paneId the pane that took focus.
@@ -948,9 +950,14 @@ private class ShellState(
         onUp = { _: Event ->
             onUp?.let { document.removeEventListener("pointerup", it, true) }
             paneFocusAnnounceArmed = false
-            val owed = paneFocusToAnnounce
-            paneFocusToAnnounce = null
-            if (owed != null) kotlinx.browser.window.setTimeout({ notify(owed.first, owed.second) }, 0)
+            // Still owed until the timeout runs: the `click` dispatched in
+            // between may make the host open (and focus) another pane, which
+            // cancels it ([yieldToHostOpenedPanes]).
+            kotlinx.browser.window.setTimeout({
+                val owed = paneFocusToAnnounce
+                paneFocusToAnnounce = null
+                if (owed != null) notify(owed.first, owed.second)
+            }, 0)
         }
         document.addEventListener("pointerup", onUp, true)
     }
@@ -4327,6 +4334,7 @@ private class ShellState(
      * @see pendingActivePaneId
      */
     private fun applyPendingActivePaneHold(snapshot: TabListSnapshot): TabListSnapshot {
+        yieldToHostOpenedPanes(snapshot)
         if (pendingActivePaneId.isEmpty()) return snapshot
         // Age out stale holds before applying anything: a hold whose
         // confirming round-trip hasn't landed within the expiry window is
@@ -4364,6 +4372,43 @@ private class ShellState(
             }
         }
         return if (changed) snapshot.copy(tabs = tabs) else snapshot
+    }
+
+    /**
+     * A host that opens a pane in answer to a press *inside another pane* —
+     * a Shift-click on a link that opens its target in a new window — pushes
+     * a snapshot whose `activePaneId` is that brand-new pane. The press
+     * itself already focused the pane it landed in: it seeded a
+     * [pendingActivePaneId] hold and owes the host that focus at the
+     * `pointerup` ([announcePaneFocus]). Left alone, the hold rewrites the
+     * new pane's activation back to the pressed pane, and the owed
+     * announcement then tells the host to refocus it — the window the user
+     * just opened comes up unfocused, behind the one they clicked in.
+     *
+     * The host's choice is the later and more specific one, so for every tab
+     * whose snapshot makes a pane active that the previous snapshot
+     * ([lastSnapshot]) did not have, this drops that tab's hold and any
+     * focus still owed for it. A focus on an existing pane changes nothing
+     * here: it is the stale in-flight value the hold exists to resist.
+     *
+     * Called by [applyPendingActivePaneHold] for every pushed snapshot,
+     * before the hold is applied.
+     *
+     * @param snapshot the raw snapshot the app just pushed.
+     * @see pendingActivePaneId
+     * @see announcePaneFocus
+     */
+    private fun yieldToHostOpenedPanes(snapshot: TabListSnapshot) {
+        if (pendingActivePaneId.isEmpty() && paneFocusToAnnounce == null) return
+        val previousByTab = lastSnapshot.tabs.associateBy { it.id }
+        for (tab in snapshot.tabs) {
+            val active = tab.activePaneId ?: continue
+            val previous = previousByTab[tab.id] ?: continue
+            if (previous.panes.any { it.id == active }) continue
+            if (tab.panes.none { it.id == active }) continue
+            pendingActivePaneId.remove(tab.id)
+            if (paneFocusToAnnounce?.first == tab.id) paneFocusToAnnounce = null
+        }
     }
 
     /**
