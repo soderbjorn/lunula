@@ -7,8 +7,9 @@
  * [ThemeManagerHost] setter (e.g. `setMonoFontFamily`), not the raw CSS
  * stack. [resolveFontFamilyCss] turns a key into the CSS font-family
  * stack at paint time, and [detectInstalledFonts] hides presets whose
- * primary family isn't available locally so the user doesn't see options
- * that would silently fall back to a generic.
+ * primary family isn't available — neither installed on the machine nor
+ * declared by the app through `@font-face` — so the user doesn't see
+ * options that would silently fall back to a generic.
  *
  * Each preset declares a [FontPreset.kind]: `Mono` for fixed-width
  * presets (terminals, code panes) and `Proportional` for prose presets
@@ -17,7 +18,8 @@
  * section offers only [FontKind.Mono] presets, while the chrome sections
  * (Proportional / Sidebar / Tab bar) list the proportional presets first
  * and then the monospaced ones, so a user can pick a fixed-width face for
- * chrome if they want.
+ * chrome if they want. `Display` presets (faces too wide for body text,
+ * such as Unbounded) are offered only in the Display font row.
  *
  * @see ThemeManagerHost.setMonoFontFamily
  * @see ThemeManagerHost.setProportionalFontFamily
@@ -52,12 +54,16 @@ enum class FontKind { Mono, Proportional, Display }
  * @property cssStack     full CSS `font-family` stack to apply in the
  *   browser. Always ends with a generic family so unknown families fall
  *   back gracefully.
- * @property detectFamily primary family name [detectInstalledFonts] probes
- *   for, or `null` for presets that are always considered available
+ * @property detectFamily primary family name [detectInstalledFonts] looks
+ *   for — declared by the app through `@font-face`, or installed on the
+ *   machine — or `null` for presets that are always considered available
  *   (`system*` stacks and any [bundled] families).
- * @property bundled      `true` when the host ships the `.woff2` for this
- *   family (e.g. via `@font-face` rules). Bundled families skip the
- *   installed-fonts probe and are always offered to the user.
+ * @property bundled      `true` when every host is expected to ship the
+ *   `.woff2` for this family (e.g. via `@font-face` rules). Bundled families
+ *   skip the availability check and are always offered to the user. A
+ *   family only some hosts ship is better left unbundled with a
+ *   [detectFamily]: it is then offered exactly where its files (or an
+ *   installed copy) exist.
  * @property kind         monospaced, proportional or display-only, see [FontKind].
  */
 data class FontPreset(
@@ -72,7 +78,8 @@ data class FontPreset(
 /**
  * Ordered list of font presets. The Settings sidebar partitions this by
  * [FontPreset.kind]: the Monospaced section uses [FontKind.Mono]; the
- * Proportional / Sidebar / Tab bar sections use [FontKind.Proportional].
+ * Proportional / Sidebar / Tab bar sections use [FontKind.Proportional];
+ * [FontKind.Display] presets appear in the Display font row only.
  *
  * The `system` mono and `systemProp` proportional presets are the
  * defaults when no preset is persisted for the corresponding kind.
@@ -130,6 +137,16 @@ val fontPresets: List<FontPreset> = listOf(
     FontPreset("ibmPlexSans", "IBM Plex Sans",
         "'IBM Plex Sans', system-ui, sans-serif", "IBM Plex Sans",
         kind = FontKind.Proportional),
+    // Shipped by Lunarbor (`@font-face`); offered in any app that declares
+    // the family or where it is installed — see [detectInstalledFonts].
+    FontPreset("instrumentSans", "Instrument Sans",
+        "'Instrument Sans', system-ui, sans-serif", "Instrument Sans",
+        kind = FontKind.Proportional),
+
+    // ── Display (headings and titles only) ──────────────────────────
+    FontPreset("unbounded", "Unbounded",
+        "'Unbounded', system-ui, sans-serif", "Unbounded",
+        kind = FontKind.Display),
 )
 
 /** The `system` mono stack — used when a host returns `null`/empty for mono. */
@@ -205,25 +222,58 @@ fun resolveProportionalFontFamilyCss(key: String?): String {
     return allFontPresets().firstOrNull { it.key == key }?.cssStack ?: systemPropStack
 }
 
-/** Cached result of [detectInstalledFonts]; null until the first call. */
-private var installedFontsCache: Set<String>? = null
+/**
+ * Per-preset result of the canvas probe in [detectInstalledFonts], keyed by
+ * [FontPreset.key]. Installed fonts don't change mid-session, so a key is
+ * probed once; presets registered later are probed on the next call.
+ */
+private val installedProbeCache: MutableMap<String, Boolean> = mutableMapOf()
 
 /**
- * Detects which [fontPresets] are actually installed on the user's machine
- * using the canvas text-width-measurement technique. Bundled and `system*`
- * presets are always returned as available; system-detected families are
- * probed against three generic fallbacks.
+ * The font families the page declares through `@font-face` (stylesheets or
+ * `FontFace` objects in `document.fonts`), lower-cased and unquoted. A
+ * declared face counts whether or not it has been loaded yet: the browser
+ * fetches it on first use, so declaring it is what makes it available.
  *
- * The result is cached after the first call — installed fonts don't change
- * mid-session.
+ * Called by [detectInstalledFonts] on every call (cheap; not cached), so a
+ * stylesheet that finishes loading after the first call is still seen.
+ */
+private fun declaredFontFamilies(): Set<String> {
+    val families = mutableSetOf<String>()
+    val fonts = document.asDynamic().fonts ?: return families
+    fonts.forEach { face: dynamic ->
+        val family = (face.family as? String) ?: return@forEach
+        families.add(normalizeFamilyName(family))
+    }
+    return families
+}
+
+/** Strips surrounding quotes and whitespace from a family name and lower-cases it. */
+private fun normalizeFamilyName(family: String): String =
+    family.trim().trim('"', '\'').trim().lowercase()
+
+/**
+ * Detects which presets in [allFontPresets] are available on this page.
+ * A preset is available when any of these holds:
  *
- * @return the set of preset keys ([FontPreset.key]) available locally.
+ * - its [FontPreset.detectFamily] is `null` (`system*` stacks, [FontPreset.bundled]
+ *   families, and app-injected presets that ship their own `@font-face`);
+ * - the page declares its [FontPreset.detectFamily] through `@font-face` — the
+ *   app ships the files (e.g. Lunarbor's Instrument Sans and Unbounded), so
+ *   the preset shows in that app and stays hidden in apps that don't;
+ * - the family is installed on the machine, found with the canvas
+ *   text-width-measurement technique against three generic fallbacks.
+ *
+ * The canvas probe is cached per preset key; the `@font-face` check runs on
+ * every call. Called by the Settings sidebar each time it builds a font row.
+ *
+ * @return the set of preset keys ([FontPreset.key]) available on this page.
  */
 fun detectInstalledFonts(): Set<String> {
-    installedFontsCache?.let { return it }
-
-    val canvas = document.createElement("canvas") as HTMLCanvasElement
-    val ctx = canvas.getContext("2d").asDynamic() ?: return emptySet()
+    val declared = declaredFontFamilies()
+    val available = mutableSetOf<String>()
+    var ctx: dynamic = null
+    var baselineWidths: Map<String, Double>? = null
     val sample = "mwiIWMOQabcdefghijklmnopqrstuvwxyz0123456789"
     val baselines = listOf("monospace", "serif", "sans-serif")
     val fontSize = 72
@@ -234,24 +284,27 @@ fun detectInstalledFonts(): Set<String> {
         return (metrics.width as Number).toDouble()
     }
 
-    val baselineWidths = baselines.associateWith { widthOf(it) }
-
-    val available = mutableSetOf<String>()
     for (preset in allFontPresets()) {
         val detect = preset.detectFamily
-        if (detect == null) {
+        if (detect == null || normalizeFamilyName(detect) in declared) {
             available.add(preset.key)
             continue
         }
-        val quoted = if (detect.contains(' ')) "'$detect'" else detect
-        val installed = baselines.any { baseline ->
-            val w = widthOf("$quoted, $baseline")
-            val b = baselineWidths.getValue(baseline)
-            kotlin.math.abs(w - b) > 0.5
+        val installed = installedProbeCache.getOrPut(preset.key) {
+            if (ctx == null) {
+                val canvas = document.createElement("canvas") as HTMLCanvasElement
+                ctx = canvas.getContext("2d").asDynamic()
+                if (ctx == null) return@getOrPut false
+                baselineWidths = baselines.associateWith { widthOf(it) }
+            }
+            val quoted = if (detect.contains(' ')) "'$detect'" else detect
+            baselines.any { baseline ->
+                val w = widthOf("$quoted, $baseline")
+                val b = baselineWidths!!.getValue(baseline)
+                kotlin.math.abs(w - b) > 0.5
+            }
         }
         if (installed) available.add(preset.key)
     }
-
-    installedFontsCache = available
     return available
 }

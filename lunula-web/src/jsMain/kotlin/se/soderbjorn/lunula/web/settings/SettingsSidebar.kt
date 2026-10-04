@@ -539,7 +539,7 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
     // ── Display font (main content — headings) ──────────────────────
     body.appendChild(buildFontFaceSection(
         title = "Display font",
-        hint = "Used by headings (falls back to Proportional when unset).",
+        hint = "Used by titles and headings (falls back to Proportional when unset).",
         kind = FontKind.Proportional,
         // Display-only faces (FontKind.Display) are offered here and nowhere else.
         showKinds = setOf(FontKind.Proportional, FontKind.Display, FontKind.Mono),
