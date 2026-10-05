@@ -2164,6 +2164,11 @@ private class ShellState(
                     // reason the family rows do.
                     sidebarSizeDefault = spec.defaultChromeFontSizePx() ?: 13,
                     mainSizeDefault = spec.defaultProseFontSizePx() ?: 14,
+                    paneHeaderSizeDefault = spec.defaultChromeFontSizePx() ?: 11,
+                    // Same ladder as applyHostFontVars: mono has its own default,
+                    // display falls through to prose.
+                    monoSizeDefault = spec.defaultMonoFontSizePx() ?: 14,
+                    displaySizeDefault = spec.defaultDisplayFontSizePx() ?: spec.defaultProseFontSizePx() ?: 14,
                 )
             ))
         } else if (isAppSettingsSidebarOpen() && spec.appSettingsContent != null) {
