@@ -2169,6 +2169,7 @@ private class ShellState(
                     // display falls through to prose.
                     monoSizeDefault = spec.defaultMonoFontSizePx() ?: 14,
                     displaySizeDefault = spec.defaultDisplayFontSizePx() ?: spec.defaultProseFontSizePx() ?: 14,
+                    fontSizeHidden = spec.fontSizeHidden,
                 )
             ))
         } else if (isAppSettingsSidebarOpen() && spec.appSettingsContent != null) {

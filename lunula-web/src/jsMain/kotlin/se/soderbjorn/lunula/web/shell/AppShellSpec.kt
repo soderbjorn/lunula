@@ -1089,6 +1089,14 @@ data class AppShellSpec(
      */
     val defaultDisplayFontFamily: () -> String? = { null },
     /**
+     * The Appearance sidebar's font lines that get no size control, for
+     * surfaces whose size this app does not take from the toolkit's
+     * `--dt-font-*-size` variables (e.g. Lunarbor's headings, sized from its
+     * text size). Their font is still offered. Empty by default, so every
+     * existing app keeps every size control.
+     */
+    val fontSizeHidden: Set<se.soderbjorn.lunula.web.settings.FontSurfaceId> = emptySet(),
+    /**
      * App-supplied fallback for the MONOSPACED content font, as a
      * [FontPreset.key], evaluated on every host-font application alongside the
      * three seams above.

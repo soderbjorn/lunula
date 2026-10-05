@@ -119,6 +119,13 @@ data class SettingsSidebarSpec(
     /** Size the Headings line shows when the host stores none (falls to prose's). */
     val displaySizeDefault: Int = mainSizeDefault,
     /**
+     * Font lines that get no size control: surfaces whose size the app does
+     * not take from the toolkit (Lunarbor sizes headings from its text size),
+     * so a stepper there would change nothing. Empty by default — every line
+     * keeps its stepper.
+     */
+    val fontSizeHidden: Set<FontSurfaceId> = emptySet(),
+    /**
      * Effective font-preset key applied to the CHROME surfaces (sidebar / tab
      * bar / window title) when the user has picked none — i.e. a deployment
      * brand font, resolved the same way [se.soderbjorn.lunula.web.shell.AppShellSpec.defaultChromeFontFamily]
@@ -462,9 +469,17 @@ private fun makeSection(title: String, hint: String? = null): Section {
 }
 
 /**
+ * The surfaces the Appearance sidebar's Fonts section has a line for, in
+ * line order. An app names them in [SettingsSidebarSpec.fontSizeHidden]
+ * (via `AppShellSpec.fontSizeHidden`) to drop a line's size control.
+ */
+enum class FontSurfaceId { Sidebar, TabBar, WindowTitle, Text, Headings, Code }
+
+/**
  * One surface's font settings, as the Fonts section lists them: what the host
  * stores for it and what is painted when it stores nothing.
  *
+ * @property id      which surface this is.
  * @property label   the surface's name on its line ("Sidebar", "Code", …).
  * @property tooltip what the surface letters, shown on hover.
  * @property kind    [FontKind.Mono] for the code surface (monospaced fonts only).
@@ -475,6 +490,7 @@ private fun makeSection(title: String, hint: String? = null): Section {
  * @property sizes   the sizes the stepper walks through, ascending.
  */
 private class FontSurface(
+    val id: FontSurfaceId,
     val label: String,
     val tooltip: String,
     val kind: FontKind,
@@ -493,7 +509,8 @@ private class FontSurface(
 /**
  * Builds the Fonts section: one line per surface — Sidebar, Tab bar, Window
  * title, Text, Headings, Code — each naming the font and size actually painted
- * there and changing either in place. The font button opens a searchable list
+ * there and changing either in place (no size control for a surface in
+ * [SettingsSidebarSpec.fontSizeHidden]). The font button opens a searchable list
  * of every font ([buildFontPicker]); the size is a − / + stepper.
  *
  * What a line shows when the user has stored nothing follows the same ladder
@@ -508,27 +525,27 @@ private class FontSurface(
  */
 private fun buildFontsSection(spec: SettingsSidebarSpec): HTMLElement {
     val host = spec.host
-    val sidebar = FontSurface("Sidebar", "The topbar and the sidebars.", FontKind.Proportional,
+    val sidebar = FontSurface(FontSurfaceId.Sidebar, "Sidebar", "The topbar and the sidebars.", FontKind.Proportional,
         { host.sidebarFontFamily }, { host.setSidebarFontFamily(it); applySidebarFontFamily(it) },
         { host.sidebarFontSizePx }, { host.setSidebarFontSizePx(it); applySidebarFontSizePx(it) },
         spec.sidebarSizePresets)
-    val tabbar = FontSurface("Tab bar", "The tab strip.", FontKind.Proportional,
+    val tabbar = FontSurface(FontSurfaceId.TabBar, "Tab bar", "The tab strip.", FontKind.Proportional,
         { host.tabbarFontFamily }, { host.setTabbarFontFamily(it); applyTabbarFontFamily(it) },
         { host.tabbarFontSizePx }, { host.setTabbarFontSizePx(it); applyTabbarFontSizePx(it) },
         spec.sidebarSizePresets)
-    val paneHeader = FontSurface("Window title", "Each window's title bar.", FontKind.Proportional,
+    val paneHeader = FontSurface(FontSurfaceId.WindowTitle, "Window title", "Each window's title bar.", FontKind.Proportional,
         { host.paneHeaderFontFamily }, { host.setPaneHeaderFontFamily(it); applyPaneHeaderFontFamily(it) },
         { host.paneHeaderFontSizePx }, { host.setPaneHeaderFontSizePx(it); applyPaneHeaderFontSizePx(it) },
         spec.sidebarSizePresets)
-    val prose = FontSurface("Text", "Prose and note content.", FontKind.Proportional,
+    val prose = FontSurface(FontSurfaceId.Text, "Text", "Prose and note content.", FontKind.Proportional,
         { host.proportionalFontFamily }, { host.setProportionalFontFamily(it); applyProportionalFontFamily(it) },
         { host.proportionalFontSizePx }, { host.setProportionalFontSizePx(it); applyProportionalFontSizePx(it) },
         spec.mainSizePresets)
-    val display = FontSurface("Headings", "Titles and headings.", FontKind.Proportional,
+    val display = FontSurface(FontSurfaceId.Headings, "Headings", "Titles and headings.", FontKind.Proportional,
         { host.displayFontFamily }, { host.setDisplayFontFamily(it); applyDisplayFontFamily(it) },
         { host.displayFontSizePx }, { host.setDisplayFontSizePx(it); applyDisplayFontSizePx(it) },
         spec.mainSizePresets)
-    val mono = FontSurface("Code", "Terminals, code panes and code in text.", FontKind.Mono,
+    val mono = FontSurface(FontSurfaceId.Code, "Code", "Terminals, code panes and code in text.", FontKind.Mono,
         { host.monoFontFamily }, { host.setMonoFontFamily(it); applyMonoFontFamily(it) },
         { host.monoFontSizePx }, { host.setMonoFontSizePx(it); applyMonoFontSizePx(it) },
         spec.mainSizePresets)
@@ -567,6 +584,7 @@ private fun buildFontsSection(spec: SettingsSidebarSpec): HTMLElement {
     for (surface in listOf(sidebar, tabbar, paneHeader, prose, display, mono)) {
         section.appendChild(buildFontLine(
             surface = surface,
+            showSize = surface.id !in spec.fontSizeHidden,
             shownFamily = { surface.shownFamily() },
             shownSize = { surface.shownSize() },
             onPickFamily = { key ->
@@ -600,6 +618,9 @@ private fun buildFontsSection(spec: SettingsSidebarSpec): HTMLElement {
  * @param shownFamily the key the button names: the stored pick, or the font
  *   painted without one. A key no list offers (a font since uninstalled) is
  *   still named.
+ * @param showSize whether the line has a size stepper; `false` for a surface
+ *   in [SettingsSidebarSpec.fontSizeHidden], whose font button then takes the
+ *   stepper's room too.
  * @param shownSize the size the stepper shows, likewise.
  * @param onPickFamily called with a picked entry's key.
  * @param onPickSize called with the stepped-to size.
@@ -608,6 +629,7 @@ private fun buildFontsSection(spec: SettingsSidebarSpec): HTMLElement {
  */
 private fun buildFontLine(
     surface: FontSurface,
+    showSize: Boolean,
     shownFamily: () -> String,
     shownSize: () -> Int,
     onPickFamily: (String) -> Unit,
@@ -660,7 +682,7 @@ private fun buildFontLine(
     stepper.appendChild(minus)
     stepper.appendChild(sizeLabel)
     stepper.appendChild(plus)
-    line.appendChild(stepper)
+    if (showSize) line.appendChild(stepper) else line.classList.add("dt-font-line-nosize")
 
     val sizes = surface.sizes.sorted()
     fun step(direction: Int) {
