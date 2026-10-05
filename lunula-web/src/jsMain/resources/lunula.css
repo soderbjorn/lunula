@@ -4888,6 +4888,10 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     align-items: center;
     gap: 8px;
 }
+.dt-font-line-nosize .dt-font-picker-button {
+    /* No size stepper on this line: the font button takes its room. */
+    grid-column: 2 / 4;
+}
 .dt-font-line-name {
     font-size: 12px;
     color: var(--t-text-dim, #9a9a9a);
