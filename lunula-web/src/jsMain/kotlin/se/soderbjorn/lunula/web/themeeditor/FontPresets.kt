@@ -14,9 +14,8 @@
  * Besides the presets, the font lists offer every family installed on the
  * machine (Electron only; [loadLocalFontFamilies]), persisted as a
  * [localFontKey]. A row shows presets and installed families as one
- * alphabetical list ([fontRowChoices]); the legacy `system` / `systemProp`
- * presets still resolve for users who picked them but are no longer offered
- * ([legacySystemFontKeys]).
+ * alphabetical list ([fontRowChoices]); the `system` / `systemProp` presets
+ * are listed under the name of the font they paint ([systemFontName]).
  *
  * Each preset declares a [FontPreset.kind]: `Mono` for fixed-width
  * presets (terminals, code panes) and `Proportional` for prose presets
@@ -84,9 +83,8 @@ data class FontPreset(
  * other font row lists all of them (see [fontRowChoices]).
  *
  * The `system` mono and `systemProp` proportional stacks are the fallbacks
- * when no key is persisted for the corresponding kind; their presets are kept
- * so a stored pick of them still resolves, but no row offers them
- * ([legacySystemFontKeys]).
+ * when no key is persisted for the corresponding kind; the lists name them
+ * for the font they paint ([systemFontName]).
  */
 val fontPresets: List<FontPreset> = listOf(
     // ── Monospaced (terminals, code panes) ──────────────────────────
@@ -167,11 +165,33 @@ fun offeredFontKinds(kind: FontKind): Set<FontKind> =
     if (kind == FontKind.Mono) setOf(FontKind.Mono) else FontKind.entries.toSet()
 
 /**
- * The keys of the two legacy "system" presets (`system`, `systemProp`). They
- * still resolve — a user who picked one keeps that face — but no font row
- * offers them any more: "System Default" said nothing about what it painted.
+ * The keys of the two system-font presets (`system`, `systemProp`). Their
+ * stacks start with the CSS keywords for the platform's own UI and monospaced
+ * fonts (`system-ui`, `ui-monospace`) — the only way a page reaches them, since
+ * macOS hides its system fonts from the installed-font list. The lists name
+ * them for what they paint ([systemFontName]): "SF Pro" / "SF Mono" on a Mac.
  */
-val legacySystemFontKeys: Set<String> = setOf("system", "systemProp")
+val systemFontKeys: Set<String> = setOf("system", "systemProp")
+
+/**
+ * The name of the font a system preset paints on this platform: SF Pro / SF
+ * Mono on macOS, Segoe UI / Consolas on Windows, else a plain description.
+ *
+ * @param key `system` (monospaced) or `systemProp` (proportional).
+ * @param platform `navigator.platform`, passed for tests.
+ */
+fun systemFontName(key: String, platform: String = currentPlatform()): String {
+    val mono = key == "system"
+    return when {
+        platform.startsWith("Mac") || platform.startsWith("iP") -> if (mono) "SF Mono" else "SF Pro"
+        platform.startsWith("Win") -> if (mono) "Consolas" else "Segoe UI"
+        else -> if (mono) "System monospace" else "System UI font"
+    }
+}
+
+/** `navigator.platform`, or `""` where there is none. */
+private fun currentPlatform(): String =
+    (window.navigator.asDynamic().platform as? String).orEmpty()
 
 /**
  * One entry of a Settings sidebar font list: a preset or an installed family.
@@ -186,8 +206,8 @@ data class FontChoice(val key: String, val label: String, val cssStack: String)
 /**
  * The fonts one Settings sidebar font row lists: one alphabetical list,
  * whatever their source. It holds the [presets] that are [available] and of
- * an offered kind ([offeredFontKinds]) — never the [legacySystemFontKeys] —
- * plus every installed family in [localFamilies] no listed preset already
+ * an offered kind ([offeredFontKinds]) — the system presets named for what
+ * they paint ([systemFontName]) — plus every installed family in [localFamilies] no listed preset already
  * names (the Monospaced row only takes [LocalFontFamily.isMono] ones). A
  * preset wins over the same installed family, so a stored preset key keeps
  * matching its entry.
@@ -200,6 +220,7 @@ data class FontChoice(val key: String, val label: String, val cssStack: String)
  * @param available preset keys usable on this page ([detectInstalledFonts]).
  * @param localFamilies the machine's installed families ([localFontFamilies]),
  *   empty where they can't be listed.
+ * @param platform `navigator.platform`, for the system presets' names.
  * @return the entries, sorted case-insensitively by [FontChoice.label].
  */
 fun fontRowChoices(
@@ -207,32 +228,44 @@ fun fontRowChoices(
     presets: List<FontPreset>,
     available: Set<String>,
     localFamilies: List<LocalFontFamily>,
+    platform: String = currentPlatform(),
 ): List<FontChoice> {
     val kinds = offeredFontKinds(kind)
-    val offered = presets.filter {
-        it.kind in kinds && it.key in available && it.key !in legacySystemFontKeys
+    val offered = presets.filter { it.kind in kinds && it.key in available }
+    val systemNames = offered.filter { it.key in systemFontKeys }
+        .map { normalizeFamilyName(systemFontName(it.key, platform)) }.toSet()
+    // A system preset named "SF Pro" stands in for the installed-only SF Pro
+    // preset, and one named "Segoe UI" for an installed Segoe UI.
+    val kept = offered.filter {
+        it.key in systemFontKeys || normalizeFamilyName(it.displayName) !in systemNames
     }
-    val presetFamilies = offered.flatMap {
-        listOfNotNull(it.detectFamily, primaryFamilyOf(it.cssStack), it.displayName)
+    val presetFamilies = kept.flatMap {
+        if (it.key in systemFontKeys) listOf(systemFontName(it.key, platform))
+        else listOfNotNull(it.detectFamily, primaryFamilyOf(it.cssStack), it.displayName)
     }.map(::normalizeFamilyName).toSet()
     val locals = localFamilies
         .filter { kind != FontKind.Mono || it.isMono }
         .filter { normalizeFamilyName(it.family) !in presetFamilies }
         .map { FontChoice(localFontKey(it.family), it.family, localFontStack(it.family, it.isMono)) }
-    return (offered.map { FontChoice(it.key, it.displayName, it.cssStack) } + locals)
+    val presetChoices = kept.map {
+        FontChoice(it.key, if (it.key in systemFontKeys) systemFontName(it.key, platform) else it.displayName, it.cssStack)
+    }
+    return (presetChoices + locals)
         .distinctBy { it.key }
         .sortedBy { it.label.lowercase() }
 }
 
 /**
  * The name to show for a persisted font key: the preset's
- * [FontPreset.displayName], an installed family's name, or the key itself
+ * [FontPreset.displayName] (a system preset's [systemFontName]), an installed
+ * family's name, or the key itself
  * for one this build doesn't know.
  *
  * Called by the Settings sidebar's font picker for its button label.
  */
 fun fontLabelFor(key: String): String =
     localFamilyOf(key)
+        ?: (if (key in systemFontKeys) systemFontName(key) else null)
         ?: allFontPresets().firstOrNull { it.key == key }?.displayName
         ?: key
 

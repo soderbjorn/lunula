@@ -6,15 +6,12 @@
  *  1. Custom title bar On/Off (Electron only).
  *  2. Corner roundness + Selection + Surfaces + Spacing — the shell's
  *     shape, its selection language, Depth vs Flat surfaces, and its density.
- *  3. Sidebar font face + size pill rows.
- *  4. Tab bar font face + size pill rows.
- *  5. Window title font face + size pill rows.
- *  6. Monospaced (main-content) font face + size pill rows.
- *  7. Proportional (main-content) font face + size pill rows.
- *  8. Display (main-content headings) font face + size pill rows.
+ *  3. Fonts — one line per surface (Sidebar, Tab bar, Window title, Text,
+ *     Headings, Code): the font actually painted there, opening a searchable
+ *     list of every usable font, and a − / + size stepper.
  *
  * Shape before type, deliberately: roundness and spacing change what the
- * shell IS shaped like, where every font row changes what it is lettered in.
+ * shell IS shaped like, where every font line changes what it is lettered in.
  *
  * Note what is NOT here: colour. Corner roundness and spacing are user
  * preferences that must survive a theme change — a user who likes square
@@ -42,6 +39,7 @@ package se.soderbjorn.lunula.web.settings
 import kotlinx.browser.document
 import kotlinx.browser.window
 import org.w3c.dom.HTMLElement
+import org.w3c.dom.HTMLButtonElement
 import org.w3c.dom.HTMLInputElement
 import org.w3c.dom.events.Event
 import org.w3c.dom.events.KeyboardEvent
@@ -90,17 +88,17 @@ import se.soderbjorn.lunula.web.themeeditor.resolveProportionalFontFamilyCss
  * @property onOpenThemeManager    invoked by the "Open theme manager" button
  *   inside section 1. Hosts typically call their existing theme-manager
  *   toggle; the SettingsSidebar deliberately does not own that flow.
- * @property mainSizePresets       size pill values for the Monospaced and
- *   Proportional sections.
- * @property sidebarSizePresets    size pill values for the Sidebar and
- *   Tab bar sections (chrome typically uses a tighter range).
- * @property sidebarSizeDefault    size to highlight in the Sidebar and Tab
- *   bar rows when the host getter returns null (i.e. the user has not
- *   explicitly picked one). 13 matches the toolkit chrome's CSS default
- *   (`.dt-app-frame { font-size: 13px }`).
- * @property mainSizeDefault       size to highlight in the Monospaced and
- *   Proportional rows when the host getter returns null. Apps whose main
- *   pane content uses a different intrinsic size may pass their own.
+ * @property mainSizePresets       sizes the Text, Headings and Code lines
+ *   step through.
+ * @property sidebarSizePresets    sizes the Sidebar, Tab bar and Window
+ *   title lines step through (chrome typically uses a tighter range).
+ * @property sidebarSizeDefault    size the Sidebar line shows when the host
+ *   getter returns null (i.e. the user has not explicitly picked one); the
+ *   Tab bar line follows the Sidebar's. 13 matches the toolkit chrome's CSS
+ *   default (`.dt-app-frame { font-size: 13px }`).
+ * @property mainSizeDefault       size the Text line shows when the host
+ *   getter returns null. Apps whose main pane content uses a
+ *   different intrinsic size may pass their own.
  */
 data class SettingsSidebarSpec(
     val host: ThemeManagerHost,
@@ -111,13 +109,22 @@ data class SettingsSidebarSpec(
     val sidebarSizeDefault: Int = 13,
     val mainSizeDefault: Int = 14,
     /**
+     * Size the Window title line shows when the host stores none. 11 matches
+     * `lunula.css`'s `--dt-pane-title-size` fallback; an app with a chrome
+     * size default passes that, since it reaches the window titles too.
+     */
+    val paneHeaderSizeDefault: Int = 11,
+    /** Size the Code line shows when the host stores none (the app's mono default). */
+    val monoSizeDefault: Int = mainSizeDefault,
+    /** Size the Headings line shows when the host stores none (falls to prose's). */
+    val displaySizeDefault: Int = mainSizeDefault,
+    /**
      * Effective font-preset key applied to the CHROME surfaces (sidebar / tab
      * bar / window title) when the user has picked none — i.e. a deployment
      * brand font, resolved the same way [se.soderbjorn.lunula.web.shell.AppShellSpec.defaultChromeFontFamily]
-     * is. Returns null on an unbranded instance. The chrome font rows highlight
-     * this pill (falling back to `systemProp`) when there is no explicit user
-     * pick, so the ringed option matches the font actually painted rather than
-     * misleadingly showing "System Default" while a brand font is on screen.
+     * is. Returns null on an unbranded instance. The chrome font lines name
+     * this font (falling back to `systemProp`) when there is no explicit user
+     * pick, so the line names the font actually painted.
      */
     val chromeDefaultKey: () -> String? = { null },
     /** Effective proportional (prose) default key when the user picked none, or null. */
@@ -129,8 +136,9 @@ data class SettingsSidebarSpec(
      *
      * Unlike the three above, this one has no sibling to fall through to — a
      * proportional brand font must not letter a terminal — so it is null unless
-     * the app names a mono face of its own. Null rings "System Default", which is
-     * what `lunula.css`'s `var(--dt-font-mono, ui-monospace, …)` chain paints.
+     * the app names a mono face of its own. Null names the `system` preset (SF
+     * Mono on a Mac), which is what `lunula.css`'s `var(--dt-font-mono,
+     * ui-monospace, …)` chain paints.
      */
     val monoDefaultKey: () -> String? = { null },
     /**
@@ -323,8 +331,8 @@ fun buildSettingsSidebar(spec: SettingsSidebarSpec): HTMLElement {
 /**
  * Mounts the Settings panel content into [target].
  *
- * Each section is built once per render; pill rows re-render in place
- * after a click so the selected state updates without rebuilding the
+ * Each section is built once per render; pill rows and font lines
+ * re-render in place after a click so the selected state updates without rebuilding the
  * whole panel.
  */
 private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
@@ -425,143 +433,8 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
         },
     ))
 
-    // ── Sidebar font ────────────────────────────────────────────────
-    body.appendChild(buildFontFaceSection(
-        title = "Sidebar font",
-        hint = "Used by the topbar and sidebars.",
-        kind = FontKind.Proportional,
-        currentKey = { spec.host.sidebarFontFamily },
-        appDefaultKey = { spec.chromeDefaultKey() },
-        onPick = { key ->
-            spec.host.setSidebarFontFamily(key)
-            applySidebarFontFamily(key)
-        },
-    ))
-    body.appendChild(buildPxChoiceSection(
-        title = "Sidebar size",
-        sizes = spec.sidebarSizePresets,
-        defaultSize = spec.sidebarSizeDefault,
-        currentSize = { spec.host.sidebarFontSizePx },
-        onPick = { px ->
-            spec.host.setSidebarFontSizePx(px)
-            applySidebarFontSizePx(px)
-        },
-    ))
-
-    // ── Tab bar font ────────────────────────────────────────────────
-    body.appendChild(buildFontFaceSection(
-        title = "Tab bar font",
-        hint = "Used by the tab strip (falls back to Sidebar when unset).",
-        kind = FontKind.Proportional,
-        currentKey = { spec.host.tabbarFontFamily },
-        appDefaultKey = { spec.chromeDefaultKey() },
-        onPick = { key ->
-            spec.host.setTabbarFontFamily(key)
-            applyTabbarFontFamily(key)
-        },
-    ))
-    body.appendChild(buildPxChoiceSection(
-        title = "Tab bar size",
-        sizes = spec.sidebarSizePresets,
-        defaultSize = spec.sidebarSizeDefault,
-        currentSize = { spec.host.tabbarFontSizePx },
-        onPick = { px ->
-            spec.host.setTabbarFontSizePx(px)
-            applyTabbarFontSizePx(px)
-        },
-    ))
-
-    // ── Window title font ───────────────────────────────────────────
-    body.appendChild(buildFontFaceSection(
-        title = "Window title font",
-        hint = "Used by each window's title bar (falls back to Sidebar when unset).",
-        kind = FontKind.Proportional,
-        currentKey = { spec.host.paneHeaderFontFamily },
-        appDefaultKey = { spec.chromeDefaultKey() },
-        onPick = { key ->
-            spec.host.setPaneHeaderFontFamily(key)
-            applyPaneHeaderFontFamily(key)
-        },
-    ))
-    body.appendChild(buildPxChoiceSection(
-        title = "Window title size",
-        sizes = spec.sidebarSizePresets,
-        defaultSize = spec.sidebarSizeDefault,
-        currentSize = { spec.host.paneHeaderFontSizePx },
-        onPick = { px ->
-            spec.host.setPaneHeaderFontSizePx(px)
-            applyPaneHeaderFontSizePx(px)
-        },
-    ))
-
-    // ── Monospaced font (main content — terminals, code) ────────────
-    body.appendChild(buildFontFaceSection(
-        title = "Monospaced font",
-        hint = "Used by terminals and code panes.",
-        kind = FontKind.Mono,
-        currentKey = { spec.host.monoFontFamily },
-        appDefaultKey = { spec.monoDefaultKey() },
-        onPick = { key ->
-            spec.host.setMonoFontFamily(key)
-            applyMonoFontFamily(key)
-        },
-    ))
-    body.appendChild(buildPxChoiceSection(
-        title = "Monospaced size",
-        sizes = spec.mainSizePresets,
-        defaultSize = spec.mainSizeDefault,
-        currentSize = { spec.host.monoFontSizePx },
-        onPick = { px ->
-            spec.host.setMonoFontSizePx(px)
-            applyMonoFontSizePx(px)
-        },
-    ))
-
-    // ── Proportional font (main content — prose) ────────────────────
-    body.appendChild(buildFontFaceSection(
-        title = "Proportional font",
-        hint = "Used by prose / note content.",
-        kind = FontKind.Proportional,
-        currentKey = { spec.host.proportionalFontFamily },
-        appDefaultKey = { spec.proseDefaultKey() },
-        onPick = { key ->
-            spec.host.setProportionalFontFamily(key)
-            applyProportionalFontFamily(key)
-        },
-    ))
-    body.appendChild(buildPxChoiceSection(
-        title = "Proportional size",
-        sizes = spec.mainSizePresets,
-        defaultSize = spec.mainSizeDefault,
-        currentSize = { spec.host.proportionalFontSizePx },
-        onPick = { px ->
-            spec.host.setProportionalFontSizePx(px)
-            applyProportionalFontSizePx(px)
-        },
-    ))
-
-    // ── Display font (main content — headings) ──────────────────────
-    body.appendChild(buildFontFaceSection(
-        title = "Display font",
-        hint = "Used by titles and headings (falls back to Proportional when unset).",
-        kind = FontKind.Proportional,
-        currentKey = { spec.host.displayFontFamily },
-        appDefaultKey = { spec.displayDefaultKey() },
-        onPick = { key ->
-            spec.host.setDisplayFontFamily(key)
-            applyDisplayFontFamily(key)
-        },
-    ))
-    body.appendChild(buildPxChoiceSection(
-        title = "Display size",
-        sizes = spec.mainSizePresets,
-        defaultSize = spec.mainSizeDefault,
-        currentSize = { spec.host.displayFontSizePx },
-        onPick = { px ->
-            spec.host.setDisplayFontSizePx(px)
-            applyDisplayFontSizePx(px)
-        },
-    ))
+    // ── Fonts: one line per surface — its font and its size ─────────
+    body.appendChild(buildFontsSection(spec))
 
     target.appendChild(panel)
 }
@@ -589,38 +462,177 @@ private fun makeSection(title: String, hint: String? = null): Section {
 }
 
 /**
- * Builds one font section: a button showing the surface's font, opening a
- * searchable list of every font the row offers — presets and the machine's
- * installed families alike, alphabetically ([fontRowChoices]); each entry is
- * drawn in its own face. Opening one section's list closes any other.
+ * One surface's font settings, as the Fonts section lists them: what the host
+ * stores for it and what is painted when it stores nothing.
  *
- * @param kind the section's primary kind: [FontKind.Mono] lists monospaced
- *   faces only, every other kind lists them all (see [offeredFontKinds]).
- * @param currentKey reader for the user's stored key (`null` when unset). A
- *   stored legacy key ([legacySystemFontKeys]) or one for an uninstalled
- *   family still shows on the button, though the list no longer offers it.
- * @param onPick called with the picked entry's key.
- * @param appDefaultKey the key the app applies to this surface when the user
- *   has picked none (e.g. a brand font); its name shows on the button then,
- *   else "Default".
+ * @property label   the surface's name on its line ("Sidebar", "Code", …).
+ * @property tooltip what the surface letters, shown on hover.
+ * @property kind    [FontKind.Mono] for the code surface (monospaced fonts only).
+ * @property family  the user's stored family key, `null` when unset.
+ * @property setFamily the host setter plus the matching `apply…FontFamily`.
+ * @property size    the user's stored size, `null` when unset.
+ * @property setSize the host setter plus the matching `apply…FontSizePx`.
+ * @property sizes   the sizes the stepper walks through, ascending.
  */
-private fun buildFontFaceSection(
-    title: String,
-    hint: String,
-    kind: FontKind,
-    currentKey: () -> String?,
-    onPick: (String?) -> Unit,
-    appDefaultKey: () -> String? = { null },
+private class FontSurface(
+    val label: String,
+    val tooltip: String,
+    val kind: FontKind,
+    val family: () -> String?,
+    val setFamily: (String) -> Unit,
+    val size: () -> Int?,
+    val setSize: (Int) -> Unit,
+    val sizes: List<Int>,
+) {
+    /** The font painted when nothing is stored; set once every surface exists. */
+    var paintedFamily: () -> String = { "systemProp" }
+    /** The size painted when nothing is stored. */
+    var paintedSize: () -> Int = { 13 }
+}
+
+/**
+ * Builds the Fonts section: one line per surface — Sidebar, Tab bar, Window
+ * title, Text, Headings, Code — each naming the font and size actually painted
+ * there and changing either in place. The font button opens a searchable list
+ * of every font ([buildFontPicker]); the size is a − / + stepper.
+ *
+ * What a line shows when the user has stored nothing follows the same ladder
+ * `AppShellMount.applyHostFontVars` and `lunula.css` paint with: the app's
+ * default for the surface (a brand font), else the surface it falls back to
+ * (Tab bar and Window title → Sidebar, Headings → Text), else the system font
+ * (`systemProp` / `system`, named for what they paint — [systemFontName]). So the
+ * button always names a real font, never "Default". A pick updates every line
+ * at once, since a line that falls back shows the font it falls back to.
+ *
+ * Called by [renderSettingsBody].
+ */
+private fun buildFontsSection(spec: SettingsSidebarSpec): HTMLElement {
+    val host = spec.host
+    val sidebar = FontSurface("Sidebar", "The topbar and the sidebars.", FontKind.Proportional,
+        { host.sidebarFontFamily }, { host.setSidebarFontFamily(it); applySidebarFontFamily(it) },
+        { host.sidebarFontSizePx }, { host.setSidebarFontSizePx(it); applySidebarFontSizePx(it) },
+        spec.sidebarSizePresets)
+    val tabbar = FontSurface("Tab bar", "The tab strip.", FontKind.Proportional,
+        { host.tabbarFontFamily }, { host.setTabbarFontFamily(it); applyTabbarFontFamily(it) },
+        { host.tabbarFontSizePx }, { host.setTabbarFontSizePx(it); applyTabbarFontSizePx(it) },
+        spec.sidebarSizePresets)
+    val paneHeader = FontSurface("Window title", "Each window's title bar.", FontKind.Proportional,
+        { host.paneHeaderFontFamily }, { host.setPaneHeaderFontFamily(it); applyPaneHeaderFontFamily(it) },
+        { host.paneHeaderFontSizePx }, { host.setPaneHeaderFontSizePx(it); applyPaneHeaderFontSizePx(it) },
+        spec.sidebarSizePresets)
+    val prose = FontSurface("Text", "Prose and note content.", FontKind.Proportional,
+        { host.proportionalFontFamily }, { host.setProportionalFontFamily(it); applyProportionalFontFamily(it) },
+        { host.proportionalFontSizePx }, { host.setProportionalFontSizePx(it); applyProportionalFontSizePx(it) },
+        spec.mainSizePresets)
+    val display = FontSurface("Headings", "Titles and headings.", FontKind.Proportional,
+        { host.displayFontFamily }, { host.setDisplayFontFamily(it); applyDisplayFontFamily(it) },
+        { host.displayFontSizePx }, { host.setDisplayFontSizePx(it); applyDisplayFontSizePx(it) },
+        spec.mainSizePresets)
+    val mono = FontSurface("Code", "Terminals, code panes and code in text.", FontKind.Mono,
+        { host.monoFontFamily }, { host.setMonoFontFamily(it); applyMonoFontFamily(it) },
+        { host.monoFontSizePx }, { host.setMonoFontSizePx(it); applyMonoFontSizePx(it) },
+        spec.mainSizePresets)
+
+    // A pick is shown before an async host setter has stored it (termtastic's
+    // setters run through `launch { … }`), so every line reads these first.
+    val pickedFamily = mutableMapOf<FontSurface, String>()
+    val pickedSize = mutableMapOf<FontSurface, Int>()
+    fun FontSurface.familyNow(): String? = pickedFamily[this] ?: family()?.ifEmpty { null }
+    fun FontSurface.sizeNow(): Int? = pickedSize[this] ?: size()
+    fun FontSurface.shownFamily(): String = familyNow() ?: paintedFamily()
+    fun FontSurface.shownSize(): Int = sizeNow() ?: paintedSize()
+
+    sidebar.paintedFamily = { spec.chromeDefaultKey() ?: "systemProp" }
+    tabbar.paintedFamily = { spec.chromeDefaultKey() ?: sidebar.shownFamily() }
+    paneHeader.paintedFamily = { spec.chromeDefaultKey() ?: sidebar.shownFamily() }
+    prose.paintedFamily = { spec.proseDefaultKey() ?: "systemProp" }
+    display.paintedFamily = { spec.displayDefaultKey() ?: prose.shownFamily() }
+    mono.paintedFamily = { spec.monoDefaultKey() ?: "system" }
+    sidebar.paintedSize = { spec.sidebarSizeDefault }
+    tabbar.paintedSize = { sidebar.shownSize() }
+    paneHeader.paintedSize = { spec.paneHeaderSizeDefault }
+    prose.paintedSize = { spec.mainSizeDefault }
+    display.paintedSize = { spec.displaySizeDefault }
+    mono.paintedSize = { spec.monoSizeDefault }
+
+    val section = document.createElement("div") as HTMLElement
+    section.className = "dt-settings-section dt-fonts-section"
+    val label = document.createElement("div") as HTMLElement
+    label.className = "dt-settings-label"
+    label.textContent = "Fonts"
+    section.appendChild(label)
+
+    val refreshers = mutableListOf<() -> Unit>()
+    fun refreshAll() = refreshers.forEach { it() }
+    for (surface in listOf(sidebar, tabbar, paneHeader, prose, display, mono)) {
+        section.appendChild(buildFontLine(
+            surface = surface,
+            shownFamily = { surface.shownFamily() },
+            shownSize = { surface.shownSize() },
+            onPickFamily = { key ->
+                pickedFamily[surface] = key
+                surface.setFamily(key)
+                refreshAll()
+            },
+            onPickSize = { px ->
+                pickedSize[surface] = px
+                surface.setSize(px)
+                refreshAll()
+            },
+            registerRefresh = { refreshers.add(it) },
+        ))
+    }
+    return section
+}
+
+/**
+ * Builds one line of the Fonts section: the surface's name, a button naming
+ * its font (drawn in it) and a − / + size stepper; the button opens a
+ * searchable list of every font the surface takes, below the line. Opening
+ * one line's list closes any other.
+ *
+ * The list holds presets and the machine's installed families alike,
+ * alphabetically ([fontRowChoices]), each drawn in its own face; the
+ * Code line lists monospaced faces only.
+ *
+ * Called by [buildFontsSection] for each surface.
+ *
+ * @param shownFamily the key the button names: the stored pick, or the font
+ *   painted without one. A key no list offers (a font since uninstalled) is
+ *   still named.
+ * @param shownSize the size the stepper shows, likewise.
+ * @param onPickFamily called with a picked entry's key.
+ * @param onPickSize called with the stepped-to size.
+ * @param registerRefresh hands over this line's repaint, run after any pick
+ *   (a line that falls back to another shows that line's font).
+ */
+private fun buildFontLine(
+    surface: FontSurface,
+    shownFamily: () -> String,
+    shownSize: () -> Int,
+    onPickFamily: (String) -> Unit,
+    onPickSize: (Int) -> Unit,
+    registerRefresh: (() -> Unit) -> Unit,
 ): HTMLElement {
-    val section = makeSection(title, hint)
-    val row = section.row
-    row.classList.add("dt-font-picker")
-    var selectedKey: String? = currentKey()?.ifEmpty { null } ?: appDefaultKey()
+    val kind = surface.kind
     // Start listing the installed families now, so the list is whole when opened.
     loadLocalFontFamilies {}
 
+    val wrap = document.createElement("div") as HTMLElement
+    wrap.className = "dt-font-picker"
+    val line = document.createElement("div") as HTMLElement
+    line.className = "dt-font-line"
+    line.title = surface.tooltip
+    wrap.appendChild(line)
+
+    val name = document.createElement("div") as HTMLElement
+    name.className = "dt-font-line-name"
+    name.textContent = surface.label
+    line.appendChild(name)
+
     val button = document.createElement("button") as HTMLElement
     button.setAttribute("type", "button")
+    button.setAttribute("aria-label", "${surface.label} font")
     button.className = "dt-settings-choice-btn dt-font-picker-button"
     val buttonLabel = document.createElement("span") as HTMLElement
     buttonLabel.className = "dt-font-picker-label"
@@ -629,18 +641,50 @@ private fun buildFontFaceSection(
     chevron.textContent = "▾"
     button.appendChild(buttonLabel)
     button.appendChild(chevron)
-    row.appendChild(button)
+    line.appendChild(button)
 
-    fun showSelected() {
-        val key = selectedKey
-        buttonLabel.textContent = if (key == null) "Default" else fontLabelFor(key)
-        button.style.fontFamily = when {
-            key == null -> ""
-            kind == FontKind.Mono -> resolveFontFamilyCss(key)
-            else -> resolveProportionalFontFamilyCss(key)
-        }
+    val stepper = document.createElement("div") as HTMLElement
+    stepper.className = "dt-font-size"
+    val minus = document.createElement("button") as HTMLButtonElement
+    minus.type = "button"
+    minus.className = "dt-font-size-step"
+    minus.textContent = "−"
+    minus.setAttribute("aria-label", "Smaller ${surface.label} font")
+    val sizeLabel = document.createElement("span") as HTMLElement
+    sizeLabel.className = "dt-font-size-value"
+    val plus = document.createElement("button") as HTMLButtonElement
+    plus.type = "button"
+    plus.className = "dt-font-size-step"
+    plus.textContent = "+"
+    plus.setAttribute("aria-label", "Larger ${surface.label} font")
+    stepper.appendChild(minus)
+    stepper.appendChild(sizeLabel)
+    stepper.appendChild(plus)
+    line.appendChild(stepper)
+
+    val sizes = surface.sizes.sorted()
+    fun step(direction: Int) {
+        val now = shownSize()
+        val next = if (direction > 0) sizes.firstOrNull { it > now } else sizes.lastOrNull { it < now }
+        if (next != null) onPickSize(next)
     }
-    showSelected()
+    minus.addEventListener("click", { step(-1) })
+    plus.addEventListener("click", { step(+1) })
+
+    fun stackOf(key: String): String =
+        if (kind == FontKind.Mono) resolveFontFamilyCss(key) else resolveProportionalFontFamilyCss(key)
+
+    fun repaint() {
+        val key = shownFamily()
+        buttonLabel.textContent = fontLabelFor(key)
+        button.style.fontFamily = stackOf(key)
+        val px = shownSize()
+        sizeLabel.textContent = "$px"
+        minus.disabled = sizes.none { it < px }
+        plus.disabled = sizes.none { it > px }
+    }
+    registerRefresh(::repaint)
+    repaint()
 
     val panel = document.createElement("div") as HTMLElement
     panel.className = "dt-font-picker-panel"
@@ -649,37 +693,36 @@ private fun buildFontFaceSection(
     search.type = "search"
     search.className = "dt-font-picker-search"
     search.placeholder = "Search fonts"
-    search.setAttribute("aria-label", "Search $title")
+    search.setAttribute("aria-label", "Search ${surface.label} fonts")
     val list = document.createElement("div") as HTMLElement
     list.className = "dt-font-picker-list"
     list.setAttribute("role", "listbox")
     panel.appendChild(search)
     panel.appendChild(list)
-    row.appendChild(panel)
+    wrap.appendChild(panel)
 
     var choices: List<FontChoice> = emptyList()
 
     fun close() {
         panel.hidden = true
-        row.classList.remove("dt-open")
+        wrap.classList.remove("dt-open")
     }
 
     fun pick(choice: FontChoice) {
-        selectedKey = choice.key
-        showSelected()
         close()
-        onPick(choice.key)
+        onPickFamily(choice.key)
     }
 
     fun renderList() {
         val query = search.value.trim().lowercase()
+        val selected = shownFamily()
         list.innerHTML = ""
         val shown = choices.filter { query.isEmpty() || query in it.label.lowercase() }
         for (choice in shown) {
             val item = document.createElement("button") as HTMLElement
             item.setAttribute("type", "button")
             item.setAttribute("role", "option")
-            item.className = "dt-font-picker-item" + if (choice.key == selectedKey) " dt-selected" else ""
+            item.className = "dt-font-picker-item" + if (choice.key == selected) " dt-selected" else ""
             item.textContent = choice.label
             item.style.fontFamily = choice.cssStack
             item.addEventListener("click", { pick(choice) })
@@ -707,7 +750,7 @@ private fun buildFontFaceSection(
             (other.querySelector(".dt-font-picker-panel") as? HTMLElement)?.hidden = true
         }
         panel.hidden = false
-        row.classList.add("dt-open")
+        wrap.classList.add("dt-open")
         search.value = ""
         refreshChoices()
         // The installed families arrive asynchronously the first time.
@@ -727,7 +770,7 @@ private fun buildFontFaceSection(
             }
         }
     })
-    return section.element
+    return wrap
 }
 
 /**
