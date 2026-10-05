@@ -42,6 +42,7 @@ package se.soderbjorn.lunula.web.settings
 import kotlinx.browser.document
 import kotlinx.browser.window
 import org.w3c.dom.HTMLElement
+import org.w3c.dom.HTMLInputElement
 import org.w3c.dom.events.Event
 import org.w3c.dom.events.KeyboardEvent
 import se.soderbjorn.lunula.web.applyMonoFontFamily
@@ -70,7 +71,13 @@ import se.soderbjorn.lunula.web.themeeditor.FontKind
 import se.soderbjorn.lunula.web.themeeditor.ThemeManagerHost
 import se.soderbjorn.lunula.web.themeeditor.detectInstalledFonts
 import se.soderbjorn.lunula.web.themeeditor.allFontPresets
-import se.soderbjorn.lunula.web.themeeditor.fontRowPresets
+import se.soderbjorn.lunula.web.themeeditor.FontChoice
+import se.soderbjorn.lunula.web.themeeditor.fontLabelFor
+import se.soderbjorn.lunula.web.themeeditor.fontRowChoices
+import se.soderbjorn.lunula.web.themeeditor.loadLocalFontFamilies
+import se.soderbjorn.lunula.web.themeeditor.localFontFamilies
+import se.soderbjorn.lunula.web.themeeditor.resolveFontFamilyCss
+import se.soderbjorn.lunula.web.themeeditor.resolveProportionalFontFamilyCss
 
 /**
  * Spec passed to [buildSettingsSidebar].
@@ -582,18 +589,20 @@ private fun makeSection(title: String, hint: String? = null): Section {
 }
 
 /**
- * Builds one font-face pill row.
+ * Builds one font section: a button showing the surface's font, opening a
+ * searchable list of every font the row offers — presets and the machine's
+ * installed families alike, alphabetically ([fontRowChoices]); each entry is
+ * drawn in its own face. Opening one section's list closes any other.
  *
- * @param kind the section's primary kind. Drives the system default
- *   ([FontKind.Mono] → `system`, [FontKind.Proportional] → `systemProp`)
- *   and floats presets of this kind to the front of the row.
- *   The row offers [fontRowPresets] for this kind: only monospaced faces
- *   for [FontKind.Mono], every preset otherwise.
- * @param appDefaultKey the preset key the app applies to this surface when the
- *   user has picked none (e.g. a deployment brand font). When [currentKey] is
- *   null/empty the row highlights this key — falling back to the system default
- *   — so the ringed pill matches the font actually painted, not just the user's
- *   override. Returns null when the app has no default for the surface.
+ * @param kind the section's primary kind: [FontKind.Mono] lists monospaced
+ *   faces only, every other kind lists them all (see [offeredFontKinds]).
+ * @param currentKey reader for the user's stored key (`null` when unset). A
+ *   stored legacy key ([legacySystemFontKeys]) or one for an uninstalled
+ *   family still shows on the button, though the list no longer offers it.
+ * @param onPick called with the picked entry's key.
+ * @param appDefaultKey the key the app applies to this surface when the user
+ *   has picked none (e.g. a brand font); its name shows on the button then,
+ *   else "Default".
  */
 private fun buildFontFaceSection(
     title: String,
@@ -605,51 +614,119 @@ private fun buildFontFaceSection(
 ): HTMLElement {
     val section = makeSection(title, hint)
     val row = section.row
-    val installed = detectInstalledFonts()
-    val current = currentKey()
-    // fontRowPresets puts the system default first, regardless of order in
-    // [allFontPresets], so users without a strong opinion always see a
-    // familiar label at the start of the row; then the section's primary
-    // [kind], Display faces and the rest, each in declared order.
-    //
-    // It iterates [allFontPresets] (built-ins + app-injected via
-    // [registerFontPresets]) — not just the built-ins — so a deployment's
-    // brand font appears as a pickable pill exactly like a built-in, matching
-    // how every resolver already walks the merged list. detectInstalledFonts()
-    // reports injected presets as always-available, so they pass the filter.
-    val systemKey = if (kind == FontKind.Mono) "system" else "systemProp"
-    // When the user has overridden nothing, the ringed pill is the app's default
-    // for this surface (a brand font) if it has one, else the system default —
-    // so the highlight tracks what is actually painted, not an empty override.
-    val effectiveDefaultKey = appDefaultKey() ?: systemKey
-    val sortedPresets = fontRowPresets(kind)
-    for (preset in sortedPresets) {
-        if (preset.key !in installed) continue
-        val isSelected = preset.key == current ||
-            (current.isNullOrEmpty() && preset.key == effectiveDefaultKey)
-        val btn = document.createElement("button") as HTMLElement
-        btn.setAttribute("type", "button")
-        btn.className = "dt-settings-choice-btn" + if (isSelected) " dt-selected" else ""
-        btn.textContent = preset.displayName
-        btn.style.fontFamily = preset.cssStack
-        btn.addEventListener("click", {
-            // Optimistic selection update. Hosts may persist the picked
-            // value asynchronously (e.g. termtastic's `appVm.setX` runs
-            // through `launch { … }`), in which case re-reading
-            // `currentKey()` immediately after `onPick` returns the *old*
-            // value — leaving the previous selection lit until the next
-            // click. Updating the DOM directly here makes the click
-            // visually take effect on the first click, regardless of how
-            // the host backs the setter. */
-            val rowChildren = row.children
-            for (i in 0 until rowChildren.length) {
-                (rowChildren.item(i) as? HTMLElement)?.classList?.remove("dt-selected")
-            }
-            btn.classList.add("dt-selected")
-            onPick(preset.key)
-        })
-        row.appendChild(btn)
+    row.classList.add("dt-font-picker")
+    var selectedKey: String? = currentKey()?.ifEmpty { null } ?: appDefaultKey()
+    // Start listing the installed families now, so the list is whole when opened.
+    loadLocalFontFamilies {}
+
+    val button = document.createElement("button") as HTMLElement
+    button.setAttribute("type", "button")
+    button.className = "dt-settings-choice-btn dt-font-picker-button"
+    val buttonLabel = document.createElement("span") as HTMLElement
+    buttonLabel.className = "dt-font-picker-label"
+    val chevron = document.createElement("span") as HTMLElement
+    chevron.className = "dt-font-picker-chevron"
+    chevron.textContent = "▾"
+    button.appendChild(buttonLabel)
+    button.appendChild(chevron)
+    row.appendChild(button)
+
+    fun showSelected() {
+        val key = selectedKey
+        buttonLabel.textContent = if (key == null) "Default" else fontLabelFor(key)
+        button.style.fontFamily = when {
+            key == null -> ""
+            kind == FontKind.Mono -> resolveFontFamilyCss(key)
+            else -> resolveProportionalFontFamilyCss(key)
+        }
     }
+    showSelected()
+
+    val panel = document.createElement("div") as HTMLElement
+    panel.className = "dt-font-picker-panel"
+    panel.hidden = true
+    val search = document.createElement("input") as HTMLInputElement
+    search.type = "search"
+    search.className = "dt-font-picker-search"
+    search.placeholder = "Search fonts"
+    search.setAttribute("aria-label", "Search $title")
+    val list = document.createElement("div") as HTMLElement
+    list.className = "dt-font-picker-list"
+    list.setAttribute("role", "listbox")
+    panel.appendChild(search)
+    panel.appendChild(list)
+    row.appendChild(panel)
+
+    var choices: List<FontChoice> = emptyList()
+
+    fun close() {
+        panel.hidden = true
+        row.classList.remove("dt-open")
+    }
+
+    fun pick(choice: FontChoice) {
+        selectedKey = choice.key
+        showSelected()
+        close()
+        onPick(choice.key)
+    }
+
+    fun renderList() {
+        val query = search.value.trim().lowercase()
+        list.innerHTML = ""
+        val shown = choices.filter { query.isEmpty() || query in it.label.lowercase() }
+        for (choice in shown) {
+            val item = document.createElement("button") as HTMLElement
+            item.setAttribute("type", "button")
+            item.setAttribute("role", "option")
+            item.className = "dt-font-picker-item" + if (choice.key == selectedKey) " dt-selected" else ""
+            item.textContent = choice.label
+            item.style.fontFamily = choice.cssStack
+            item.addEventListener("click", { pick(choice) })
+            list.appendChild(item)
+        }
+        if (shown.isEmpty()) {
+            val empty = document.createElement("div") as HTMLElement
+            empty.className = "dt-font-picker-empty"
+            empty.textContent = "No fonts match"
+            list.appendChild(empty)
+        }
+    }
+
+    fun refreshChoices() {
+        choices = fontRowChoices(kind, allFontPresets(), detectInstalledFonts(), localFontFamilies())
+        renderList()
+    }
+
+    button.addEventListener("click", {
+        if (!panel.hidden) { close(); return@addEventListener }
+        val open = document.querySelectorAll(".dt-font-picker.dt-open")
+        for (i in 0 until open.length) {
+            val other = open.item(i) as? HTMLElement ?: continue
+            other.classList.remove("dt-open")
+            (other.querySelector(".dt-font-picker-panel") as? HTMLElement)?.hidden = true
+        }
+        panel.hidden = false
+        row.classList.add("dt-open")
+        search.value = ""
+        refreshChoices()
+        // The installed families arrive asynchronously the first time.
+        loadLocalFontFamilies { if (!panel.hidden) refreshChoices() }
+        (list.querySelector(".dt-selected") as? HTMLElement)?.scrollIntoView(js("({ block: 'center' })"))
+        search.focus()
+    })
+    search.addEventListener("input", { renderList() })
+    search.addEventListener("keydown", { e ->
+        val key = (e as KeyboardEvent).key
+        when (key) {
+            "Escape" -> { e.preventDefault(); e.stopPropagation(); close(); button.focus() }
+            "Enter" -> {
+                e.preventDefault()
+                val query = search.value.trim().lowercase()
+                choices.firstOrNull { query.isEmpty() || query in it.label.lowercase() }?.let { pick(it) }
+            }
+        }
+    })
     return section.element
 }
 

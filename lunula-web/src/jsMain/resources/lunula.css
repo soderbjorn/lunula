@@ -4870,6 +4870,93 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     box-shadow: inset 0 0 0 1px var(--t-accent, #ff8a3d);
     font-weight: 600;
 }
+/* Font picker (SettingsSidebar `buildFontFaceSection`): a button naming the
+   surface's font, opening a searchable list of every font — presets and
+   installed families — each drawn in its own face. */
+.dt-font-picker {
+    flex-direction: column;
+    flex-wrap: nowrap;
+}
+.dt-font-picker-button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+    font-size: 13px;
+    padding: 6px 10px;
+    color: var(--t-text, #e6e6e6);
+}
+.dt-font-picker-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dt-font-picker-chevron {
+    flex: none;
+    font-family: system-ui, sans-serif;
+    color: var(--t-text-dim, #9a9a9a);
+    transition: transform 0.12s;
+}
+.dt-font-picker.dt-open .dt-font-picker-chevron {
+    transform: rotate(180deg);
+}
+.dt-font-picker-panel {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--t-border, rgba(255,255,255,0.10));
+    border-radius: 4px;
+    background: var(--t-surface, rgba(255,255,255,0.04));
+    overflow: hidden;
+}
+.dt-font-picker-panel[hidden] {
+    display: none;
+}
+.dt-font-picker-search {
+    appearance: none;
+    border: none;
+    border-bottom: 1px solid var(--t-border, rgba(255,255,255,0.10));
+    background: transparent;
+    color: var(--t-text, #e6e6e6);
+    font: inherit;
+    font-size: 12px;
+    padding: 7px 10px;
+    outline: none;
+}
+.dt-font-picker-list {
+    max-height: 260px;
+    overflow-y: auto;
+    padding: 4px 0;
+}
+.dt-font-picker-item {
+    appearance: none;
+    display: block;
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--t-text, #e6e6e6);
+    text-align: left;
+    font-size: 14px;
+    line-height: 1.3;
+    padding: 5px 10px;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dt-font-picker-item:hover {
+    background: var(--t-surface-alt, rgba(255,255,255,0.10));
+}
+.dt-font-picker-item.dt-selected {
+    color: var(--t-accent, #ff8a3d);
+    font-weight: 600;
+}
+.dt-font-picker-empty {
+    padding: 8px 10px;
+    font-size: 12px;
+    color: var(--t-text-dim, #9a9a9a);
+}
 .dt-settings-link-btn {
     appearance: none;
     background: var(--t-surface, rgba(255,255,255,0.04));
