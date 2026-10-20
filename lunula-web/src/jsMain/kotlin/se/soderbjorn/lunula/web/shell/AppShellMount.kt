@@ -1464,9 +1464,9 @@ private class ShellState(
     /**
      * Which navigation surfaces this shell draws: the resolved mode with the
      * app's [AppShellSpec.showSidebar] / [AppShellSpec.showTabStrip] opt-outs
-     * applied (LNA-22). Recomputed by [applyHostFontVars]; read by [rerender]
-     * (left sidebar), [buildTopBar] (tab strip, sidebar toggle, per-tab window
-     * list) and [setSidebarOpen].
+     * applied. Recomputed by [applyHostFontVars]; read by [rerender]
+     * (left sidebar), [buildTopBar] (tab strip, sidebar toggle) and
+     * [setSidebarOpen].
      *
      * Seeded from the spec alone, so a rerender that somehow ran before the
      * first host application would draw exactly what the app asked for.
@@ -1483,7 +1483,8 @@ private class ShellState(
     /**
      * Changes the user's navigation mode at runtime and redraws the chrome to
      * match. The entry point a settings control calls (the Appearance control
-     * itself is LNA-24); also exposed as [AppShellHandle.setNavigationMode].
+     * itself lives in the Appearance settings); also exposed as
+     * [AppShellHandle.setNavigationMode].
      *
      * Writes through the same `settingsHost ?: themeHost` ladder every other
      * appearance setting uses. With the toolkit's own host, the setter fires
@@ -2927,14 +2928,6 @@ private class ShellState(
                 isHiddenFromSidebar = t.isHiddenFromSidebar,
             )
         }
-        // With the sidebar hidden by the navigation mode, each tab's dot menu
-        // lists the tab's windows so they stay reachable (LNA-22). Left off
-        // while the sidebar is there, so the familiar menu is unchanged.
-        val windowsInMenu = !navigationLayout.showsSidebar
-        val tabWindows: ((String) -> List<TabWindowEntry>)? =
-            if (windowsInMenu) ::tabWindowEntries else null
-        val onSelectWindow: ((String, String) -> Unit)? =
-            if (windowsInMenu) ::activatePaneFromNavigation else null
         val callbacks = if (srcMode) {
             val src = spec.tabSource!!
             TabBarCallbacks(
@@ -2995,8 +2988,6 @@ private class ShellState(
                     emptyList()
                 },
                 onMoveToWorld = if (fixedStrip) null else spec.worldSource?.onMoveTab,
-                tabWindows = tabWindows,
-                onSelectWindow = onSelectWindow,
             )
         } else {
             TabBarCallbacks(
@@ -3077,8 +3068,6 @@ private class ShellState(
                 // inline × button removed, the kebab "Close" row is the
                 // only entry point so a single confirmation is enough.
                 confirmTabClose = true,
-                tabWindows = tabWindows,
-                onSelectWindow = onSelectWindow,
             )
         }
         val tabBarSpec = TabBarSpec(
@@ -3887,118 +3876,74 @@ private class ShellState(
             badge.setAttribute("aria-label", "Pane $indexValue")
             row.appendChild(badge)
         }
-        row.addEventListener("click", { activatePaneFromNavigation(tabId, paneId) })
+        row.addEventListener("click", {
+            // Clicking a docked pane's row un-minimizes it first, so the
+            // pane re-enters the layout (animating back from the dock) and
+            // can then become active just like any other row click.
+            val wasMinimized = geometryFor(tabId, paneId).isMinimized
+            if (wasMinimized) {
+                updateGeometry(tabId, paneId) { it.copy(isMinimized = false) }
+            }
+            // Switch the active tab to the clicked row's tab first. In
+            // source mode `onPaneSelect` only changes pane focus inside
+            // its tab and `buildPaneLayout` only renders the active tab,
+            // so a click on a row in a non-active tab section would
+            // otherwise appear to do nothing; in local mode `mutateLocal`
+            // owns the active-tab switch. Neither touches paneOrder —
+            // that order is owned by the user via drag-to-reorder.
+            if (spec.tabSource != null) {
+                if (tabId != viewActiveTabId()) {
+                    spec.tabSource.onSelect(tabId)
+                }
+            } else {
+                mutateLocal { it.copy(activeTabId = tabId) }
+            }
+            // Activate the clicked pane (drives the row's dt-active
+            // highlight via [activePaneForActiveTab]) and raise it to the
+            // front so clicking a sidebar row brings its pane forward —
+            // exactly like the dock-chip restore, the double-click focus,
+            // and the maximize toggle already do. Applies whether or not
+            // the pane was minimized: a plain row click on an occluded
+            // floating pane should surface it too.
+            bringPaneToFront(tabId, paneId, raise = true)
+            // Surface the pane: a maximized sibling is full-bleed and would
+            // keep covering the pane the user just picked (the post-render
+            // focus reconciliation deliberately passes autoUnmaximize=false,
+            // so nothing else clears it — the restored pane silently landed
+            // *behind* the maximized one). Under a non-Custom preset the
+            // restore re-tile clears the flag anyway; this makes Custom —
+            // and the plain row-click-while-a-sibling-is-maximized case —
+            // behave the same. See [clearMaximizedSiblings].
+            val unmaximized = clearMaximizedSiblings(tabId, paneId)
+            // Reflow once after the host-select calls so the restore FLIP
+            // plays; for source mode the host's activePaneId catches up on
+            // its snapshot round-trip and focuses the freshly-restored pane.
+            if (wasMinimized) {
+                reflowAfterMinimizeChange(tabId)
+            } else if (unmaximized) {
+                // No minimize flip to reflow for, but the cleared maximize
+                // still needs a repaint (same follow-up the maximize toggle
+                // does: rerender + geometry-changed ping).
+                rerender()
+                spec.onGeometryChanged?.invoke(tabId)
+            } else {
+                // Plain row click on an already-visible pane: neither a
+                // minimize flip nor a maximize clear rebuilt the DOM, so the
+                // zIndex bump [bringPaneToFront] just wrote to geometry state
+                // isn't reflected on screen yet. Mirror [onFloatingFocused]:
+                // push the new z straight onto the live element's `--dt-fp-z`
+                // CSS var for an instant, transition-free restack instead of a
+                // full rerender (which would rebuild every pane element and is
+                // wasteful for a pure z-order change). The host snapshot round-
+                // trip that `onPaneSelect` kicked off would eventually restack
+                // it too, but only after a network hop — this makes the raise
+                // feel immediate.
+                val z = geometryFor(tabId, paneId).zIndex
+                (main?.querySelector("[data-pane-id=\"$paneId\"]") as? HTMLElement)
+                    ?.style?.setProperty("--dt-fp-z", "$z")
+            }
+        })
         return row
-    }
-
-    /**
-     * Switches to [paneId] in [tabId] the way a navigation surface does:
-     * activates the tab if needed, un-minimizes the pane from the dock,
-     * raises it, and clears a maximized sibling that would cover it.
-     *
-     * Shared by the two places a user picks a window from a list — a click
-     * on its sidebar row ([buildPaneRow]) and a pick from its tab's dot-menu
-     * "Windows" section ([TabBarCallbacks.onSelectWindow], wired by
-     * [buildTopBar] while the navigation mode hides the sidebar) — so the
-     * two behave identically.
-     *
-     * @param tabId  the tab that owns the pane.
-     * @param paneId the pane to bring forward.
-     */
-    private fun activatePaneFromNavigation(tabId: String, paneId: String) {
-        // Clicking a docked pane's row un-minimizes it first, so the
-        // pane re-enters the layout (animating back from the dock) and
-        // can then become active just like any other row click.
-        val wasMinimized = geometryFor(tabId, paneId).isMinimized
-        if (wasMinimized) {
-            updateGeometry(tabId, paneId) { it.copy(isMinimized = false) }
-        }
-        // Switch the active tab to the clicked row's tab first. In
-        // source mode `onPaneSelect` only changes pane focus inside
-        // its tab and `buildPaneLayout` only renders the active tab,
-        // so a click on a row in a non-active tab section would
-        // otherwise appear to do nothing; in local mode `mutateLocal`
-        // owns the active-tab switch. Neither touches paneOrder —
-        // that order is owned by the user via drag-to-reorder.
-        if (spec.tabSource != null) {
-            if (tabId != viewActiveTabId()) {
-                spec.tabSource.onSelect(tabId)
-            }
-        } else {
-            mutateLocal { it.copy(activeTabId = tabId) }
-        }
-        // Activate the clicked pane (drives the row's dt-active
-        // highlight via [activePaneForActiveTab]) and raise it to the
-        // front so clicking a sidebar row brings its pane forward —
-        // exactly like the dock-chip restore, the double-click focus,
-        // and the maximize toggle already do. Applies whether or not
-        // the pane was minimized: a plain row click on an occluded
-        // floating pane should surface it too.
-        bringPaneToFront(tabId, paneId, raise = true)
-        // Surface the pane: a maximized sibling is full-bleed and would
-        // keep covering the pane the user just picked (the post-render
-        // focus reconciliation deliberately passes autoUnmaximize=false,
-        // so nothing else clears it — the restored pane silently landed
-        // *behind* the maximized one). Under a non-Custom preset the
-        // restore re-tile clears the flag anyway; this makes Custom —
-        // and the plain row-click-while-a-sibling-is-maximized case —
-        // behave the same. See [clearMaximizedSiblings].
-        val unmaximized = clearMaximizedSiblings(tabId, paneId)
-        // Reflow once after the host-select calls so the restore FLIP
-        // plays; for source mode the host's activePaneId catches up on
-        // its snapshot round-trip and focuses the freshly-restored pane.
-        if (wasMinimized) {
-            reflowAfterMinimizeChange(tabId)
-        } else if (unmaximized) {
-            // No minimize flip to reflow for, but the cleared maximize
-            // still needs a repaint (same follow-up the maximize toggle
-            // does: rerender + geometry-changed ping).
-            rerender()
-            spec.onGeometryChanged?.invoke(tabId)
-        } else {
-            // Plain row click on an already-visible pane: neither a
-            // minimize flip nor a maximize clear rebuilt the DOM, so the
-            // zIndex bump [bringPaneToFront] just wrote to geometry state
-            // isn't reflected on screen yet. Mirror [onFloatingFocused]:
-            // push the new z straight onto the live element's `--dt-fp-z`
-            // CSS var for an instant, transition-free restack instead of a
-            // full rerender (which would rebuild every pane element and is
-            // wasteful for a pure z-order change). The host snapshot round-
-            // trip that `onPaneSelect` kicked off would eventually restack
-            // it too, but only after a network hop — this makes the raise
-            // feel immediate.
-            val z = geometryFor(tabId, paneId).zIndex
-            (main?.querySelector("[data-pane-id=\"$paneId\"]") as? HTMLElement)
-                ?.style?.setProperty("--dt-fp-z", "$z")
-        }
-    }
-
-    /**
-     * The windows (panes) of [tabId] for its dot-menu "Windows" section, in
-     * the order the sidebar lists them (the controller's user-owned
-     * paneOrder, untracked panes last), with the same labels and icons.
-     *
-     * Backs [TabBarCallbacks.tabWindows], which [buildTopBar] wires only
-     * while [navigationLayout] hides the sidebar.
-     *
-     * @param tabId the tab whose windows to list.
-     * @return one entry per pane; empty when the tab has none.
-     */
-    private fun tabWindowEntries(tabId: String): List<TabWindowEntry> {
-        val orderIndex: Map<String, Int> =
-            controllerFor(tabId).paneOrder.withIndex().associate { (i, id) -> id to i }
-        val activeTab = viewActiveTabId()
-        val activePane = activePaneForActiveTab()
-        return viewPanesIn(tabId)
-            .sortedBy { orderIndex[it.id] ?: Int.MAX_VALUE }
-            .map { pane ->
-                TabWindowEntry(
-                    id = pane.id,
-                    label = spec.paneLabel(tabId, pane.id),
-                    iconHtml = spec.paneIcon(tabId, pane.id),
-                    isActive = tabId == activeTab && pane.id == activePane,
-                )
-            }
     }
 
     /**

@@ -1401,7 +1401,7 @@ interface AppShellHandle {
      * still win over the mode; when they would leave nothing to navigate
      * with, the shell shows whichever surface the app does allow.
      *
-     * Called by a settings control (the Appearance control is LNA-24) or by
+     * Called by a settings control (the Appearance settings) or by
      * an app reacting to its own settings (e.g. a `nav=` query parameter).
      * The default implementation is a no-op so hand-written fakes of this
      * interface keep compiling.

@@ -1,7 +1,7 @@
 /*
  * NavigationModeTest.kt (jsTest)
  *
- * Tests for the runtime navigation mode (Sidebar / Tab strip / Both, LNA-22):
+ * Tests for the runtime navigation mode (Sidebar / Tab strip / Both):
  *
  *  - the precedence and fallback rules in [resolveNavigationLayout] (the
  *    app's hard `showSidebar` / `showTabStrip = false` first, then the user,
@@ -10,9 +10,7 @@
  *  - a mounted shell switching modes through [AppShellHandle.setNavigationMode]
  *    without a remount: the sidebar and tab strip appear and disappear, the
  *    active tab and pane are kept, the sidebar's toggle-collapse survives a
- *    round trip, the choice is persisted, and an app's opt-out still wins;
- *  - the tab dot menu's "Windows" list, which is how windows stay reachable
- *    when the sidebar is hidden.
+ *    round trip, the choice is persisted, and an app's opt-out still wins.
  *
  * The mounted tests drive the real [mountAppShell] in source mode with an
  * in-memory [Persister] and a hand-pushed [TabSource] snapshot, the same
@@ -22,7 +20,6 @@
  *
  * @see resolveNavigationLayout
  * @see AppShellHandle.setNavigationMode
- * @see TabBarCallbacks.tabWindows
  */
 package se.soderbjorn.lunula.web.shell
 
@@ -31,8 +28,6 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.promise
 import org.w3c.dom.HTMLElement
-import org.w3c.dom.events.MouseEvent
-import org.w3c.dom.events.MouseEventInit
 import se.soderbjorn.lunula.core.AppearanceShape
 import se.soderbjorn.lunula.core.NavigationMode
 import se.soderbjorn.lunula.core.PersistKeys
@@ -109,11 +104,6 @@ private fun HTMLElement.pane(id: String): HTMLElement? =
 private fun HTMLElement.selectedTabId(): String? =
     (querySelector(".${TabBarClassNames.TAB}.${TabBarClassNames.TAB_SELECTED}") as? HTMLElement)
         ?.getAttribute("data-tab-id")
-
-/** Dispatches a bubbling click, like a user press. */
-private fun HTMLElement.clickAsUser() {
-    dispatchEvent(MouseEvent("click", MouseEventInit(bubbles = true, cancelable = true)))
-}
 
 /**
  * Mounts a fresh shell, pushes [twoTabSnapshot] and runs [body] once both
@@ -386,43 +376,6 @@ class NavigationModeTest {
                 "the sidebar comes back collapsed, as the user left it",
             )
             assertFalse(leftSidebarController.isOpen)
-        }
-    }
-
-    // ── Windows in the tab dot menu ─────────────────────────────────
-
-    /**
-     * With the sidebar hidden, each tab's dot menu lists that tab's windows,
-     * marks the focused one, and picking one switches to it — including a
-     * window in another tab.
-     */
-    @Test
-    fun theDotMenuListsTheTabsWindowsInTabStripMode() = GlobalScope.promise {
-        withShell { root, handle ->
-            // With the sidebar shown, the menu is as it always was — and this
-            // host wires no tab edits, so there is no dot menu at all.
-            assertNull(root.querySelector(".dt-tab[data-tab-id=\"t1\"] .dt-tab-menu-button"))
-
-            handle.setNavigationMode(NavigationMode.TabStrip)
-            waitFor("sidebar hidden") { root.leftSidebar() == null }
-
-            (root.querySelector(".dt-tab[data-tab-id=\"t1\"] .dt-tab-menu-button") as HTMLElement).clickAsUser()
-            val rows = document.querySelectorAll(".${TabMenuClassNames.WINDOW_ROW}")
-            assertEquals(2, rows.length)
-            val first = rows.item(0) as HTMLElement
-            val second = rows.item(1) as HTMLElement
-            assertEquals("Window p1", first.textContent)
-            assertEquals("Window p2", second.textContent)
-            assertTrue(second.classList.contains("dt-menu-selected"), "the focused window is marked")
-            assertFalse(first.classList.contains("dt-menu-selected"))
-            closeTabBarMenus()
-
-            (root.querySelector(".dt-tab[data-tab-id=\"t2\"] .dt-tab-menu-button") as HTMLElement).clickAsUser()
-            val other = document.querySelector(".${TabMenuClassNames.WINDOW_ROW}[data-pane-id=\"p3\"]") as? HTMLElement
-            assertNotNull(other, "the other tab's menu lists its own window")
-            other.clickAsUser()
-            assertNull(document.querySelector(".${TabMenuClassNames.PANEL}"), "picking a window closes the menu")
-            waitFor("switched to p3's tab") { root.pane("p3") != null }
         }
     }
 }

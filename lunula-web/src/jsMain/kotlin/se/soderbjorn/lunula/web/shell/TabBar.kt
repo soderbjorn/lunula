@@ -278,55 +278,6 @@ class TabBarCallbacks(
      * [WorldSource.onMoveTab].
      */
     val onMoveToWorld: ((tabId: String, worldId: String) -> Unit)? = null,
-    /**
-     * Lists a tab's windows (panes) for the "Windows" section of that tab's
-     * `⋮` dot menu, in the order the sidebar shows them. Queried when the
-     * menu is built and again each time it opens, so the list is never
-     * stale.
-     *
-     * The shell wires this only while the left sidebar is hidden by the
-     * navigation mode (Tab strip, LNA-22): the sidebar's tab → windows tree
-     * is otherwise the only way to reach a window that is not on screen. A
-     * tab with no windows gets no section. `null` (the default) omits the
-     * section, leaving every existing strip unchanged.
-     *
-     * Unlike every other dot-menu row this one is not an edit of the tab
-     * set, so it is offered on a fixed strip ([TabBarSpec.isFixed]) too —
-     * as the only thing in that strip's dot menu.
-     *
-     * @see onSelectWindow
-     * @see TabWindowEntry
-     */
-    val tabWindows: ((tabId: String) -> List<TabWindowEntry>)? = null,
-    /**
-     * Fires when the user picks a window from a tab's dot-menu "Windows"
-     * section — `(tabId, paneId)`. The host activates the tab (if it is not
-     * already active) and brings the pane forward, exactly as a click on
-     * the pane's sidebar row would. Required alongside [tabWindows]; when
-     * either is `null` the section is omitted.
-     */
-    val onSelectWindow: ((tabId: String, paneId: String) -> Unit)? = null,
-)
-
-/**
- * One window (pane) row in a tab's dot-menu "Windows" section.
- *
- * Built by the shell from its tab/pane model for
- * [TabBarCallbacks.tabWindows].
- *
- * @property id       the pane id, passed back through
- *   [TabBarCallbacks.onSelectWindow].
- * @property label    the window's title, as the sidebar row shows it.
- * @property iconHtml optional inline SVG for the row's leading gutter (the
- *   same icon as the pane's title bar), or `null` for none.
- * @property isActive whether this is the focused window of the active tab;
- *   painted with the menu's selected-row treatment.
- */
-data class TabWindowEntry(
-    val id: String,
-    val label: String,
-    val iconHtml: String? = null,
-    val isActive: Boolean = false,
 )
 
 /**
@@ -374,9 +325,7 @@ class TabBarSpec(
      * Selection affordances are deliberately untouched. Clicking a tab,
      * the Next/Previous chords and Cmd/Ctrl+`<digit>` all keep working —
      * a fixed strip constrains what the tab set *is*, not which member of
-     * it the user is looking at. For the same reason the dot menu's
-     * "Windows" list ([TabBarCallbacks.tabWindows]) is still offered when
-     * wired, and is then the only thing a fixed tab's dot menu holds.
+     * it the user is looking at.
      *
      * Defaults to `false`: every existing consumer keeps the fully
      * user-editable strip it has today.
@@ -727,10 +676,8 @@ fun buildTabElement(tab: TabSpec, spec: TabBarSpec): HTMLElement {
     // bar). Self-gates: renders nothing when no relevant callback is wired.
     // Issue #65 moved these out of the far-right `⋮` overflow menu so the
     // overflow only carries cross-tab concerns (the hidden-tabs list).
-    // Every row it can offer is an edit — except the "Windows" list wired
-    // while the sidebar is hidden, which is selection — so on a fixed strip
-    // appendTabDotMenu withholds the edits and offers only that list.
-    appendTabDotMenu(el, tab, spec)
+    // Every row it can offer is an edit, so a fixed strip skips it whole.
+    if (!spec.isFixed) appendTabDotMenu(el, tab, spec)
 
     return el
 }

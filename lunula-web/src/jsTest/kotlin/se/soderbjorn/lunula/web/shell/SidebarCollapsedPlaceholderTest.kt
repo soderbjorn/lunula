@@ -208,7 +208,7 @@ class SidebarCollapsedPlaceholderTest {
     }
 
     /**
-     * The navigation mode (LNA-22) hides the sidebar by simply not mounting
+     * The navigation mode hides the sidebar by simply not mounting
      * it, so the controller must come back from an unmounted stretch exactly
      * as it was left: a sidebar toggled closed before the user switched to
      * Tab strip is still closed — and still strip-less — when they switch

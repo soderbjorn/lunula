@@ -3,7 +3,7 @@
  * ----------------------------
  * Turns the user's navigation-mode setting into the two facts the shell
  * actually draws from — "is the left sidebar there?" and "is the tab strip
- * there?" — and stamps the result on `:root` as `data-dt-nav` (LNA-22).
+ * there?" — and stamps the result on `:root` as `data-dt-nav`.
  *
  * Three inputs meet here, in a fixed order of precedence:
  *
