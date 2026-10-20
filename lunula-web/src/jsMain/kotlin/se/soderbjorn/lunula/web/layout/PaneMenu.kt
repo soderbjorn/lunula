@@ -262,45 +262,18 @@ private const val SUBMENU_CLOSE_GRACE_MS = 350
  * [PaneHeaderClassNames.ACTION_MENU_OPEN]; the class comes off again when
  * the menu closes by any route.
  *
- * Keyboard: `Escape` always closes. With [keyboardNavigation] the popover
- * is also a proper keyboard menu: `ArrowDown` / `ArrowUp` move focus between
- * the enabled top-level rows (wrapping), `Home` / `End` jump to the first and
- * last, `Tab` closes it, and an `Escape` pressed while focus is inside the
- * menu hands focus back to [anchor]. The rows are `<button>`s, so `Enter`
- * and `Space` activate the focused one natively. Off by default so the pane
- * kebab and the theme manager's category menu, which predate it, behave
- * exactly as before.
- *
  * @param anchor the element the popover should appear next to (typically
  *   the kebab button in a [PaneHeaderSpec.actions] strip).
  * @param spec   the declarative menu description.
- * @param extraClass classes appended to the popover's own class list, e.g.
- *   [se.soderbjorn.lunula.web.shell.MenuTriggerClassNames.CHROME] for a menu
- *   raised from the top bar. Empty (the default) adds nothing.
- * @param keyboardNavigation `true` to enable the arrow-key handling described
- *   above.
- * @param focusFirstItem `true` to move focus onto the first enabled row as
- *   soon as the popover is up — for an open the user made from the keyboard,
- *   who then drives it with the arrows. A pointer open leaves focus alone.
  * @return a function that closes the popover when called. Calling it more
  *   than once is a no-op.
  * @see PaneHeaderClassNames.ACTION_MENU_OPEN
  */
-fun openPaneMenu(
-    anchor: HTMLElement,
-    spec: PaneMenuSpec,
-    extraClass: String = "",
-    keyboardNavigation: Boolean = false,
-    focusFirstItem: Boolean = false,
-): () -> Unit {
+fun openPaneMenu(anchor: HTMLElement, spec: PaneMenuSpec): () -> Unit {
     if (spec.items.isEmpty()) return { /* nothing to do */ }
 
     val menu = document.createElement("div") as HTMLElement
-    menu.className = if (extraClass.isBlank()) {
-        PaneMenuClassNames.MENU
-    } else {
-        "${PaneMenuClassNames.MENU} $extraClass"
-    }
+    menu.className = PaneMenuClassNames.MENU
     menu.setAttribute("role", "menu")
     // Block mousedown bubbling so a click inside the menu doesn't trip
     // the outside-click handler that fires before the click event runs.
@@ -324,14 +297,9 @@ fun openPaneMenu(
         }
     }
     val onKeyDown: (Event) -> Unit = { ev ->
-        val key = (ev as KeyboardEvent).key
-        if (key == "Escape") {
+        if ((ev as KeyboardEvent).key == "Escape") {
             ev.preventDefault()
-            val focusWasInMenu = menu.asDynamic().contains(document.activeElement) as Boolean
             close()
-            if (keyboardNavigation && focusWasInMenu) anchor.focus()
-        } else if (keyboardNavigation) {
-            handleMenuNavigationKey(menu, ev, close)
         }
     }
     val onResize: (Event) -> Unit = { close() }
@@ -370,7 +338,6 @@ fun openPaneMenu(
 
     document.body?.appendChild(menu)
     positionMenu(menu, anchor)
-    if (focusFirstItem) topLevelMenuRows(menu).firstOrNull()?.focus()
 
     document.addEventListener("mousedown", onOutsideMouseDown, true)
     document.addEventListener("keydown", onKeyDown, true)
@@ -380,61 +347,6 @@ fun openPaneMenu(
     window.addEventListener("scroll", onResize, true)
 
     return close
-}
-
-/**
- * The enabled, focusable rows directly inside [menu] (not those of a nested
- * flyout), in display order. Separators are `<div>`s and disabled rows are
- * skipped, so arrow keys never land on something that cannot be activated.
- *
- * Called by [openPaneMenu] (to focus the first row) and
- * [handleMenuNavigationKey].
- *
- * @param menu the `.dt-pane-menu` surface.
- * @return the rows, possibly empty.
- */
-private fun topLevelMenuRows(menu: HTMLElement): List<HTMLElement> {
-    val out = mutableListOf<HTMLElement>()
-    val children = menu.children
-    for (i in 0 until children.length) {
-        val el = children.item(i) as? HTMLButtonElement ?: continue
-        if (!el.classList.contains(PaneMenuClassNames.ITEM) || el.disabled) continue
-        out += el
-    }
-    return out
-}
-
-/**
- * The arrow-key half of [openPaneMenu]'s `keyboardNavigation`: moves focus
- * between the top-level rows of [menu] for `ArrowDown` / `ArrowUp` (wrapping
- * at either end), `Home` and `End`, and closes the popover on `Tab` so focus
- * moves on with the page instead of leaving a menu stranded behind it.
- *
- * Arrow keys while focus is still on the anchor move into the menu, which is
- * what a user who opened it with the pointer and then reached for the
- * keyboard expects. Any other key is left alone.
- *
- * @param menu  the open popover.
- * @param ev    the keydown event (capture phase on `document`).
- * @param close the popover's closer.
- */
-private fun handleMenuNavigationKey(menu: HTMLElement, ev: KeyboardEvent, close: () -> Unit) {
-    val rows = topLevelMenuRows(menu)
-    if (rows.isEmpty()) return
-    val current = rows.indexOfFirst { it == document.activeElement }
-    val next = when (ev.key) {
-        "ArrowDown" -> if (current < 0) 0 else (current + 1) % rows.size
-        "ArrowUp" -> if (current < 0) rows.lastIndex else (current - 1 + rows.size) % rows.size
-        "Home" -> 0
-        "End" -> rows.lastIndex
-        "Tab" -> {
-            close()
-            return
-        }
-        else -> return
-    }
-    ev.preventDefault()
-    rows[next].focus()
 }
 
 /**

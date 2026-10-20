@@ -1415,9 +1415,8 @@ interface AppShellHandle {
     /**
      * Changes the user's shell style (Classic / Clean) and redraws the chrome
      * to match, without a remount: `data-dt-style` is restamped on `:root`
-     * and the top bar is rebuilt, since its trailing cluster differs between
-     * the two styles (under Clean the layout, appearance, theme and
-     * Appearance buttons fold into one settings menu).
+     * and the chrome is rebuilt. Both styles show the same top-bar buttons
+     * in the same order; only how they are drawn differs.
      *
      * Persists exactly like [setNavigationMode]: through
      * [AppShellSpec.settingsHost] when the app supplies one, otherwise

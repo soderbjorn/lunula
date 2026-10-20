@@ -149,11 +149,7 @@ private suspend fun withSettingsOpen(
                 defaultAppearanceShape = { appDefault },
             ),
         )
-        // Classic draws a Theme manager button; Clean folds it into the
-        // settings menu (LNA-23), so either one says the top bar is up.
-        until("topbar rendered") {
-            root.querySelector("button[title=\"Theme manager\"], .$SETTINGS_MENU_BUTTON_CLASS") != null
-        }
+        until("topbar rendered") { root.querySelector("button[title=\"Theme manager\"]") != null }
         if (openSettings) {
             toggleSettingsSidebar { handle.refresh() }
             until("settings rows rendered") { settingSection("style") != null && settingSection("surfaces") != null }
@@ -323,15 +319,7 @@ class AppearanceStyleNavRowsTest {
             appDefault = AppearanceShape(shellStyle = ShellStyle.Clean),
             openSettings = false,
         ) { root, _ ->
-            // Under Clean the theme manager lives in the top bar's settings
-            // menu (LNA-23) rather than on a button of its own.
-            (root.querySelector(".$SETTINGS_MENU_BUTTON_CLASS") as HTMLElement).dispatchClick()
-            until("settings menu open") { document.querySelector(".dt-pane-menu") != null }
-            val themesRow = document.querySelectorAll(".dt-pane-menu .dt-pane-menu-item").let { rows ->
-                (0 until rows.length).map { rows.item(it) as HTMLElement }
-                    .first { it.textContent?.contains("Themes") == true }
-            }
-            themesRow.dispatchClick()
+            (root.querySelector("button[title=\"Theme manager\"]") as HTMLElement).dispatchClick()
             until("theme manager open") { document.querySelector(".dt-theme-card") != null }
             assertTrue(isCalmTheme(firstCardTheme()), "first card under Clean should be calm")
         }

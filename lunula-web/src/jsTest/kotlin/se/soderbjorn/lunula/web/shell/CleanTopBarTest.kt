@@ -5,16 +5,18 @@
  *
  *  - Classic is exactly what it was: the leading and trailing buttons, by
  *    accessible name and in order, match the pre-LNA-23 top bar.
- *  - Under Clean the Layout, appearance-cycle, Theme manager, "Aa" and App
- *    settings buttons are gone and a single "Settings" menu button stands in
- *    their place, between "+" and the app's trailing buttons. Each row of its
- *    menu does what the old button did: cycles the appearance, opens the
- *    theme manager, the Appearance sidebar, the layout grid, App settings.
- *  - The menu is keyboard-accessible (aria-haspopup / aria-expanded, focus
- *    on open from the keyboard, arrow keys, Escape back to the button).
- *  - Switching style at runtime rebuilds the top bar, both ways.
+ *  - Clean shows the very same buttons, in the same order ("+", Layout, the
+ *    appearance cycle, Theme manager, "Aa", App settings, flanked by the
+ *    app's own buttons), and each one still does what it does under Classic.
+ *  - Switching style at runtime rebuilds the top bar, both ways, and keeps
+ *    the same buttons.
  *  - Under Clean, with the stylesheet loaded, the icon buttons are 34×34
- *    with an 8px radius and the bar is a 52px border-box.
+ *    ghosts with an 8px radius, 18px glyphs in the Clean dim, the bar is a
+ *    52px border-box, and an open button wears the `--t-border` chip.
+ *  - Dark mode: under Clean, cycling the appearance to Dark really applies
+ *    the dark slot's theme (`--t-bg` and `color-scheme`), both with the
+ *    toolkit's own theme host and with an app-supplied
+ *    [AppShellSpec.settingsHost].
  *
  * The mounted tests drive the real [mountAppShell] with an in-memory
  * [Persister] and a hand-pushed [TabSource] snapshot, as NavigationModeTest
@@ -23,8 +25,8 @@
  * [resetRightPanels] puts them all away between steps, driving the theme
  * manager's `transitionend` itself in case no transition runs.
  *
- * @see buildSettingsMenuButton
  * @see AppShellHandle.setShellStyle
+ * @see buildAppearanceCycleButton
  */
 package se.soderbjorn.lunula.web.shell
 
@@ -52,11 +54,16 @@ import se.soderbjorn.lunula.web.settings.closeNotificationsSidebar
 import se.soderbjorn.lunula.web.settings.closeSettingsSidebar
 import se.soderbjorn.lunula.web.settings.isAppSettingsSidebarOpen
 import se.soderbjorn.lunula.web.settings.isSettingsSidebarOpen
+import se.soderbjorn.lunula.web.themeeditor.DefaultThemeManagerHost
+import se.soderbjorn.lunula.web.themeeditor.DefaultThemeManagerState
+import se.soderbjorn.lunula.web.themeeditor.ThemeManagerHost
 import se.soderbjorn.lunula.web.themeeditor.isThemeManagerSidebarOpen
 import se.soderbjorn.lunula.web.themeeditor.toggleThemeManagerSidebar
+import se.soderbjorn.lunula.web.toCssVarMap
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -83,11 +90,6 @@ private fun HTMLElement.click0() {
     dispatchEvent(MouseEvent("click", MouseEventInit(bubbles = true, cancelable = true)))
 }
 
-/** A pointer click (`detail == 1`), which must not move focus into the menu. */
-private fun HTMLElement.pointerClick() {
-    dispatchEvent(MouseEvent("click", MouseEventInit(bubbles = true, cancelable = true, detail = 1)))
-}
-
 /** Dispatches a keydown for [key] on the focused element (or the body). */
 private fun pressKey(key: String) {
     val target = (document.activeElement as? HTMLElement) ?: document.body!!
@@ -104,28 +106,24 @@ private fun HTMLElement.topBarNames(selector: String): List<String> {
     return (0 until list.length).map { (list.item(it) as HTMLElement).accessibleName() }
 }
 
-/** The Clean settings button, if drawn. */
-private fun HTMLElement.settingsButton(): HTMLElement? =
-    querySelector(".dt-topbar-trailing .$SETTINGS_MENU_BUTTON_CLASS") as? HTMLElement
-
-/** The open settings menu (a `.dt-pane-menu` on `<body>`), if any. */
-private fun openMenu(): HTMLElement? = document.querySelector(".dt-pane-menu") as? HTMLElement
-
-/** The top-level row of the open menu whose label is [label]. */
-private fun menuRow(label: String): HTMLElement {
-    val menu = openMenu() ?: fail("no menu open")
-    val rows = menu.querySelectorAll(".dt-pane-menu-item")
-    for (i in 0 until rows.length) {
-        val row = rows.item(i) as HTMLElement
-        if (row.querySelector(".dt-pane-menu-item-label")?.textContent == label) return row
+/** The trailing top-bar button whose accessible name is [name]. */
+private fun HTMLElement.trailingButton(name: String): HTMLElement {
+    val list = querySelectorAll(".dt-topbar-trailing button")
+    for (i in 0 until list.length) {
+        val b = list.item(i) as HTMLElement
+        if (b.accessibleName() == name) return b
     }
-    fail("no menu row '$label'")
+    fail("no top-bar button '$name' in ${topBarNames(".dt-topbar-trailing")}")
 }
 
-/** The labels of the open menu's rows, in order. */
-private fun menuLabels(): List<String> {
-    val rows = openMenu()?.querySelectorAll(".dt-pane-menu-item-label") ?: return emptyList()
-    return (0 until rows.length).map { rows.item(it)!!.textContent.orEmpty() }
+/** The trailing top-bar button whose name starts with "Appearance: " (the cycle). */
+private fun HTMLElement.appearanceCycleButton(): HTMLElement {
+    val list = querySelectorAll(".dt-topbar-trailing button")
+    for (i in 0 until list.length) {
+        val b = list.item(i) as HTMLElement
+        if (b.accessibleName().startsWith("Appearance: ")) return b
+    }
+    fail("no appearance cycle button")
 }
 
 /** The persisted appearance, read back the way the shell will on the next boot. */
@@ -133,6 +131,10 @@ private fun persistedAppearance(p: TopBarMemoryPersister): Appearance = ThemeSna
     selectionJson = p.store[PersistKeys.THEME_V2_SELECTION],
     customThemesJson = p.store[PersistKeys.THEME_V2_CUSTOM],
 ).appearance
+
+/** The `:root` inline value of the CSS custom property or property [name]. */
+private fun rootStyle(name: String): String =
+    (document.documentElement as HTMLElement).style.getPropertyValue(name).trim()
 
 /**
  * Puts every right-hand panel away, synchronously where the toolkit allows
@@ -163,8 +165,13 @@ private suspend fun resetRightPanels(handle: AppShellHandle) {
     }
 }
 
-/** The Classic top bar before LNA-23, trailing cluster, for the harness below. */
-private val CLASSIC_TRAILING = listOf(
+/**
+ * The top bar's trailing cluster for the harness below, the same under both
+ * styles: the app's "Before" button, the toolkit's standard cluster in its
+ * Classic order, then the app's "After" button. The appearance cycle reads
+ * "Appearance: Dark" because the harness seeds a Dark appearance.
+ */
+private val TRAILING = listOf(
     "Before",
     "New",
     "Layout",
@@ -175,26 +182,31 @@ private val CLASSIC_TRAILING = listOf(
     "After",
 )
 
-/** The Clean trailing cluster for the same harness. */
-private val CLEAN_TRAILING = listOf("Before", "New", "Settings", "After")
+/** The calm pair the dark-mode tests bind to the two slots. */
+private const val CALM_DARK = "Lunicle Calm Dark"
+private const val CALM_LIGHT = "Lunicle Calm Light"
 
 /**
- * Mounts a shell with app buttons on both flanks, a "+" (via `onAdd`), App
- * settings content and a Dark appearance, then runs [body] once the active
- * tab's pane is on screen.
+ * Mounts a shell with app buttons on both flanks, a "+" (via `onAdd`) and
+ * App settings content, then runs [body] once the active tab's pane is on
+ * screen.
  *
  * @param style the persisted shell style to boot with, or `null` for none.
- * @param body  the test, given the root, the handle and the persister.
+ * @param seed the persisted theme selection (slots and appearance).
+ * @param settingsHost an app-supplied theme host, or `null` for the
+ *   toolkit's own.
+ * @param body the test, given the root, the handle and the persister.
  */
 private suspend fun withTopBarShell(
     style: ShellStyle? = null,
-    body: suspend (root: HTMLElement, handle: AppShellHandle, persister: TopBarMemoryPersister) -> Unit,
-) {
-    val seed = ThemeSnapshotV2(
+    seed: ThemeSnapshotV2 = ThemeSnapshotV2(
         darkThemeName = "Dracula",
         lightThemeName = "Lunamux Light",
         appearance = Appearance.Dark,
-    )
+    ),
+    settingsHost: ThemeManagerHost? = null,
+    body: suspend (root: HTMLElement, handle: AppShellHandle, persister: TopBarMemoryPersister) -> Unit,
+) {
     val persister = TopBarMemoryPersister(
         buildMap {
             put(PersistKeys.THEME_V2_SELECTION, seed.selectionJson())
@@ -218,6 +230,7 @@ private suspend fun withTopBarShell(
                 appSettingsContent = {
                     (document.createElement("div") as HTMLElement).also { it.id = "tb-app-settings-body" }
                 },
+                settingsHost = settingsHost,
             ),
         )
         waitUntil("tab source subscribe") { push != null }
@@ -238,6 +251,42 @@ private suspend fun withTopBarShell(
     }
 }
 
+/**
+ * Seeds the calm pair on a Light appearance under Clean, presses the top
+ * bar's appearance cycle until it reads Dark, and checks that `:root` now
+ * carries the dark slot's theme: its `--t-bg` and `color-scheme: dark`.
+ *
+ * Shared by the toolkit-host and app-host variants of the dark-mode test.
+ *
+ * @param root the mounted shell's root.
+ */
+private suspend fun cycleToDarkAndCheck(root: HTMLElement) {
+    val seeded = ThemeSnapshotV2(darkThemeName = CALM_DARK, lightThemeName = CALM_LIGHT)
+    val darkBg = seeded.copy(appearance = Appearance.Dark).resolve(systemIsDark = false).toCssVarMap()["--t-bg"]
+    val lightBg = seeded.copy(appearance = Appearance.Light).resolve(systemIsDark = true).toCssVarMap()["--t-bg"]
+    assertNotNull(darkBg)
+    assertNotEquals(lightBg, darkBg, "the calm pair must differ for this test to mean anything")
+
+    assertEquals("clean", (document.documentElement as HTMLElement).getAttribute("data-dt-style"))
+    waitUntil("light slot painted") { rootStyle("--t-bg") == lightBg }
+    assertEquals("light", rootStyle("color-scheme"))
+
+    // Light → Auto → Dark, through the real button each time (it is rebuilt
+    // on every rerender, so look it up afresh).
+    repeat(3) {
+        if (root.appearanceCycleButton().accessibleName() == "Appearance: Dark") return@repeat
+        root.appearanceCycleButton().click0()
+        delay(20)
+    }
+    waitUntil("button reads Dark") { root.appearanceCycleButton().accessibleName() == "Appearance: Dark" }
+    waitUntil("dark slot painted") { rootStyle("--t-bg") == darkBg }
+    assertEquals("dark", rootStyle("color-scheme"))
+    // And it stays dark: nothing in the rerender that followed put it back.
+    delay(100)
+    assertEquals(darkBg, rootStyle("--t-bg"))
+    assertEquals("dark", rootStyle("color-scheme"))
+}
+
 class CleanTopBarTest {
 
     @AfterTest
@@ -251,64 +300,45 @@ class CleanTopBarTest {
         withTopBarShell { root, _, _ ->
             assertNull((document.documentElement as HTMLElement).getAttribute("data-dt-style"))
             assertEquals(listOf("Toggle left sidebar"), root.topBarNames(".dt-topbar-leading"))
-            assertEquals(CLASSIC_TRAILING, root.topBarNames(".dt-topbar-trailing"))
-            assertNull(root.settingsButton(), "Classic has no settings menu button")
+            assertEquals(TRAILING, root.topBarNames(".dt-topbar-trailing"))
         }
     }
 
-    /** Clean: the four (plus App settings) are folded away and Settings stands in. */
+    /** Clean: exactly Classic's buttons, in Classic's order, and no settings menu. */
     @Test
-    fun cleanTopBarFoldsTheButtonsIntoSettings() = GlobalScope.promise {
+    fun cleanTopBarHasClassicsButtonsInClassicsOrder() = GlobalScope.promise {
         withTopBarShell(style = ShellStyle.Clean) { root, _, _ ->
             assertEquals("clean", (document.documentElement as HTMLElement).getAttribute("data-dt-style"))
-            assertEquals(listOf("Toggle left sidebar"), root.topBarNames(".dt-topbar-leading"), "sidebar toggle kept")
-            assertEquals(CLEAN_TRAILING, root.topBarNames(".dt-topbar-trailing"))
-            val settings = assertNotNull(root.settingsButton())
-            assertEquals("Settings", settings.getAttribute("aria-label"))
-            assertEquals("menu", settings.getAttribute("aria-haspopup"))
-            assertEquals("false", settings.getAttribute("aria-expanded"))
-
-            settings.pointerClick()
-            waitUntil("menu open") { openMenu() != null }
-            assertEquals("true", settings.getAttribute("aria-expanded"))
-            assertTrue(openMenu()!!.classList.contains(MenuTriggerClassNames.CHROME), "a chrome-zone menu")
-            assertEquals(
-                listOf("Appearance: Dark", "Themes…", "Appearance…", "Layout", "App settings"),
-                menuLabels(),
-            )
-            // A second press closes it again.
-            settings.pointerClick()
-            waitUntil("menu closed") { openMenu() == null }
-            assertEquals("false", settings.getAttribute("aria-expanded"))
+            assertEquals(listOf("Toggle left sidebar"), root.topBarNames(".dt-topbar-leading"))
+            assertEquals(TRAILING, root.topBarNames(".dt-topbar-trailing"))
+            assertNull(root.querySelector(".dt-topbar-settings-button"), "no folded settings menu")
         }
     }
 
-    /** Each menu row runs the action its Classic button ran. */
+    /** Under Clean each button does what it does under Classic. */
     @Test
-    fun eachMenuRowDoesWhatItsButtonDid() = GlobalScope.promise {
+    fun eachButtonWorksUnderClean() = GlobalScope.promise {
         withTopBarShell(style = ShellStyle.Clean) { root, handle, persister ->
-            // Appearance: the same cycle — Dark → Light, persisted.
-            root.settingsButton()!!.pointerClick()
-            menuRow("Appearance: Dark").click0()
+            // Appearance cycle: Dark → Light → Auto, persisted, label follows.
+            root.appearanceCycleButton().click0()
             waitUntil("appearance cycled to Light") { persistedAppearance(persister) == Appearance.Light }
-            root.settingsButton()!!.pointerClick()
-            assertNotNull(menuRow("Appearance: Light"), "the row reads the live appearance")
-            menuRow("Appearance: Light").click0()
+            waitUntil("label reads Light") { root.appearanceCycleButton().accessibleName() == "Appearance: Light" }
+            root.appearanceCycleButton().click0()
             waitUntil("appearance cycled to Auto") { persistedAppearance(persister) == Appearance.Auto }
 
-            // Themes…: the theme manager opens, and the button reads as pressed.
+            // Theme manager: opens, and its button reads as pressed.
             resetRightPanels(handle)
-            root.settingsButton()!!.pointerClick()
-            menuRow("Themes…").click0()
+            root.trailingButton("Theme manager").click0()
             waitUntil("theme manager open") {
                 isThemeManagerSidebarOpen() && document.querySelector(".dt-theme-card") != null
             }
-            waitUntil("settings button pressed") { root.settingsButton()?.classList?.contains("dt-active") == true }
+            waitUntil("theme manager button pressed") {
+                root.trailingButton("Theme manager").classList.contains("dt-active")
+            }
 
-            // Appearance…: the "Aa" sidebar.
+            // "Aa": the Appearance sidebar.
             resetRightPanels(handle)
-            root.settingsButton()!!.pointerClick()
-            menuRow("Appearance…").click0()
+            root.trailingButton("Appearance").click0()
             waitUntil("Appearance sidebar open") {
                 isSettingsSidebarOpen() &&
                     root.querySelector(".dt-settings-sidebar-title")?.textContent == "Appearance"
@@ -316,16 +346,14 @@ class CleanTopBarTest {
 
             // App settings: the app's own sidebar content.
             resetRightPanels(handle)
-            root.settingsButton()!!.pointerClick()
-            menuRow("App settings").click0()
+            root.trailingButton("App settings").click0()
             waitUntil("App settings open") {
                 isAppSettingsSidebarOpen() && document.getElementById("tb-app-settings-body") != null
             }
 
-            // Layout: the same layout grid, hung under the settings button.
+            // Layout: the layout grid, Auto first.
             resetRightPanels(handle)
-            root.settingsButton()!!.pointerClick()
-            menuRow("Layout").click0()
+            root.trailingButton("Layout").click0()
             waitUntil("layout grid open") { document.querySelector(".dt-layout-preset-grid") != null }
             assertNotNull(
                 document.querySelector(".dt-layout-preset-grid .dt-layout-preset-tile-auto"),
@@ -336,79 +364,112 @@ class CleanTopBarTest {
         }
     }
 
-    /** The menu can be driven from the keyboard alone. */
-    @Test
-    fun theSettingsMenuIsKeyboardAccessible() = GlobalScope.promise {
-        withTopBarShell(style = ShellStyle.Clean) { root, _, _ ->
-            val settings = root.settingsButton()!!
-            settings.focus()
-            // Enter/Space on a button arrive as a click with detail 0.
-            settings.click0()
-            waitUntil("menu open") { openMenu() != null }
-            assertEquals(menuRow("Appearance: Dark"), document.activeElement, "focus moves to the first row")
-            pressKey("ArrowDown")
-            assertEquals(menuRow("Themes…"), document.activeElement)
-            pressKey("End")
-            assertEquals(menuRow("App settings"), document.activeElement)
-            pressKey("ArrowDown")
-            assertEquals(menuRow("Appearance: Dark"), document.activeElement, "wraps to the top")
-            pressKey("ArrowUp")
-            assertEquals(menuRow("App settings"), document.activeElement, "wraps to the bottom")
-            pressKey("Escape")
-            waitUntil("menu closed") { openMenu() == null }
-            assertEquals(settings, document.activeElement, "Escape hands focus back to the button")
-            assertEquals("false", settings.getAttribute("aria-expanded"))
-
-            // ArrowDown on the closed button opens the menu too.
-            pressKey("ArrowDown")
-            waitUntil("menu open from ArrowDown") { openMenu() != null }
-            assertEquals(menuRow("Appearance: Dark"), document.activeElement)
-            pressKey("Escape")
-            waitUntil("menu closed again") { openMenu() == null }
-        }
-    }
-
     /** A style switch at runtime rebuilds the top bar, both ways, and persists. */
     @Test
     fun switchingStyleAtRuntimeRebuildsTheTopBar() = GlobalScope.promise {
         withTopBarShell { root, handle, persister ->
-            assertEquals(CLASSIC_TRAILING, root.topBarNames(".dt-topbar-trailing"))
+            assertEquals(TRAILING, root.topBarNames(".dt-topbar-trailing"))
+            val classicLayout = root.trailingButton("Layout")
 
             handle.setShellStyle(ShellStyle.Clean)
-            waitUntil("Clean top bar") { root.settingsButton() != null }
-            assertEquals(CLEAN_TRAILING, root.topBarNames(".dt-topbar-trailing"))
-            assertEquals("clean", (document.documentElement as HTMLElement).getAttribute("data-dt-style"))
+            waitUntil("Clean stamped") {
+                (document.documentElement as HTMLElement).getAttribute("data-dt-style") == "clean"
+            }
+            waitUntil("top bar rebuilt") { root.trailingButton("Layout") !== classicLayout }
+            assertEquals(TRAILING, root.topBarNames(".dt-topbar-trailing"))
             waitUntil("Clean persisted") {
                 AppearanceShape.fromJson(persister.store[PersistKeys.APPEARANCE_SHAPE]).shellStyle == ShellStyle.Clean
             }
 
             handle.setShellStyle(ShellStyle.Classic)
-            waitUntil("Classic top bar") { root.settingsButton() == null }
-            assertEquals(CLASSIC_TRAILING, root.topBarNames(".dt-topbar-trailing"))
-            assertNull((document.documentElement as HTMLElement).getAttribute("data-dt-style"))
+            waitUntil("Classic stamped") {
+                (document.documentElement as HTMLElement).getAttribute("data-dt-style") == null
+            }
+            assertEquals(TRAILING, root.topBarNames(".dt-topbar-trailing"))
         }
     }
 
-    /** With the stylesheet loaded, Clean draws the design's ghost buttons on a 52px bar. */
+    /**
+     * With the stylesheet loaded, Clean draws the design's ghost buttons on a
+     * 52px bar: 34×34, radius 8, 18px glyphs in the Clean dim, and an open
+     * button wears a chip. Classic keeps its own 30px buttons.
+     */
     @Test
     fun cleanTopBarMetrics() = GlobalScope.promise {
         injectLunulaStyles()
-        withTopBarShell(style = ShellStyle.Clean) { root, _, _ ->
-            val settings = root.settingsButton()!!
-            val css = window.getComputedStyle(settings)
-            assertEquals("34px", css.width)
-            assertEquals("34px", css.height)
-            assertEquals("8px", css.borderTopLeftRadius)
+        withTopBarShell { root, _, _ ->
+            assertEquals("30px", window.getComputedStyle(root.trailingButton("Layout")).width, "Classic is unchanged")
+        }
+        withTopBarShell(style = ShellStyle.Clean) { root, handle, _ ->
+            for (name in TRAILING.filter { it != "Before" && it != "After" && !it.startsWith("Appearance: ") } +
+                root.appearanceCycleButton().accessibleName()
+            ) {
+                val css = window.getComputedStyle(root.trailingButton(name))
+                assertEquals("34px", css.width, "$name width")
+                assertEquals("34px", css.height, "$name height")
+                assertEquals("8px", css.borderTopLeftRadius, "$name radius")
+            }
+            val layout = root.trailingButton("Layout")
+            val glyph = assertNotNull(layout.querySelector("svg"), "Layout has an SVG glyph")
+            assertEquals("18px", window.getComputedStyle(glyph).width)
+            // The Clean dim, resolved the way the rule resolves it.
+            val probe = (document.createElement("span") as HTMLElement).also {
+                it.style.setProperty("color", "var(--dt-clean-text-dim)")
+                root.querySelector(".dt-topbar")!!.appendChild(it)
+            }
+            assertEquals(window.getComputedStyle(probe).color, window.getComputedStyle(layout).color)
+            probe.remove()
+
             val bar = root.querySelector(".dt-topbar") as HTMLElement
             val barCss = window.getComputedStyle(bar)
             assertEquals("border-box", barCss.boxSizing)
             assertEquals("52px", barCss.minHeight)
-            // Open, the settings button wears the border-toned chip, not the accent.
-            settings.pointerClick()
-            waitUntil("menu open") { openMenu() != null }
-            val open = window.getComputedStyle(settings)
+
+            // Open, the theme manager's button wears the border-toned chip.
+            root.trailingButton("Theme manager").click0()
+            // Let the manager finish opening before it is put away again, so
+            // no half-open panel outlives this test.
+            waitUntil("theme manager open") {
+                isThemeManagerSidebarOpen() && document.querySelector(".dt-theme-card") != null
+            }
+            waitUntil("theme manager button pressed") {
+                root.trailingButton("Theme manager").classList.contains("dt-active")
+            }
+            val open = window.getComputedStyle(root.trailingButton("Theme manager"))
             assertTrue(open.backgroundColor != "rgba(0, 0, 0, 0)", "the open button shows a chip")
-            settings.pointerClick()
+            assertEquals("none", open.boxShadow)
+            resetRightPanels(handle)
+        }
+    }
+
+    /** Clean, the toolkit's own host: cycling to Dark paints the dark slot. */
+    @Test
+    fun cyclingToDarkUnderCleanAppliesTheDarkSlot() = GlobalScope.promise {
+        injectLunulaStyles()
+        withTopBarShell(
+            style = ShellStyle.Clean,
+            seed = ThemeSnapshotV2(darkThemeName = CALM_DARK, lightThemeName = CALM_LIGHT, appearance = Appearance.Light),
+        ) { root, _, persister ->
+            cycleToDarkAndCheck(root)
+            waitUntil("Dark persisted") { persistedAppearance(persister) == Appearance.Dark }
+        }
+    }
+
+    /** Clean, an app-supplied settings host: cycling to Dark paints the dark slot too. */
+    @Test
+    fun cyclingToDarkUnderCleanWithAnAppHostAppliesTheDarkSlot() = GlobalScope.promise {
+        injectLunulaStyles()
+        val appState = DefaultThemeManagerState(
+            darkThemeName = CALM_DARK,
+            lightThemeName = CALM_LIGHT,
+            appearance = Appearance.Light,
+            shellStyle = ShellStyle.Clean,
+        )
+        withTopBarShell(
+            seed = ThemeSnapshotV2(darkThemeName = CALM_DARK, lightThemeName = CALM_LIGHT, appearance = Appearance.Light),
+            settingsHost = DefaultThemeManagerHost(appState),
+        ) { root, _, _ ->
+            cycleToDarkAndCheck(root)
         }
     }
 }
