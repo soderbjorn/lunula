@@ -663,6 +663,10 @@ fun mountAppShell(
             state.setSidebarOpen(open)
         }
 
+        override fun setNavigationMode(mode: NavigationMode?) {
+            state.setNavigationMode(mode)
+        }
+
         override fun refresh() {
             state.rerender()
         }
@@ -1444,14 +1448,65 @@ private class ShellState(
      * host's pick, then the app's [AppShellSpec.defaultAppearanceShape], then
      * [NavigationMode.Default].
      *
-     * Held here for the later tab-strip work (epic LNA-16); nothing reads it
-     * yet and nothing renders differently because of it.
+     * This is the mode ASKED FOR, before the app's hard opt-outs are applied;
+     * what is actually drawn is [navigationLayout]. A settings control shows
+     * this one as selected.
      *
      * @see NavigationMode
+     * @see navigationLayout
      * @see resolvedShellStyle
      */
-    var resolvedNavigationMode: NavigationMode = NavigationMode.Default
-        private set
+    val resolvedNavigationMode: NavigationMode
+        get() = navigationLayout.mode
+
+    /**
+     * Which navigation surfaces this shell draws: the resolved mode with the
+     * app's [AppShellSpec.showSidebar] / [AppShellSpec.showTabStrip] opt-outs
+     * applied (LNA-22). Recomputed by [applyHostFontVars]; read by [rerender]
+     * (left sidebar), [buildTopBar] (tab strip, sidebar toggle, per-tab window
+     * list) and [setSidebarOpen].
+     *
+     * Seeded from the spec alone, so a rerender that somehow ran before the
+     * first host application would draw exactly what the app asked for.
+     *
+     * @see resolveNavigationLayout
+     */
+    private var navigationLayout: NavigationLayout = resolveNavigationLayout(
+        userMode = null,
+        appDefaultMode = spec.defaultAppearanceShape().navigationMode,
+        appAllowsSidebar = spec.showSidebar,
+        appAllowsTabStrip = spec.showTabStrip,
+    )
+
+    /**
+     * Changes the user's navigation mode at runtime and redraws the chrome to
+     * match. The entry point a settings control calls (the Appearance control
+     * itself is LNA-24); also exposed as [AppShellHandle.setNavigationMode].
+     *
+     * Writes through the same `settingsHost ?: themeHost` ladder every other
+     * appearance setting uses. With the toolkit's own host, the setter fires
+     * [onThemeManagerChanged], which re-applies (redrawing the sidebar and tab
+     * strip via [applyHostFontVars]) and persists the choice under
+     * [PersistKeys.APPEARANCE_SHAPE]. An app-supplied host persists through
+     * its own setter, so here it is only re-applied — writing the toolkit's
+     * shape key from [themeState] would store a stale mirror over the app's.
+     *
+     * The tab, pane and sidebar collapse state are untouched: only which
+     * surfaces are mounted changes.
+     *
+     * @param mode the new mode, or `null` to clear the user's pick and fall
+     *   back to the app default.
+     * @see navigationLayout
+     */
+    fun setNavigationMode(mode: NavigationMode?) {
+        val host = spec.settingsHost
+        if (host == null) {
+            themeHost.setNavigationMode(mode)
+        } else {
+            host.setNavigationMode(mode)
+            applyHostFontVars()
+        }
+    }
 
     /**
      * Pushes the host's currently-persisted font preferences onto the
@@ -1532,12 +1587,48 @@ private class ShellState(
             applySelectionStyle(it, host.selectionStyle ?: shapeFallback.selectionStyle)
         }
         applySurfaceStyle(host.surfaceStyle ?: shapeFallback.surfaceStyle)
-        // Shell style and navigation mode take the same ladder, but are only
-        // RESOLVED here, not applied: no CSS or `data-dt-*` stamp keys off them
-        // yet (that is later Clean-shell work), so Classic renders unchanged.
+        // Shell style takes the same ladder, but is only RESOLVED here: no CSS
+        // or `data-dt-*` stamp keys off it yet (that is later Clean-shell
+        // work), so Classic renders unchanged.
         resolvedShellStyle = host.shellStyle ?: shapeFallback.shellStyle ?: ShellStyle.Default
-        resolvedNavigationMode = host.navigationMode ?: shapeFallback.navigationMode
-            ?: NavigationMode.Default
+        // Navigation takes the same ladder too, then the app's hard opt-outs
+        // win over it (see resolveNavigationLayout).
+        applyNavigation(
+            resolveNavigationLayout(
+                userMode = host.navigationMode,
+                appDefaultMode = shapeFallback.navigationMode,
+                appAllowsSidebar = spec.showSidebar,
+                appAllowsTabStrip = spec.showTabStrip,
+            ),
+        )
+    }
+
+    /**
+     * Installs a freshly resolved [layout]: stamps `data-dt-nav` on `:root`
+     * and, when the set of drawn surfaces changed, rebuilds the chrome so the
+     * sidebar and tab strip appear or disappear at once.
+     *
+     * The rebuild is the ordinary [rerender], which already rebuilds the top
+     * bar and the left sidebar from scratch on every pass, so showing or
+     * hiding them needs no extra machinery. It leaves the tab model, the
+     * active pane, cached pane bodies and [leftSidebarController]'s
+     * open/collapsed state alone, which is why a temporary collapse made with
+     * the toggle button survives a round trip through Tab strip mode. Skipped
+     * before [attach] (nothing to rebuild yet; the first rerender reads the
+     * new layout) and when only the requested mode changed but not what is
+     * drawn (e.g. switching to Tab strip in an app that hard-disables it).
+     *
+     * Called only by [applyHostFontVars].
+     *
+     * @param layout the newly resolved navigation.
+     */
+    private fun applyNavigation(layout: NavigationLayout) {
+        val previous = navigationLayout
+        navigationLayout = layout
+        (document.documentElement as? HTMLElement)?.let { applyNavigationAttribute(it, layout) }
+        val surfacesChanged = previous.showsSidebar != layout.showsSidebar ||
+            previous.showsTabStrip != layout.showsTabStrip
+        if (surfacesChanged && topBarSlot != null) rerender()
     }
 
     /** Last value pushed to the Electron main process; lets us skip
@@ -2003,9 +2094,12 @@ private class ShellState(
     }
 
     fun setSidebarOpen(open: Boolean) {
-        // No sidebar exists when the app opted out — programmatic opens
-        // (Electron menu items, host hotkeys) must not resurrect it.
-        if (!spec.showSidebar) return
+        // No sidebar exists when the app opted out, or while the user's
+        // navigation mode hides it — programmatic opens (Electron menu items,
+        // host hotkeys) must not resurrect it, and the controller's
+        // open/collapsed state is left as it was for when the mode brings the
+        // sidebar back.
+        if (!navigationLayout.showsSidebar) return
         // Route through the controller so the user-visible width
         // animation (0 ↔ widthPx) plays. The controller flips its
         // own state and calls our rerender once the transition has
@@ -2111,8 +2205,10 @@ private class ShellState(
         leftSlot.innerHTML = ""
         // `showSidebar = false` skips the mount entirely — no sidebar, no
         // collapsed drag-to-restore placeholder. The slot stays empty so
-        // the main area starts flush at the frame's left edge.
-        if (spec.showSidebar) {
+        // the main area starts flush at the frame's left edge. The user's
+        // navigation mode (Tab strip) hides it the same way; see
+        // [navigationLayout].
+        if (navigationLayout.showsSidebar) {
             val sidebarEl = leftSidebarController.mountSidebarOrPlaceholder(
                 spec = SidebarSpec(
                     // App-supplied header / footer pinned above and below the
@@ -2829,6 +2925,14 @@ private class ShellState(
                 isHiddenFromSidebar = t.isHiddenFromSidebar,
             )
         }
+        // With the sidebar hidden by the navigation mode, each tab's dot menu
+        // lists the tab's windows so they stay reachable (LNA-22). Left off
+        // while the sidebar is there, so the familiar menu is unchanged.
+        val windowsInMenu = !navigationLayout.showsSidebar
+        val tabWindows: ((String) -> List<TabWindowEntry>)? =
+            if (windowsInMenu) ::tabWindowEntries else null
+        val onSelectWindow: ((String, String) -> Unit)? =
+            if (windowsInMenu) ::activatePaneFromNavigation else null
         val callbacks = if (srcMode) {
             val src = spec.tabSource!!
             TabBarCallbacks(
@@ -2889,6 +2993,8 @@ private class ShellState(
                     emptyList()
                 },
                 onMoveToWorld = if (fixedStrip) null else spec.worldSource?.onMoveTab,
+                tabWindows = tabWindows,
+                onSelectWindow = onSelectWindow,
             )
         } else {
             TabBarCallbacks(
@@ -2969,6 +3075,8 @@ private class ShellState(
                 // inline × button removed, the kebab "Close" row is the
                 // only entry point so a single confirmation is enough.
                 confirmTabClose = true,
+                tabWindows = tabWindows,
+                onSelectWindow = onSelectWindow,
             )
         }
         val tabBarSpec = TabBarSpec(
@@ -2994,11 +3102,12 @@ private class ShellState(
         // Leading: sidebar-toggle button to the LEFT of the tab strip
         // (matching termtastic / notegrow chrome layout). Omitted when
         // the app opts out of the sidebar entirely (`showSidebar =
-        // false`) — a toggle for a bar that never mounts is dead chrome.
+        // false`), or the navigation mode hides it — a toggle for a bar
+        // that never mounts is dead chrome.
         val leading = document.createElement("div") as HTMLElement
         leading.style.display = "flex"
         leading.style.alignItems = "center"
-        if (spec.showSidebar) {
+        if (navigationLayout.showsSidebar) {
             leading.appendChild(
                 buildLeftSidebarToggleButton(
                     isOpen = leftSidebarController.isOpen,
@@ -3334,8 +3443,9 @@ private class ShellState(
                 // `showTabStrip = false` hides the whole strip: the middle
                 // slot renders empty while the tab model (and its panes)
                 // stays fully live. The TabBarCallbacks above are still
-                // built — the "+" split-button menu reuses them.
-                tabBar = if (spec.showTabStrip) tabBarSpec else null,
+                // built — the "+" split-button menu reuses them. The user's
+                // navigation mode (Sidebar) hides it the same way.
+                tabBar = if (navigationLayout.showsTabStrip) tabBarSpec else null,
                 // App content for the empty middle slot, centered between the
                 // leading and trailing clusters. Ignored when the tab strip
                 // above claims the slot (see TopBarSpec.centerContent).
@@ -3775,74 +3885,118 @@ private class ShellState(
             badge.setAttribute("aria-label", "Pane $indexValue")
             row.appendChild(badge)
         }
-        row.addEventListener("click", {
-            // Clicking a docked pane's row un-minimizes it first, so the
-            // pane re-enters the layout (animating back from the dock) and
-            // can then become active just like any other row click.
-            val wasMinimized = geometryFor(tabId, paneId).isMinimized
-            if (wasMinimized) {
-                updateGeometry(tabId, paneId) { it.copy(isMinimized = false) }
-            }
-            // Switch the active tab to the clicked row's tab first. In
-            // source mode `onPaneSelect` only changes pane focus inside
-            // its tab and `buildPaneLayout` only renders the active tab,
-            // so a click on a row in a non-active tab section would
-            // otherwise appear to do nothing; in local mode `mutateLocal`
-            // owns the active-tab switch. Neither touches paneOrder —
-            // that order is owned by the user via drag-to-reorder.
-            if (spec.tabSource != null) {
-                if (tabId != viewActiveTabId()) {
-                    spec.tabSource.onSelect(tabId)
-                }
-            } else {
-                mutateLocal { it.copy(activeTabId = tabId) }
-            }
-            // Activate the clicked pane (drives the row's dt-active
-            // highlight via [activePaneForActiveTab]) and raise it to the
-            // front so clicking a sidebar row brings its pane forward —
-            // exactly like the dock-chip restore, the double-click focus,
-            // and the maximize toggle already do. Applies whether or not
-            // the pane was minimized: a plain row click on an occluded
-            // floating pane should surface it too.
-            bringPaneToFront(tabId, paneId, raise = true)
-            // Surface the pane: a maximized sibling is full-bleed and would
-            // keep covering the pane the user just picked (the post-render
-            // focus reconciliation deliberately passes autoUnmaximize=false,
-            // so nothing else clears it — the restored pane silently landed
-            // *behind* the maximized one). Under a non-Custom preset the
-            // restore re-tile clears the flag anyway; this makes Custom —
-            // and the plain row-click-while-a-sibling-is-maximized case —
-            // behave the same. See [clearMaximizedSiblings].
-            val unmaximized = clearMaximizedSiblings(tabId, paneId)
-            // Reflow once after the host-select calls so the restore FLIP
-            // plays; for source mode the host's activePaneId catches up on
-            // its snapshot round-trip and focuses the freshly-restored pane.
-            if (wasMinimized) {
-                reflowAfterMinimizeChange(tabId)
-            } else if (unmaximized) {
-                // No minimize flip to reflow for, but the cleared maximize
-                // still needs a repaint (same follow-up the maximize toggle
-                // does: rerender + geometry-changed ping).
-                rerender()
-                spec.onGeometryChanged?.invoke(tabId)
-            } else {
-                // Plain row click on an already-visible pane: neither a
-                // minimize flip nor a maximize clear rebuilt the DOM, so the
-                // zIndex bump [bringPaneToFront] just wrote to geometry state
-                // isn't reflected on screen yet. Mirror [onFloatingFocused]:
-                // push the new z straight onto the live element's `--dt-fp-z`
-                // CSS var for an instant, transition-free restack instead of a
-                // full rerender (which would rebuild every pane element and is
-                // wasteful for a pure z-order change). The host snapshot round-
-                // trip that `onPaneSelect` kicked off would eventually restack
-                // it too, but only after a network hop — this makes the raise
-                // feel immediate.
-                val z = geometryFor(tabId, paneId).zIndex
-                (main?.querySelector("[data-pane-id=\"$paneId\"]") as? HTMLElement)
-                    ?.style?.setProperty("--dt-fp-z", "$z")
-            }
-        })
+        row.addEventListener("click", { activatePaneFromNavigation(tabId, paneId) })
         return row
+    }
+
+    /**
+     * Switches to [paneId] in [tabId] the way a navigation surface does:
+     * activates the tab if needed, un-minimizes the pane from the dock,
+     * raises it, and clears a maximized sibling that would cover it.
+     *
+     * Shared by the two places a user picks a window from a list — a click
+     * on its sidebar row ([buildPaneRow]) and a pick from its tab's dot-menu
+     * "Windows" section ([TabBarCallbacks.onSelectWindow], wired by
+     * [buildTopBar] while the navigation mode hides the sidebar) — so the
+     * two behave identically.
+     *
+     * @param tabId  the tab that owns the pane.
+     * @param paneId the pane to bring forward.
+     */
+    private fun activatePaneFromNavigation(tabId: String, paneId: String) {
+        // Clicking a docked pane's row un-minimizes it first, so the
+        // pane re-enters the layout (animating back from the dock) and
+        // can then become active just like any other row click.
+        val wasMinimized = geometryFor(tabId, paneId).isMinimized
+        if (wasMinimized) {
+            updateGeometry(tabId, paneId) { it.copy(isMinimized = false) }
+        }
+        // Switch the active tab to the clicked row's tab first. In
+        // source mode `onPaneSelect` only changes pane focus inside
+        // its tab and `buildPaneLayout` only renders the active tab,
+        // so a click on a row in a non-active tab section would
+        // otherwise appear to do nothing; in local mode `mutateLocal`
+        // owns the active-tab switch. Neither touches paneOrder —
+        // that order is owned by the user via drag-to-reorder.
+        if (spec.tabSource != null) {
+            if (tabId != viewActiveTabId()) {
+                spec.tabSource.onSelect(tabId)
+            }
+        } else {
+            mutateLocal { it.copy(activeTabId = tabId) }
+        }
+        // Activate the clicked pane (drives the row's dt-active
+        // highlight via [activePaneForActiveTab]) and raise it to the
+        // front so clicking a sidebar row brings its pane forward —
+        // exactly like the dock-chip restore, the double-click focus,
+        // and the maximize toggle already do. Applies whether or not
+        // the pane was minimized: a plain row click on an occluded
+        // floating pane should surface it too.
+        bringPaneToFront(tabId, paneId, raise = true)
+        // Surface the pane: a maximized sibling is full-bleed and would
+        // keep covering the pane the user just picked (the post-render
+        // focus reconciliation deliberately passes autoUnmaximize=false,
+        // so nothing else clears it — the restored pane silently landed
+        // *behind* the maximized one). Under a non-Custom preset the
+        // restore re-tile clears the flag anyway; this makes Custom —
+        // and the plain row-click-while-a-sibling-is-maximized case —
+        // behave the same. See [clearMaximizedSiblings].
+        val unmaximized = clearMaximizedSiblings(tabId, paneId)
+        // Reflow once after the host-select calls so the restore FLIP
+        // plays; for source mode the host's activePaneId catches up on
+        // its snapshot round-trip and focuses the freshly-restored pane.
+        if (wasMinimized) {
+            reflowAfterMinimizeChange(tabId)
+        } else if (unmaximized) {
+            // No minimize flip to reflow for, but the cleared maximize
+            // still needs a repaint (same follow-up the maximize toggle
+            // does: rerender + geometry-changed ping).
+            rerender()
+            spec.onGeometryChanged?.invoke(tabId)
+        } else {
+            // Plain row click on an already-visible pane: neither a
+            // minimize flip nor a maximize clear rebuilt the DOM, so the
+            // zIndex bump [bringPaneToFront] just wrote to geometry state
+            // isn't reflected on screen yet. Mirror [onFloatingFocused]:
+            // push the new z straight onto the live element's `--dt-fp-z`
+            // CSS var for an instant, transition-free restack instead of a
+            // full rerender (which would rebuild every pane element and is
+            // wasteful for a pure z-order change). The host snapshot round-
+            // trip that `onPaneSelect` kicked off would eventually restack
+            // it too, but only after a network hop — this makes the raise
+            // feel immediate.
+            val z = geometryFor(tabId, paneId).zIndex
+            (main?.querySelector("[data-pane-id=\"$paneId\"]") as? HTMLElement)
+                ?.style?.setProperty("--dt-fp-z", "$z")
+        }
+    }
+
+    /**
+     * The windows (panes) of [tabId] for its dot-menu "Windows" section, in
+     * the order the sidebar lists them (the controller's user-owned
+     * paneOrder, untracked panes last), with the same labels and icons.
+     *
+     * Backs [TabBarCallbacks.tabWindows], which [buildTopBar] wires only
+     * while [navigationLayout] hides the sidebar.
+     *
+     * @param tabId the tab whose windows to list.
+     * @return one entry per pane; empty when the tab has none.
+     */
+    private fun tabWindowEntries(tabId: String): List<TabWindowEntry> {
+        val orderIndex: Map<String, Int> =
+            controllerFor(tabId).paneOrder.withIndex().associate { (i, id) -> id to i }
+        val activeTab = viewActiveTabId()
+        val activePane = activePaneForActiveTab()
+        return viewPanesIn(tabId)
+            .sortedBy { orderIndex[it.id] ?: Int.MAX_VALUE }
+            .map { pane ->
+                TabWindowEntry(
+                    id = pane.id,
+                    label = spec.paneLabel(tabId, pane.id),
+                    iconHtml = spec.paneIcon(tabId, pane.id),
+                    isActive = tabId == activeTab && pane.id == activePane,
+                )
+            }
     }
 
     /**

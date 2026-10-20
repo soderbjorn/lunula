@@ -5,9 +5,10 @@
  * A USER setting, not a theme property — it sits beside the other shell
  * preferences in [AppearanceShape] and is persisted per-app under
  * [PersistKeys.APPEARANCE_SHAPE]. It belongs to the "Clean" shell work (epic
- * LNA-16): at this stage the value is only modelled, persisted and resolved in
- * the web shell's `applyHostFontVars` (user → app default →
- * [NavigationMode.Default]); nothing renders differently yet.
+ * LNA-16). The web shell resolves it in `applyHostFontVars` (user → app
+ * default → [NavigationMode.Default]), lets an app's hard opt-outs
+ * (`AppShellSpec.showSidebar` / `showTabStrip = false`) override it, and
+ * shows or hides the sidebar and tab strip at runtime to match (LNA-22).
  */
 package se.soderbjorn.lunula.core
 
@@ -16,11 +17,11 @@ import kotlinx.serialization.Serializable
 /**
  * The navigation surfaces the shell can offer.
  *
- *  - [Sidebar] — the default: tabs are listed in the sidebar only, as the
- *    shell has always done.
+ *  - [Sidebar] — tabs are listed in the sidebar only; no tab strip.
  *  - [TabStrip] — tabs are shown as a horizontal strip and the sidebar is
  *    hidden.
- *  - [Both] — the sidebar and the tab strip are shown together.
+ *  - [Both] — the default: the sidebar and the tab strip are shown
+ *    together, which is what the shell has always drawn.
  *
  * @property cssValue the token persisted in [AppearanceShape].
  * @see AppearanceShape
@@ -28,13 +29,13 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 enum class NavigationMode(val cssValue: String) {
-    /** Navigation through the sidebar only. The default. */
+    /** Navigation through the sidebar only. */
     Sidebar("sidebar"),
 
     /** Navigation through a horizontal tab strip only. */
     TabStrip("tabstrip"),
 
-    /** Sidebar and tab strip together. */
+    /** Sidebar and tab strip together. The default. */
     Both("both"),
     ;
 
@@ -68,8 +69,16 @@ enum class NavigationMode(val cssValue: String) {
          * Read as a FALLBACK, never written: consulted only where the host's
          * value and the app's [AppearanceShape] default are both null, so
          * changing it reaches exactly the users who never expressed an opinion.
+         *
+         * [Both], because that is what the shell drew before this setting
+         * existed (`AppShellSpec.showSidebar` and `showTabStrip` both default
+         * to `true`). Any other value would change every app's chrome on
+         * upgrade for users who never touched the setting, which the Clean
+         * epic (LNA-16) rules out: nothing changes for anyone who doesn't
+         * opt in. An app that wants a different default for its users says
+         * so through its `AppearanceShape` default instead.
          */
-        val Default: NavigationMode = Sidebar
+        val Default: NavigationMode = Both
 
         /**
          * Parses a persisted [cssValue] or enum name, tolerating anything

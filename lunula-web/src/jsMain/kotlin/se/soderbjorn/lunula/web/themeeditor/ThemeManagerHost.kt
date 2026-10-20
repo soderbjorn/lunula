@@ -203,12 +203,14 @@ interface ThemeManagerHost {
 
     /**
      * How the user navigates between tabs (sidebar, tab strip, or both), or
-     * `null` for [NavigationMode.Default] ([NavigationMode.Sidebar]).
+     * `null` for [NavigationMode.Default] ([NavigationMode.Both]).
      *
      * A user setting beside [shellStyle]. Read by `AppShellMount`'s host-apply
-     * pass, which resolves it (host → app default → [NavigationMode.Default]);
-     * no rendering keys off it yet. The default getter returns `null` —
-     * override it together with [setNavigationMode] to persist a choice.
+     * pass, which resolves it (host → app default → [NavigationMode.Default])
+     * and shows or hides the sidebar and tab strip to match, subject to the
+     * app's own `showSidebar` / `showTabStrip` opt-outs. The default getter
+     * returns `null` — override it together with [setNavigationMode] to
+     * persist a choice.
      *
      * @see NavigationMode
      * @see setNavigationMode

@@ -43,7 +43,7 @@ private val shapeJson = Json { ignoreUnknownKeys = true }
  * @property shellStyle      which shell composition to draw; `null` →
  *   [ShellStyle.Default] ([ShellStyle.Classic]).
  * @property navigationMode  whether tabs are reached through the sidebar, a tab
- *   strip, or both; `null` → [NavigationMode.Default] ([NavigationMode.Sidebar]).
+ *   strip, or both; `null` → [NavigationMode.Default] ([NavigationMode.Both]).
  * @see PersistKeys.APPEARANCE_SHAPE
  */
 data class AppearanceShape(

@@ -216,11 +216,12 @@ class AppearanceShapeTest {
     }
 
     @Test
-    fun theDefaultsAreClassicAndSidebar() {
-        // Classic is the default and must stay so: unset must read as the
-        // shell users already have.
+    fun theDefaultsAreClassicAndBoth() {
+        // Classic and Both are the defaults and must stay so: unset must read
+        // as the shell users already have, which draws the sidebar AND the
+        // tab strip.
         assertEquals(ShellStyle.Classic, ShellStyle.Default)
-        assertEquals(NavigationMode.Sidebar, NavigationMode.Default)
+        assertEquals(NavigationMode.Both, NavigationMode.Default)
     }
 
     @Test

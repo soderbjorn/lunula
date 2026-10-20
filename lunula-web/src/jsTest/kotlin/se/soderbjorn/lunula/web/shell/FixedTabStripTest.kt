@@ -26,12 +26,17 @@
  * everything asserted is structural (elements, classes, attributes) rather
  * than visual.
  *
+ * It also pins the tab dot menu's "Windows" list (LNA-22): offered on a
+ * fixed strip as its only content, and above the edit rows elsewhere.
+ *
  * @see TabBarSpec.isFixed
  * @see TabSource.fixed
  * @see TabBadge
+ * @see TabBarCallbacks.tabWindows
  */
 package se.soderbjorn.lunula.web.shell
 
+import kotlinx.browser.document
 import org.w3c.dom.HTMLElement
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -106,6 +111,67 @@ class FixedTabStripTest {
     fun fixedStripIsMarkedForStyling() {
         assertTrue(render(isFixed = true).classList.contains(TabBarClassNames.BAR_FIXED))
         assertTrue(!render(isFixed = false).classList.contains(TabBarClassNames.BAR_FIXED))
+    }
+
+    // ── The "Windows" list (navigation mode, LNA-22) ────────────────
+
+    /**
+     * With the window list wired (the shell does so while the navigation
+     * mode hides the sidebar), a fixed tab grows a dot menu holding only
+     * that list: picking a window is selection, which a fixed strip keeps,
+     * while every edit row stays withheld.
+     */
+    @Test
+    fun fixedStripOffersOnlyTheWindowListInItsDotMenu() {
+        var picked: Pair<String, String>? = null
+        val bar = render(isFixed = true, windows = true) { tabId, paneId -> picked = tabId to paneId }
+        document.body!!.appendChild(bar)
+        try {
+            val buttons = bar.querySelectorAll(".dt-tab-menu-button")
+            assertEquals(2, buttons.length, "each fixed tab with windows gets a dot menu")
+            (buttons.item(0) as HTMLElement).click()
+            val panel = assertNotNull(document.querySelector(".${TabMenuClassNames.PANEL}") as? HTMLElement)
+            val rows = panel.querySelectorAll(".dt-hover-menu-item")
+            assertEquals(2, rows.length, "only the two window rows — no Rename / Close / Hide")
+            assertEquals(2, panel.querySelectorAll(".${TabMenuClassNames.WINDOW_ROW}").length)
+            (panel.querySelector(".${TabMenuClassNames.WINDOW_ROW}[data-pane-id=\"issues-b\"]") as HTMLElement).click()
+            assertEquals("issues" to "issues-b", picked)
+        } finally {
+            closeTabBarMenus()
+            bar.remove()
+        }
+    }
+
+    /**
+     * On an editable strip the list sits above the usual rows, separated
+     * from them, and the focused window carries the selected treatment.
+     */
+    @Test
+    fun editableStripListsWindowsAboveItsEditRows() {
+        val bar = render(isFixed = false, windows = true) { _, _ -> }
+        document.body!!.appendChild(bar)
+        try {
+            (bar.querySelector(".dt-tab-menu-button") as HTMLElement).click()
+            val panel = assertNotNull(document.querySelector(".${TabMenuClassNames.PANEL}") as? HTMLElement)
+            val windowRows = panel.querySelectorAll(".${TabMenuClassNames.WINDOW_ROW}")
+            assertEquals(2, windowRows.length)
+            assertTrue((windowRows.item(0) as HTMLElement).classList.contains("dt-menu-selected"))
+            assertTrue(!(windowRows.item(1) as HTMLElement).classList.contains("dt-menu-selected"))
+            assertNotNull(panel.querySelector(".dt-hover-menu-separator"))
+            assertTrue(
+                panel.querySelectorAll(".dt-hover-menu-item").length > 2,
+                "the edit rows are still there below the list",
+            )
+        } finally {
+            closeTabBarMenus()
+            bar.remove()
+        }
+    }
+
+    /** Without the list wired, a fixed strip still has no dot menu at all. */
+    @Test
+    fun fixedStripWithoutWindowListStillHasNoDotMenu() {
+        assertEquals(0, render(isFixed = true, windows = false).querySelectorAll(".dt-tab-menu").length)
     }
 
     // ── TabSource.fixed ─────────────────────────────────────────────
@@ -227,10 +293,18 @@ class FixedTabStripTest {
      * missing inputs.
      *
      * @param isFixed value for [TabBarSpec.isFixed].
+     * @param windows  whether to wire [TabBarCallbacks.tabWindows] (two
+     *   windows per tab, the first focused) and
+     *   [TabBarCallbacks.onSelectWindow].
+     * @param onSelectWindow receives `(tabId, paneId)` when [windows] is set.
      * @return the rendered bar element (not attached to the document —
      *   nothing here measures layout).
      */
-    private fun render(isFixed: Boolean): HTMLElement = renderTabBar(
+    private fun render(
+        isFixed: Boolean,
+        windows: Boolean = false,
+        onSelectWindow: (String, String) -> Unit = { _, _ -> },
+    ): HTMLElement = renderTabBar(
         TabBarSpec(
             tabs = listOf(
                 TabSpec("issues", "Issues", isDraggable = true, isRenamable = true, isClosable = true),
@@ -248,6 +322,17 @@ class FixedTabStripTest {
                 onRename = { _, _ -> },
                 onSetHidden = { _, _ -> },
                 onSetHiddenFromSidebar = { _, _ -> },
+                tabWindows = if (windows) {
+                    { tabId ->
+                        listOf(
+                            TabWindowEntry("$tabId-a", "A", isActive = true),
+                            TabWindowEntry("$tabId-b", "B"),
+                        )
+                    }
+                } else {
+                    null
+                },
+                onSelectWindow = if (windows) onSelectWindow else null,
             ),
         ),
     )
