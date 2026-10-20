@@ -57,6 +57,10 @@ fun isDarkActive(appearance: Appearance): Boolean = when (appearance) {
  *
  * Every value is produced via [argbToCss].
  *
+ * The three Clean-only vars — `--t-accent-soft-solid`, `--t-clean-text-dim`
+ * and `--t-clean-accent-text` — are likewise always emitted, opaque, for the
+ * `data-dt-style="clean"` stylesheet block to read; Classic rules ignore them.
+ *
  * The 9 chrome/canvas vars are always emitted: [ResolvedTheme] has already
  * applied each optional token's fallback, so a theme that doesn't split its
  * chrome from its content emits chrome vars equal to its base tokens. The
@@ -90,6 +94,12 @@ fun ResolvedTheme.toCssVarMap(): Map<String, String> = buildMap {
     put("--t-accent-text", argbToCss(accentText))
     put("--t-selection", argbToCss(selection))
     put("--t-window-idle", argbToCss(windowIdle))
+    // Clean-only derived tokens (LNA-19). Always emitted; Classic's rules never
+    // read them. Each equals its source exactly when the source is already
+    // legible — see ResolvedTheme.cleanTextDim / cleanAccentText.
+    put("--t-accent-soft-solid", argbToCss(accentSoftSolid))
+    put("--t-clean-text-dim", argbToCss(cleanTextDim))
+    put("--t-clean-accent-text", argbToCss(cleanAccentText))
     put("--t-glow", argbToCss(glow))
     put("--t-warn", argbToCss(warn))
     put("--t-warn-on", argbToCss(warnOn))

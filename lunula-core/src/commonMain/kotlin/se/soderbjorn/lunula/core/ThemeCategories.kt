@@ -24,9 +24,10 @@ package se.soderbjorn.lunula.core
  * A filter offered by the theme picker's category dropdown.
  *
  * [All] and [Starred] are selection filters — they ask about the user, not
- * about the palette. The remaining four are palette filters and partition the
- * catalog, so switching between them shows every theme exactly once across the
- * set.
+ * about the palette. [Clean] is a curated filter: the calm themes drawn for the
+ * Clean shell, which also appear under their palette category. The remaining
+ * four are palette filters and partition the catalog, so switching between
+ * them shows every theme exactly once across the set.
  *
  * ### Callers
  * The web/Mac Theme Manager renders these as its dropdown and filters with
@@ -55,6 +56,19 @@ enum class ThemeCategory(val label: String) {
      * @see ThemeSnapshotV2.favorites
      */
     Starred("Starred"),
+
+    /**
+     * The calm themes drawn for the Clean shell style (LNA-19): the ten
+     * "<Hue> Calm Light/Dark" built-ins and any theme tagged
+     * [CALM_THEME_TAG], decided by [isCalmTheme].
+     *
+     * Not part of the palette partition — a calm theme is also Dark or Light,
+     * and [paletteCategoryOf] never returns this. It is a shortcut for a user
+     * who picked Clean and wants the palettes made for it.
+     *
+     * @see CALM_THEME_NAMES
+     */
+    Clean("Clean"),
 
     /**
      * Dark throughout: dark content in dark chrome. Includes the two-zone dark
@@ -116,8 +130,9 @@ val Theme.hasDistinctChromeZone: Boolean
 /**
  * The single palette category [theme] belongs to.
  *
- * Never returns [ThemeCategory.All] or [ThemeCategory.Starred] — those are
- * about the user's selection, not the palette. The four it can return partition
+ * Never returns [ThemeCategory.All], [ThemeCategory.Starred] or
+ * [ThemeCategory.Clean] — those are about the user's selection or a curated
+ * set, not the palette. The four it can return partition
  * the catalog, so this is a total function with no overlap.
  *
  * @param theme the theme to classify.
@@ -152,6 +167,7 @@ fun matchesThemeCategory(
 ): Boolean = when (category) {
     ThemeCategory.All -> true
     ThemeCategory.Starred -> theme.name in favorites
+    ThemeCategory.Clean -> isCalmTheme(theme)
     else -> paletteCategoryOf(theme) == category
 }
 
@@ -190,6 +206,9 @@ fun matchesThemeQuery(theme: Theme, query: String): Boolean {
  * @param favorites the user's starred theme names.
  * @param category  the selected dropdown entry; defaults to [ThemeCategory.All].
  * @param query     the filter box contents; defaults to empty (no search).
+ * @param calmFirst whether the calm themes lead the list (after the stars) —
+ *   passed `true` by the web layer when the shell style is Clean; see
+ *   [orderThemesForPicker]. Defaults to `false`, the Classic order.
  * @return the themes to render, in picker order.
  * @see orderThemesForPicker
  */
@@ -198,5 +217,6 @@ fun filterThemesForPicker(
     favorites: Set<String>,
     category: ThemeCategory = ThemeCategory.All,
     query: String = "",
-): List<Theme> = orderThemesForPicker(themes, favorites)
+    calmFirst: Boolean = false,
+): List<Theme> = orderThemesForPicker(themes, favorites, calmFirst)
     .filter { matchesThemeCategory(it, category, favorites) && matchesThemeQuery(it, query) }

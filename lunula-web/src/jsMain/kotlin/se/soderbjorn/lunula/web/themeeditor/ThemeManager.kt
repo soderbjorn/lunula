@@ -10,8 +10,9 @@
  * This file owns the panel chrome (header, filter controls, Escape handling)
  * and the shared module state, then renders all themes as a single reflowing
  * thumbnail grid — no "Dark"/"Light" section headings (issue #107). The list is
- * ordered starred first, then the house themes, then everything else
- * alphabetically (see [se.soderbjorn.lunula.core.orderThemesForPicker]).
+ * ordered starred first, then (when the host's style is Clean) the calm themes,
+ * then the house themes, then everything else alphabetically (see
+ * [se.soderbjorn.lunula.core.orderThemesForPicker]).
  *
  * The header carries two filters over that list: a free-text box matching name,
  * tag and description, and a category dropdown. The categories are *derived
@@ -33,6 +34,7 @@
 package se.soderbjorn.lunula.web.themeeditor
 
 import se.soderbjorn.lunula.core.SelectionStyle
+import se.soderbjorn.lunula.core.ShellStyle
 import se.soderbjorn.lunula.core.Theme
 import se.soderbjorn.lunula.core.ThemeCategory
 import se.soderbjorn.lunula.core.allThemes
@@ -484,8 +486,9 @@ internal fun pokeManager() {
 /**
  * Renders the theme catalog into [container] as a single reflowing thumbnail
  * grid — one flat list with no "Dark"/"Light" section headings (issue #107).
- * The themes are ordered starred first, then the house themes, then the rest by
- * name, and narrowed by the header's category dropdown and filter box, all by
+ * The themes are ordered starred first, then — when the host reports
+ * [ShellStyle.Clean] — the calm themes drawn for that style, then the house
+ * themes, then the rest by name, and narrowed by the header's category dropdown and filter box, all by
  * [filterThemesForPicker]; each card is built by [renderThemeCard].
  * The grid packs as many thumbnails per row as the (resizable) sidebar width
  * allows. The appearance (Auto/Dark/Light) is chosen from the app's toolbar,
@@ -506,6 +509,7 @@ private fun renderThemeList(container: HTMLElement, onOpen: (String, Boolean) ->
         favorites = host.favoriteThemeNames,
         category = themeFilterCategory,
         query = themeFilterQuery,
+        calmFirst = host.shellStyle == ShellStyle.Clean,
     )
     if (matching.isEmpty()) {
         container.appendChild(buildNoThemesMatchRow())

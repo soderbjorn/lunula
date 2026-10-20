@@ -17,8 +17,12 @@
  *  - [contrastRatio] and [onColorFor], which serve the on-fill token pairs and
  *    the contrast lint that guards them.
  *  - [mix], only for the selection fallback ([Theme.effectiveSelection]) of a
- *    custom theme saved before the `selection` token existed; every built-in
- *    states its selection colour.
+ *    custom theme saved before the `selection` token existed (every built-in
+ *    states its selection colour), and for the idle-window fallback;
+ *  - [compositeOver] and [nudgeForContrast], for the Clean shell's derived
+ *    tokens ([ResolvedTheme.accentSoftSolid], [ResolvedTheme.cleanTextDim],
+ *    [ResolvedTheme.cleanAccentText]), which move a failing colour only as
+ *    far toward a legible one as the contrast floor requires.
  *
  * None of these invent a hue. Each one answers a question the theme author has
  * already framed ("this colour, dimmed against that backdrop"), which is why
@@ -203,4 +207,62 @@ fun mix(over: Long, under: Long, amount: Double): Long {
         return kotlin.math.round(a * amount + b * (1 - amount)).toLong().coerceIn(0, 255)
     }
     return 0xFF000000L or (channel(16) shl 16) or (channel(8) shl 8) or channel(0)
+}
+
+/**
+ * Composites a possibly translucent ARGB [over] onto an opaque [under], the way
+ * a browser paints it: [over]'s alpha channel becomes the [mix] amount.
+ *
+ * Used by [Theme.effectiveAccentSoftSolid] to turn the translucent accent wash
+ * into the opaque colour it actually shows on a surface, so the Clean shell
+ * and the contrast checks measure what the user sees.
+ *
+ * @param over the translucent colour (e.g. the accent at 15 % alpha).
+ * @param under the opaque colour it sits on.
+ * @return the opaque composited ARGB colour; [over] itself (made opaque) when
+ *   it is already fully opaque.
+ * @see withAlpha
+ */
+fun compositeOver(over: Long, under: Long): Long {
+    val alpha = ((over ushr 24) and 0xFF) / 255.0
+    return mix(over or 0xFF000000L, under, alpha)
+}
+
+/**
+ * Moves [color] toward [toward] in steps of [step] until it reaches
+ * [minRatio] contrast against every colour in [backdrops].
+ *
+ * Returns [color] **unchanged** when it already clears the floor on all of
+ * them — the property that keeps a passing theme byte-identical — and
+ * [toward] when no intermediate step does. Each step is an opaque [mix]
+ * (`mix(toward, color, k * step)`), so the result stays on the straight line
+ * between the two and keeps as much of [color]'s hue as legibility allows.
+ *
+ * Callers: [Theme.resolve]'s Clean-only tokens ([ResolvedTheme.cleanTextDim],
+ * [ResolvedTheme.cleanAccentText]).
+ *
+ * @param color the starting colour (e.g. the theme's dim text).
+ * @param toward the colour to move toward (e.g. the theme's body text).
+ * @param backdrops the opaque colours the result must be legible on.
+ * @param minRatio the contrast floor, e.g. `4.5`.
+ * @param step the mix increment per attempt, in `(0.0, 1.0]`.
+ * @return the first colour on the ladder that clears every backdrop, or
+ *   [toward] if none does.
+ * @see contrastRatio
+ */
+fun nudgeForContrast(
+    color: Long,
+    toward: Long,
+    backdrops: List<Long>,
+    minRatio: Double,
+    step: Double,
+): Long {
+    fun passes(c: Long) = backdrops.all { contrastRatio(c, it) >= minRatio }
+    if (passes(color)) return color
+    val steps = kotlin.math.round(1.0 / step).toInt().coerceAtLeast(1)
+    for (k in 1 until steps) {
+        val candidate = mix(toward, color, k * step)
+        if (passes(candidate)) return candidate
+    }
+    return toward or 0xFF000000L
 }

@@ -59,8 +59,15 @@ enum class Appearance { Auto, Dark, Light }
  * `accent`/`add`/`chromeAccent` colour at a fixed transparency (e.g.
  * `rgba(accent, 0.15)`). So they are NOT stored or edited separately;
  * [resolve] derives them by setting an alpha on the source token (a
- * single-channel transparency, not a colour mix). Every other token is a
- * literal value with no computation.
+ * single-channel transparency, not a colour mix). The one exception is
+ * `accentSoft`, which a theme may now pin to an explicit opaque value (the
+ * calm themes do). Every other token is a literal value with no computation.
+ *
+ * ### Clean-only derived tokens
+ * The Clean shell reads three more resolved values that Classic ignores:
+ * [ResolvedTheme.accentSoftSolid], [ResolvedTheme.cleanTextDim] and
+ * [ResolvedTheme.cleanAccentText]. They are computed in [resolve], not stored,
+ * and each equals its source exactly whenever the source is already legible.
  *
  * ### The three zones
  * The 8 nullable tokens let a theme paint the app **chrome** (title bar, tab
@@ -130,6 +137,9 @@ enum class Appearance { Auto, Dark, Light }
  *   fallback [effectiveSelection].
  * @property windowIdle       optional — fill of an idle (unfocused, resting) window in the
  *   Clean shell; falls back to a derivation from [surface] — see [effectiveWindowIdle].
+ * @property accentSoft       optional — an **opaque** accent wash (the active sidebar row, a
+ *   soft highlight). Unset, the wash is [accent] at [ACCENT_SOFT_ALPHA] as before; set, it
+ *   replaces that translucent value outright — see [effectiveAccentSoftSolid].
  * @property tintAlpha        optional — diff-row tint opacity; falls back to the tone default.
  * @property group            **legacy, ignored** — the removed dark/light declaration. Kept
  *   so a `themes.json` written before the removal still decodes; see [ThemeGroup].
@@ -217,6 +227,13 @@ data class Theme(
     // so a theme that leaves it out serializes exactly as before; when unset
     // it is derived from [surface] — see [effectiveWindowIdle].
     @EncodeDefault(EncodeDefault.Mode.NEVER) val windowIdle: String? = null,
+    // ---- Optional opaque accent wash ----
+    // `accentSoft` has always been derived — the accent at 15 % alpha — which
+    // is right for a faint tint but leaves a theme no say over the colour the
+    // tint actually lands on. The calm themes (LNA-19) state an exact opaque
+    // wash instead. Optional and never-encoded like every token above, so a
+    // theme that leaves it out resolves and serializes exactly as before.
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val accentSoft: String? = null,
     // ---- Optional non-colour properties ----
     /**
      * Opacity of the diff-add/remove row tints. `null` → the tone default
@@ -407,6 +424,78 @@ data class Theme(
             }
         )
 
+    /**
+     * The accent wash as an opaque colour: [accentSoft] if declared, else
+     * [accent] at [ACCENT_SOFT_ALPHA] composited over [surface] — the colour a
+     * browser actually paints for the translucent wash on a surface.
+     *
+     * Read by [resolve] (for [ResolvedTheme.accentSoftSolid] and as the
+     * backdrop of [ResolvedTheme.cleanAccentText]) and by [token], so the
+     * editor shows a real swatch for a theme that never declared a wash.
+     *
+     * @return the opaque wash as a `#rrggbb` hex string.
+     * @see ResolvedTheme.accentSoftSolid
+     */
+    val effectiveAccentSoftSolid: String
+        get() = accentSoft ?: argbToHex(
+            compositeOver(withAlpha(hexToArgb(accent), ACCENT_SOFT_ALPHA), hexToArgb(surface))
+        )
+
+    /**
+     * [textDim] made legible for the Clean shell: unchanged when it already
+     * clears [CLEAN_TEXT_AA] on [effectiveWindowIdle], [bg] and [surface];
+     * otherwise nudged toward [text] in [CLEAN_NUDGE_STEP] steps
+     * ([nudgeForContrast]) until it does.
+     *
+     * Clean paints an inactive window's title in the dim tone on the
+     * idle-window fill, a pairing no theme was drawn for — 69 built-ins fall
+     * short of AA there (LNA-18). Rather than re-tint every palette, Clean
+     * reads this derived value and Classic keeps reading [textDim] untouched.
+     *
+     * Should even [text] fall short (a low-headroom palette), the ladder
+     * carries on from [text] toward black or white — whichever the
+     * idle-window fill contrasts with more — so the result always clears the
+     * floor.
+     *
+     * @return the Clean dim-text colour as ARGB.
+     * @see ResolvedTheme.cleanTextDim
+     */
+    private fun cleanTextDimArgb(): Long {
+        val backdrops = listOf(hexToArgb(effectiveWindowIdle), hexToArgb(bg), hexToArgb(surface))
+        val towardText = nudgeForContrast(hexToArgb(textDim), hexToArgb(text), backdrops, CLEAN_TEXT_AA, CLEAN_NUDGE_STEP)
+        if (backdrops.all { contrastRatio(towardText, it) >= CLEAN_TEXT_AA }) return towardText
+        return nudgeForContrast(towardText, onColorFor(backdrops.first()), backdrops, CLEAN_TEXT_AA, CLEAN_NUDGE_STEP)
+    }
+
+    /**
+     * The accent as type, made legible on the opaque accent wash for the Clean
+     * shell: [effectiveAccentText] unchanged when it already clears
+     * [CLEAN_TEXT_AA] on [effectiveAccentSoftSolid]; otherwise nudged in
+     * [CLEAN_NUDGE_STEP] steps toward the readable extreme until it does.
+     *
+     * The extreme is [text] when [text] itself clears the floor on the wash and
+     * contrasts with it more than the accent text does (keeping the result in
+     * the palette's own ink); otherwise black or white, whichever contrasts
+     * with the wash more ([onColorFor], which clears the floor for any fill).
+     * Clean paints the active sidebar row in this colour on that wash, where 51
+     * built-ins' accent text falls short (LNA-18).
+     *
+     * @return the Clean accent-text colour as ARGB.
+     * @see ResolvedTheme.cleanAccentText
+     */
+    private fun cleanAccentTextArgb(): Long {
+        val wash = hexToArgb(effectiveAccentSoftSolid)
+        val accentTextArgb = hexToArgb(effectiveAccentText)
+        val textArgb = hexToArgb(text)
+        val textRatio = contrastRatio(textArgb, wash)
+        val target = if (textRatio >= CLEAN_TEXT_AA && textRatio > contrastRatio(accentTextArgb, wash)) {
+            textArgb
+        } else {
+            onColorFor(wash)
+        }
+        return nudgeForContrast(accentTextArgb, target, listOf(wash), CLEAN_TEXT_AA, CLEAN_NUDGE_STEP)
+    }
+
     /** [tintAlpha] if set, else the tone default (0.16 light / 0.18 dark). */
     val effectiveTintAlpha: Double
         get() = tintAlpha ?: if (isDarkToned) DARK_TINT_ALPHA else LIGHT_TINT_ALPHA
@@ -433,7 +522,8 @@ data class Theme(
         accent = hexToArgb(accent),
         // Derived directly from the design's formula: the accent/add colour at
         // a fixed transparency. A single alpha set — not a colour mix.
-        accentSoft = withAlpha(hexToArgb(accent), 0.15),
+        // A declared opaque wash (see [Theme.accentSoft]) replaces the formula.
+        accentSoft = accentSoft?.let(::hexToArgb) ?: withAlpha(hexToArgb(accent), ACCENT_SOFT_ALPHA),
         glow = withAlpha(hexToArgb(accent), 0.34),
         warn = hexToArgb(warn),
         danger = hexToArgb(danger),
@@ -481,6 +571,11 @@ data class Theme(
         selection = hexToArgb(effectiveSelection),
         // Declared, or derived from surface by tone — see effectiveWindowIdle.
         windowIdle = hexToArgb(effectiveWindowIdle),
+        // Clean-only derived tokens; Classic never reads them. Each equals its
+        // source exactly when the source already clears AA.
+        accentSoftSolid = hexToArgb(effectiveAccentSoftSolid),
+        cleanTextDim = cleanTextDimArgb(),
+        cleanAccentText = cleanAccentTextArgb(),
     )
 
     companion object {
@@ -526,18 +621,41 @@ data class Theme(
          */
         const val WINDOW_IDLE_DARK_TOWARD_BG: Double = 0.55
 
+        /**
+         * Opacity of the derived accent wash, [ResolvedTheme.accentSoft]: the
+         * design's "accent at 15 %". Ignored by a theme that declares an
+         * opaque [accentSoft].
+         */
+        const val ACCENT_SOFT_ALPHA: Double = 0.15
+
+        /**
+         * The contrast floor the Clean-only text tokens are nudged to reach —
+         * WCAG AA for body text. See [ResolvedTheme.cleanTextDim] and
+         * [ResolvedTheme.cleanAccentText].
+         */
+        const val CLEAN_TEXT_AA: Double = 4.5
+
+        /**
+         * The mix increment of each nudge toward a more legible colour (see
+         * [nudgeForContrast]): small, so a failing colour moves only as far as
+         * it must and keeps as much of its hue as it can.
+         */
+        const val CLEAN_NUDGE_STEP: Double = 0.02
+
         /** Opaque black, the light-tone mix target for [effectiveWindowIdle]. */
         private const val BLACK: Long = 0xFF000000L
 
         /**
-         * The 39 editable token ids in display order, grouped by role. Used by
+         * The 40 editable token ids in display order, grouped by role. Used by
          * the web editor to render one colour input per token. (The five
-         * derived tokens — accentSoft / glow / addBg / removeBgTint /
-         * chromeAccentSoft — are not listed; they follow the
-         * accent/add/danger/chromeAccent colour automatically.)
+         * derived tokens — glow / addBg / removeBgTint / chromeAccentSoft —
+         * are not listed; they follow the accent/add/danger/chromeAccent
+         * colour automatically. `accentSoft` is listed: it is derived unless
+         * a theme pins the opaque override, which the editor shows as the
+         * composited [effectiveAccentSoftSolid].)
          *
-         * The optional ids — the 8 chrome/canvas ones, the 9 role-split ones
-         * `selection` and `windowIdle` — report their *effective* value through [token], so the editor
+         * The optional ids — the 8 chrome/canvas ones, the 9 role-split ones,
+         * `selection`, `windowIdle` and `accentSoft` — report their *effective* value through [token], so the editor
          * always shows a real colour rather than an empty swatch, and
          * [withToken] pins an explicit one on edit.
          *
@@ -548,7 +666,7 @@ data class Theme(
         val TOKEN_IDS: List<String> = listOf(
             "bg", "canvas", "surface", "surfaceAlt", "windowIdle", "border",
             "text", "textDim", "textBright",
-            "accent", "accentOn", "accentText", "selection",
+            "accent", "accentOn", "accentText", "accentSoft", "selection",
             "warn", "warnOn", "warnText",
             "danger", "dangerOn", "dangerText",
             "add", "addOn", "addText",
@@ -587,6 +705,7 @@ data class Theme(
         "accentText" -> effectiveAccentText
         "selection" -> effectiveSelection
         "windowIdle" -> effectiveWindowIdle
+        "accentSoft" -> effectiveAccentSoftSolid
         "warnOn" -> argbToHex(effectiveWarnOn)
         "warnText" -> effectiveWarnText
         "dangerOn" -> argbToHex(effectiveDangerOn)
@@ -641,6 +760,7 @@ data class Theme(
         "accentText" -> copy(accentText = hex)
         "selection" -> copy(selection = hex)
         "windowIdle" -> copy(windowIdle = hex)
+        "accentSoft" -> copy(accentSoft = hex)
         "warnOn" -> copy(warnOn = hex)
         "warnText" -> copy(warnText = hex)
         "dangerOn" -> copy(dangerOn = hex)

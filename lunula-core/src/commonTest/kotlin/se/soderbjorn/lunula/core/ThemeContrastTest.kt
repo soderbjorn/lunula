@@ -367,6 +367,30 @@ class ThemeContrastTest {
         )
     }
 
+    /**
+     * The calm themes (LNA-19) were drawn for the Clean shell, so they are
+     * held to every check above with no exemption: none may appear in either
+     * allowlist. Since [textDimClearsAAOnWindowIdle] and
+     * [accentTextClearsAAOnAccentSoft] fail on any unlisted failure, this plus
+     * those two is the full guarantee.
+     */
+    @Test
+    fun calmThemesHaveNoAllowlistEntries() {
+        val listed = CALM_THEME_NAMES.filter {
+            it in KNOWN_TEXT_DIM_ON_WINDOW_IDLE_FAILURES || it in KNOWN_ACCENT_TEXT_ON_ACCENT_SOFT_FAILURES
+        }
+        assertEquals(emptyList(), listed)
+        for (name in CALM_THEME_NAMES) {
+            val t = builtinTheme(name)!!
+            val r = t.resolve()
+            assertTrue(contrastRatio(r.textDim, r.windowIdle) >= AA, "$name: textDim on windowIdle")
+            assertTrue(
+                contrastRatio(r.accentText, composite(r.accentSoft, r.surface)) >= AA,
+                "$name: accentText on accentSoft",
+            )
+        }
+    }
+
     @Test
     fun compositeOfATranslucentColourIsTheAlphaMix() {
         // Guards the helper the accentSoft check depends on: 15% of white over

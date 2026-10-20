@@ -20,7 +20,8 @@ package se.soderbjorn.lunula.core
  *
  * Produced by [Theme.resolve]. The 28 stored tokens plus the 4 derived
  * translucent ones (accentSoft / glow / addBg / chromeAccentSoft) are exposed
- * directly; the extra UI needs that aren't their own token (cursor, selection)
+ * directly, as are three Clean-only derived tokens ([accentSoftSolid],
+ * [cleanTextDim], [cleanAccentText]) that Classic rendering never reads; the extra UI needs that aren't their own token (cursor, selection)
  * are exposed as aliases that reference one of the tokens — a structural
  * assignment, not a derived colour. The syntax palette has 8 dedicated slots.
  * Window traffic-light dots are OS-semantic fixed colours, not theme tokens.
@@ -101,6 +102,26 @@ data class ResolvedTheme(
      * or [Theme.effectiveWindowIdle]'s tone-aware derivation from [surface].
      */
     val windowIdle: Long,
+    /**
+     * The accent wash as an opaque colour, for the Clean shell: the theme's
+     * declared opaque [Theme.accentSoft], or [accent] at
+     * [Theme.ACCENT_SOFT_ALPHA] composited over [surface]. Classic keeps
+     * painting the translucent [accentSoft]. See [Theme.effectiveAccentSoftSolid].
+     */
+    val accentSoftSolid: Long,
+    /**
+     * [textDim], nudged toward [text] only as far as needed to clear 4.5:1 on
+     * [windowIdle], [bg] and [surface]; identical to [textDim] when it already
+     * does. Clean paints inactive window titles and other dim type in it;
+     * Classic ignores it.
+     */
+    val cleanTextDim: Long,
+    /**
+     * [accentText], nudged toward the readable extreme only as far as needed
+     * to clear 4.5:1 on [accentSoftSolid]; identical to [accentText] when it
+     * already does. Clean paints the active sidebar row in it; Classic ignores it.
+     */
+    val cleanAccentText: Long,
 ) {
     // ----- Structural aliases (direct token references; no colour maths) -----
 

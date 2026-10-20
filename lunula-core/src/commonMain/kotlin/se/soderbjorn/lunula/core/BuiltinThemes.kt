@@ -1,13 +1,14 @@
 /* BuiltinThemes.kt
- * The 93 built-in themes (37 dark-toned, 56 light-toned): 71 transcribed verbatim from
+ * The 103 built-in themes (42 dark-toned, 61 light-toned): 71 transcribed verbatim from
  * the "Termtastic Theme Studio" design's RAW array, plus two hand-tuned
  * retro-computer palettes ("Workbench", "C64") appended at the
  * end of the list, sixteen hand-tuned light-chrome splits in the light
  * section ("Harbour", "Orchid", "Marmalade", "Cerise", "Fern", "Lagoon",
  * "Peony", "Sunbeam", "Bluebell", "Kiwi", "Spearmint", "Dusk", "Sunset",
  * "Cactus", "Pebble", "Nimbus"), the "Citron" pair transcribed from the
- * "LunaPin Theme" design, and the "Lunarbor" pair drawn from Lunarbor's app
- * icon. Each theme
+ * "LunaPin Theme" design, the "Lunarbor" pair drawn from Lunarbor's app
+ * icon, and the ten calm themes for the Clean shell (LNA-19: Moss, Lunicle,
+ * Orchid, Ember and Graphite, each as "… Calm Light" and "… Calm Dark"). Each theme
  * defines all 20 literal tokens (including 8 dedicated syntax slots); the
  * four the design computes by formula (accentSoft, glow, addBg,
  * chromeAccentSoft) are derived at render time by [Theme.resolve] applying the
@@ -76,6 +77,8 @@ private fun theme(
     addOn: String? = null,
     chromeAccentOn: String? = null, chromeAccentText: String? = null,
     selection: String? = null,
+    windowIdle: String? = null,
+    accentSoft: String? = null,
     tintAlpha: Double? = null,
 ): Theme = Theme(
     name = name, tag = tag, desc = desc,
@@ -95,11 +98,13 @@ private fun theme(
     addOn = addOn,
     chromeAccentOn = chromeAccentOn, chromeAccentText = chromeAccentText,
     selection = selection,
+    windowIdle = windowIdle,
+    accentSoft = accentSoft,
     tintAlpha = tintAlpha,
 )
 
 /**
- * The 93 built-in themes.
+ * The 103 built-in themes.
  *
  * **This list's order is not the display order.** The picker sorts by name
  * ([orderThemesForPicker]), so the grouping below — house block, the Citron
@@ -222,6 +227,98 @@ val builtinThemes: List<Theme> = listOf(
         "#8a9a12", "#c48a1e", "#c9435a", "#2f8a6a", "#1d6b50",
         "#8a3fbf", "#4a7a1e", "#a86a1e", "#9a8a98", "#6b7a0d", "#2f7a8a", "#43303f", "#b03a86",
         selection = "#c1c685"),
+    // ── Calm (the Clean shell's own palettes) ───────────────────────────
+    // Ten themes for the Clean style (epic LNA-16, ticket LNA-19): five hues in
+    // two tones, kept together as one block. Each is named "<Hue> Calm
+    // Light/Dark" because "Graphite", "Ember" and "Orchid" are already
+    // built-ins and "Lunicle" would read as an app's house theme. All carry the
+    // tag [CALM_THEME_TAG], which is what [ThemeCategory.Clean] matches; their
+    // picker order when the style is Clean is [CALM_THEME_NAMES].
+    //
+    // Stated from the brief (§4), verbatim: bg, surface, windowIdle, border,
+    // text, textDim, accent, the opaque accentSoft and accentText. The brief
+    // gives nothing else, so the rest is derived by one rule per token, the
+    // same for all ten, and then checked against every contrast lint (no
+    // allowlist entries):
+    //  - surfaceAlt — the sunken well, between the ground and the border:
+    //    light `mix(border, bg, 0.4)`, dark `mix(border, surface, 0.5)` (dark
+    //    wells sit a step lighter than the surface, as elsewhere in the catalog).
+    //  - textBright — text pushed halfway to the extreme: light
+    //    `mix(black, text, 0.5)`, dark `mix(white, text, 0.5)`.
+    //  - warn / danger / add / addText — one quiet semantic set per tone,
+    //    shared by all five hues so status reads the same in each: light amber
+    //    #8a5a00, red #b3261e, green #276b44 (addText #1d5636); dark #e0b25a,
+    //    #f08a80, #7cc6a0 (#a8e0c0). Each clears 4.5:1 as type on bg, surface,
+    //    surfaceAlt and windowIdle, and addText on the add tint.
+    //  - syntax — keyword = accentText, function = accent (Orchid Light's
+    //    accent is nudged 5 % toward its accentText to clear 4.5:1 on the well),
+    //    comment = textDim, operator = text; string / number / type / constant
+    //    from a shared muted set (green, amber, violet, plum), with string
+    //    swapped to blue in Moss and constant swapped to blue in Orchid so no
+    //    slot repeats the theme's own accent hue. All clear 4.5:1 on every surface.
+    //  - selection — the accent blended into bg at the weakest strength that
+    //    stands 1.6:1 apart from bg and surface with text at AA: the same
+    //    ladder as [Theme.effectiveSelection], stated so no built-in leans on it.
+    theme("Moss Calm Light", "Calm", "Quiet off-white with a deep moss-green accent. Calm daylight for the Clean shell.",
+        "#f7f7f5", "#ffffff", "#efefec", "#e3e3df", "#1a1c1e", "#62686d", "#0d0e0f",
+        "#2f6b4f", "#8a5a00", "#b3261e", "#276b44", "#1d5636",
+        "#1f4d38", "#2d6a8a", "#8f5a16", "#62686d", "#2f6b4f", "#6a4fb3", "#1a1c1e", "#a0436b",
+        accentText = "#1f4d38", accentSoft = "#e4ece6", windowIdle = "#f3f3f0",
+        selection = "#b7cac0"),
+    theme("Moss Calm Dark", "Calm", "Soft charcoal with a sage-green accent. Calm night for the Clean shell.",
+        "#0d0f10", "#1a1d20", "#202326", "#25292c", "#eceeee", "#9ba2a6", "#f6f6f6",
+        "#7cc6a0", "#e0b25a", "#f08a80", "#7cc6a0", "#a8e0c0",
+        "#9ed7b7", "#8ec5e0", "#e3b27a", "#9ba2a6", "#7cc6a0", "#b9a5f0", "#eceeee", "#e8a3c2",
+        accentText = "#9ed7b7", accentSoft = "#1d2a23", windowIdle = "#121416",
+        selection = "#2d443a"),
+    theme("Lunicle Calm Light", "Calm", "Quiet off-white with Lunicle's ink-blue accent. Calm daylight for the Clean shell.",
+        "#f7f7f5", "#ffffff", "#efefec", "#e3e3df", "#1a1c1e", "#62686d", "#0d0e0f",
+        "#2c5bbf", "#8a5a00", "#b3261e", "#276b44", "#1d5636",
+        "#1d3f8a", "#276b44", "#8f5a16", "#62686d", "#2c5bbf", "#6a4fb3", "#1a1c1e", "#a0436b",
+        accentText = "#1d3f8a", accentSoft = "#e3eaf7", windowIdle = "#f3f3f0",
+        selection = "#b6c5e4"),
+    theme("Lunicle Calm Dark", "Calm", "Soft charcoal with a periwinkle-blue accent. Calm night for the Clean shell.",
+        "#0e1012", "#181b1e", "#1f2226", "#262a2e", "#eceeef", "#9aa1a7", "#f6f6f7",
+        "#8ab0f0", "#e0b25a", "#f08a80", "#7cc6a0", "#a8e0c0",
+        "#b5ccf5", "#9ed7b7", "#e3b27a", "#9aa1a7", "#8ab0f0", "#b9a5f0", "#eceeef", "#e8a3c2",
+        accentText = "#b5ccf5", accentSoft = "#1c2536", windowIdle = "#121416",
+        selection = "#323e52"),
+    theme("Orchid Calm Light", "Calm", "Rose-tinted off-white with an orchid accent. Calm daylight for the Clean shell.",
+        "#f8f6f7", "#ffffff", "#f1eeef", "#e7e2e4", "#1c1a1b", "#675f63", "#0e0d0e",
+        "#b3477a", "#8a5a00", "#b3261e", "#276b44", "#1d5636",
+        "#7a2450", "#276b44", "#8f5a16", "#675f63", "#b04578", "#6a4fb3", "#1c1a1b", "#2d6a8a",
+        accentText = "#7a2450", accentSoft = "#f6e3ec", windowIdle = "#f4f1f2",
+        selection = "#e1bacc"),
+    theme("Orchid Calm Dark", "Calm", "Plum-black with a soft orchid-pink accent. Calm night for the Clean shell.",
+        "#121013", "#1a171a", "#221e22", "#2b262a", "#eeeaec", "#a69ca2", "#f6f4f6",
+        "#e58ab4", "#e0b25a", "#f08a80", "#7cc6a0", "#a8e0c0",
+        "#f2b6d0", "#9ed7b7", "#e3b27a", "#a69ca2", "#e58ab4", "#b9a5f0", "#eeeaec", "#8ec5e0",
+        accentText = "#f2b6d0", accentSoft = "#33202b", windowIdle = "#141214",
+        selection = "#513543"),
+    theme("Ember Calm Light", "Calm", "Warm off-white with a brick-red accent. Calm daylight for the Clean shell.",
+        "#f8f6f5", "#ffffff", "#f1eeec", "#e7e1df", "#1c1919", "#675f5e", "#0e0c0c",
+        "#b5443f", "#8a5a00", "#b3261e", "#276b44", "#1d5636",
+        "#7e2723", "#276b44", "#8f5a16", "#675f5e", "#b5443f", "#6a4fb3", "#1c1919", "#a0436b",
+        accentText = "#7e2723", accentSoft = "#f6e2e0", windowIdle = "#f4f1f0",
+        selection = "#e2bbb9"),
+    theme("Ember Calm Dark", "Calm", "Warm near-black with a coral-ember accent. Calm night for the Clean shell.",
+        "#110e0e", "#1c1717", "#241e1e", "#2b2424", "#eee8e7", "#a89c9a", "#f6f4f3",
+        "#e07a72", "#e0b25a", "#f08a80", "#7cc6a0", "#a8e0c0",
+        "#f2b6b0", "#9ed7b7", "#e3b27a", "#a89c9a", "#e07a72", "#b9a5f0", "#eee8e7", "#e8a3c2",
+        accentText = "#f2b6b0", accentSoft = "#2f1e1d", windowIdle = "#131010",
+        selection = "#573330"),
+    theme("Graphite Calm Light", "Calm", "Neutral greys with a graphite accent and no hue at all. Calm daylight for the Clean shell.",
+        "#f6f6f6", "#ffffff", "#eeeeee", "#e3e3e3", "#1a1b1c", "#5f6266", "#0d0e0e",
+        "#55595e", "#8a5a00", "#b3261e", "#276b44", "#1d5636",
+        "#2b2e31", "#276b44", "#8f5a16", "#5f6266", "#55595e", "#6a4fb3", "#1a1b1c", "#a0436b",
+        accentText = "#2b2e31", accentSoft = "#e6e7e9", windowIdle = "#f2f2f2",
+        selection = "#c2c4c5"),
+    theme("Graphite Calm Dark", "Calm", "Neutral near-black with a pale graphite accent. Calm night for the Clean shell.",
+        "#111214", "#1b1c1e", "#212224", "#27292b", "#ecedee", "#9da0a4", "#f6f6f6",
+        "#aeb2b7", "#e0b25a", "#f08a80", "#7cc6a0", "#a8e0c0",
+        "#d6d9dc", "#9ed7b7", "#e3b27a", "#9da0a4", "#aeb2b7", "#b9a5f0", "#ecedee", "#e8a3c2",
+        accentText = "#d6d9dc", accentSoft = "#2a2c2f", windowIdle = "#141517",
+        selection = "#3d3f42"),
     // ---------------------------------- Dark ----------------------------------
     // Renamed from "Obsidian Split". These two open the chrome zone, but both
     // their zones are dark — the split is in value, not between dark chrome and
@@ -931,6 +1028,51 @@ fun allThemes(custom: List<Theme>): List<Theme> {
 }
 
 /**
+ * The [Theme.tag] every calm built-in carries, and what [ThemeCategory.Clean]
+ * matches (see [isCalmTheme]).
+ *
+ * A tag rather than a name list so a user's clone of a calm theme — which
+ * keeps the tag — is still offered under Clean, and so a user can make their
+ * own theme count as calm by tagging it.
+ */
+const val CALM_THEME_TAG: String = "Calm"
+
+/**
+ * The calm built-ins in the order they lead the picker when the style is Clean
+ * (see [orderThemesForPicker]'s `calmFirst`): one hue at a time, light then
+ * dark, in the brief's order — Moss, Lunicle, Orchid, Ember, Graphite.
+ *
+ * Spelled out for the same reason as [HOUSE_THEME_NAMES]: the order is
+ * editorial, and alphabetical would open the list with Ember.
+ *
+ * @see CALM_THEME_TAG
+ */
+val CALM_THEME_NAMES: List<String> = listOf(
+    "Moss Calm Light", "Moss Calm Dark",
+    "Lunicle Calm Light", "Lunicle Calm Dark",
+    "Orchid Calm Light", "Orchid Calm Dark",
+    "Ember Calm Light", "Ember Calm Dark",
+    "Graphite Calm Light", "Graphite Calm Dark",
+)
+
+/** [CALM_THEME_NAMES] as name → position, for O(1) lookup while sorting. */
+private val calmThemeRank: Map<String, Int> =
+    CALM_THEME_NAMES.withIndex().associate { (i, name) -> name to i }
+
+/**
+ * Whether [theme] is one of the calm themes drawn for the Clean shell — a
+ * built-in from [CALM_THEME_NAMES], or any theme (a clone included) tagged
+ * [CALM_THEME_TAG].
+ *
+ * Called by [matchesThemeCategory] for [ThemeCategory.Clean] and by
+ * [orderThemesForPicker] when it puts calm themes first.
+ *
+ * @param theme the theme under test.
+ * @return true when the theme counts as calm.
+ */
+fun isCalmTheme(theme: Theme): Boolean = theme.tag == CALM_THEME_TAG || theme.name in calmThemeRank
+
+/**
  * The house themes, in the order they lead the picker: the three current
  * Lunamux palettes, the Lunarbor pair, then the three "Classic" ones Lunamux
  * replaced.
@@ -958,11 +1100,17 @@ private val houseThemeRank: Map<String, Int> =
  * which dropped the separate "Dark" / "Light" section headings):
  *
  *   1. starred themes
- *   2. the house themes, in [HOUSE_THEME_NAMES] order
- *   3. everything else, alphabetically by name
+ *   2. only when [calmFirst]: the calm themes ([isCalmTheme]), built-ins in
+ *      [CALM_THEME_NAMES] order and then any calm clone by name
+ *   3. the house themes, in [HOUSE_THEME_NAMES] order
+ *   4. everything else, alphabetically by name
+ *
+ * [calmFirst] is what the web layer passes when the user's style is Clean, so
+ * the palettes drawn for that shell are the first thing offered; under Classic
+ * (the default, `false`) the order is exactly what it always was.
  *
  * Alphabetical is the only order a stranger to the catalog can predict. The
- * list is 93 entries and growing; hand-maintained ordering meant the position
+ * list is 103 entries and growing; hand-maintained ordering meant the position
  * of "Sandstone" was a fact you could only learn by scrolling, and it
  * silently decided which themes got seen. Sorting by name makes a theme
  * findable by the name it is displayed under, which is also the thing the
@@ -989,13 +1137,28 @@ private val houseThemeRank: Map<String, Int> =
  *
  * @param themes    the full pickable catalog (typically [allThemes]).
  * @param favorites the set of starred theme names (see [ThemeSnapshotV2.favorites]).
+ * @param calmFirst whether to lift the calm themes above the house block —
+ *   `true` when the shell style is [ShellStyle.Clean]. Defaults to `false`.
  * @return the themes in single-list picker order.
  * @see allThemes
  * @see HOUSE_THEME_NAMES
+ * @see CALM_THEME_NAMES
  */
-fun orderThemesForPicker(themes: List<Theme>, favorites: Set<String>): List<Theme> =
+fun orderThemesForPicker(
+    themes: List<Theme>,
+    favorites: Set<String>,
+    calmFirst: Boolean = false,
+): List<Theme> =
     themes.sortedWith(
         compareBy<Theme> { if (it.name in favorites) 0 else 1 }
+            // Calm built-ins in their editorial order, then calm clones; every
+            // other theme shares the last rank. A no-op unless calmFirst.
+            .thenBy {
+                when {
+                    !calmFirst || !isCalmTheme(it) -> Int.MAX_VALUE
+                    else -> calmThemeRank[it.name] ?: CALM_THEME_NAMES.size
+                }
+            }
             // Non-house themes all share the same rank here, so the name
             // comparison below is what actually orders them.
             .thenBy { houseThemeRank[it.name] ?: Int.MAX_VALUE }
