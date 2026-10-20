@@ -103,6 +103,12 @@ data class ResolvedTheme(
      */
     val windowIdle: Long,
     /**
+     * Hairline ring around the focused window in the Clean shell: [border]
+     * pushed slightly toward [text]. Always derived — see
+     * [Theme.effectiveWindowRing]. Classic ignores it.
+     */
+    val windowRing: Long,
+    /**
      * The accent wash as an opaque colour, for the Clean shell: the theme's
      * declared opaque [Theme.accentSoft], or [accent] at
      * [Theme.ACCENT_SOFT_ALPHA] composited over [surface]. Classic keeps

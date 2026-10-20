@@ -403,10 +403,10 @@ data class Theme(
      * in opposite directions on the two:
      *
      *  - **light** — [surface] mixed [WINDOW_IDLE_LIGHT_TOWARD_BLACK] toward
-     *    black, a faint grey (`#FFFFFF` → `#F2F2F2`);
+     *    black, a light grey (`#FFFFFF` → `#ECECEC`);
      *  - **dark** — [surface] mixed [WINDOW_IDLE_DARK_TOWARD_BG] toward [bg],
-     *    sinking it most of the way into the window background
-     *    (`#1A1D20` over `#0D0F10` → `#131517`).
+     *    sinking it three quarters of the way into the window background
+     *    (`#1A1D20` over `#0D0F10` → `#101214`), never darker than [bg].
      *
      * Like [effectiveSelection], this is a computed fallback for an optional
      * token rather than a stored value; a theme that states [windowIdle] wins.
@@ -423,6 +423,23 @@ data class Theme(
                 mix(BLACK, hexToArgb(surface), WINDOW_IDLE_LIGHT_TOWARD_BLACK)
             }
         )
+
+    /**
+     * The hairline ring the Clean shell draws around the focused window:
+     * [border] mixed [WINDOW_RING_TOWARD_TEXT] toward [text], one step
+     * stronger than an ordinary hairline so the active window's edge reads
+     * on every side (`#E3E3DF` with text `#1A1C1E` → `#D5D5D1`).
+     *
+     * Derived only; there is no theme token to declare it, because it exists
+     * to track [border] and [text]. Read by [resolve] for
+     * [ResolvedTheme.windowRing], which the web layer emits as
+     * `--t-window-ring`.
+     *
+     * @return the ring colour as a `#rrggbb` hex string.
+     * @see ResolvedTheme.windowRing
+     */
+    val effectiveWindowRing: String
+        get() = argbToHex(mix(hexToArgb(text), hexToArgb(border), WINDOW_RING_TOWARD_TEXT))
 
     /**
      * The accent wash as an opaque colour: [accentSoft] if declared, else
@@ -571,6 +588,8 @@ data class Theme(
         selection = hexToArgb(effectiveSelection),
         // Declared, or derived from surface by tone — see effectiveWindowIdle.
         windowIdle = hexToArgb(effectiveWindowIdle),
+        // Derived from border and text — see effectiveWindowRing.
+        windowRing = hexToArgb(effectiveWindowRing),
         // Clean-only derived tokens; Classic never reads them. Each equals its
         // source exactly when the source already clears AA.
         accentSoftSolid = hexToArgb(effectiveAccentSoftSolid),
@@ -611,15 +630,25 @@ data class Theme(
 
         /**
          * How far [effectiveWindowIdle]'s light-tone fallback mixes [surface]
-         * toward black: `0.05` takes `#FFFFFF` to `#F2F2F2`.
+         * toward black: `0.075` takes `#FFFFFF` to `#ECECEC`. Raised from
+         * `0.05` (`#F2F2F2`) so a white focused window stands clearly apart
+         * from the idle ones under Clean.
          */
-        const val WINDOW_IDLE_LIGHT_TOWARD_BLACK: Double = 0.05
+        const val WINDOW_IDLE_LIGHT_TOWARD_BLACK: Double = 0.075
 
         /**
          * How far [effectiveWindowIdle]'s dark-tone fallback mixes [surface]
-         * toward [bg]: `0.55` takes `#1A1D20` over `#0D0F10` to `#131517`.
+         * toward [bg]: `0.75` takes `#1A1D20` over `#0D0F10` to `#101214`.
+         * Raised from `0.55` (`#131517`) for the same reason as the light
+         * fallback; kept below `1.0`, so idle never goes darker than [bg].
          */
-        const val WINDOW_IDLE_DARK_TOWARD_BG: Double = 0.55
+        const val WINDOW_IDLE_DARK_TOWARD_BG: Double = 0.75
+
+        /**
+         * How far [effectiveWindowRing] mixes [border] toward [text]: `0.07`
+         * takes `#E3E3DF` (with text `#1A1C1E`) to `#D5D5D1`.
+         */
+        const val WINDOW_RING_TOWARD_TEXT: Double = 0.07
 
         /**
          * Opacity of the derived accent wash, [ResolvedTheme.accentSoft]: the

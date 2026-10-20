@@ -235,9 +235,13 @@ val builtinThemes: List<Theme> = listOf(
     // tag [CALM_THEME_TAG], which is what [ThemeCategory.Clean] matches; their
     // picker order when the style is Clean is [CALM_THEME_NAMES].
     //
-    // Stated from the brief (§4), verbatim: bg, surface, windowIdle, border,
-    // text, textDim, accent, the opaque accentSoft and accentText. The brief
-    // gives nothing else, so the rest is derived by one rule per token, the
+    // Stated from the brief (§4), verbatim: bg, surface, border, text,
+    // textDim, accent, the opaque accentSoft and accentText. windowIdle came
+    // from the brief too, but was later moved one step further from the
+    // focused surface, so the active window stands out more: light idles
+    // darkened by about 7/255 (#f3f3f0 → #ecece8), dark idles sunk the same
+    // way the derived fallback now does, to about a quarter of the way from bg to
+    // surface (see Theme.WINDOW_IDLE_*). The brief gives nothing else, so the rest is derived by one rule per token, the
     // same for all ten, and then checked against every contrast lint (no
     // allowlist entries):
     //  - surfaceAlt — the sunken well, between the ground and the border:
@@ -251,7 +255,8 @@ val builtinThemes: List<Theme> = listOf(
     //    #f08a80, #7cc6a0 (#a8e0c0). Each clears 4.5:1 as type on bg, surface,
     //    surfaceAlt and windowIdle, and addText on the add tint.
     //  - syntax — keyword = accentText, function = accent (Orchid Light's
-    //    accent is nudged 5 % toward its accentText to clear 4.5:1 on the well),
+    //    accent is nudged 10 % toward its accentText to clear 4.5:1 on the well
+    //    and on the darker idle window),
     //    comment = textDim, operator = text; string / number / type / constant
     //    from a shared muted set (green, amber, violet, plum), with string
     //    swapped to blue in Moss and constant swapped to blue in Orchid so no
@@ -263,61 +268,61 @@ val builtinThemes: List<Theme> = listOf(
         "#f7f7f5", "#ffffff", "#efefec", "#e3e3df", "#1a1c1e", "#62686d", "#0d0e0f",
         "#2f6b4f", "#8a5a00", "#b3261e", "#276b44", "#1d5636",
         "#1f4d38", "#2d6a8a", "#8f5a16", "#62686d", "#2f6b4f", "#6a4fb3", "#1a1c1e", "#a0436b",
-        accentText = "#1f4d38", accentSoft = "#e4ece6", windowIdle = "#f3f3f0",
+        accentText = "#1f4d38", accentSoft = "#e4ece6", windowIdle = "#ecece8",
         selection = "#b7cac0"),
     theme("Moss Calm Dark", "Calm", "Soft charcoal with a sage-green accent. Calm night for the Clean shell.",
         "#0d0f10", "#1a1d20", "#202326", "#25292c", "#eceeee", "#9ba2a6", "#f6f6f6",
         "#7cc6a0", "#e0b25a", "#f08a80", "#7cc6a0", "#a8e0c0",
         "#9ed7b7", "#8ec5e0", "#e3b27a", "#9ba2a6", "#7cc6a0", "#b9a5f0", "#eceeee", "#e8a3c2",
-        accentText = "#9ed7b7", accentSoft = "#1d2a23", windowIdle = "#121416",
+        accentText = "#9ed7b7", accentSoft = "#1d2a23", windowIdle = "#101213",
         selection = "#2d443a"),
     theme("Lunicle Calm Light", "Calm", "Quiet off-white with Lunicle's ink-blue accent. Calm daylight for the Clean shell.",
         "#f7f7f5", "#ffffff", "#efefec", "#e3e3df", "#1a1c1e", "#62686d", "#0d0e0f",
         "#2c5bbf", "#8a5a00", "#b3261e", "#276b44", "#1d5636",
         "#1d3f8a", "#276b44", "#8f5a16", "#62686d", "#2c5bbf", "#6a4fb3", "#1a1c1e", "#a0436b",
-        accentText = "#1d3f8a", accentSoft = "#e3eaf7", windowIdle = "#f3f3f0",
+        accentText = "#1d3f8a", accentSoft = "#e3eaf7", windowIdle = "#ecece8",
         selection = "#b6c5e4"),
     theme("Lunicle Calm Dark", "Calm", "Soft charcoal with a periwinkle-blue accent. Calm night for the Clean shell.",
         "#0e1012", "#181b1e", "#1f2226", "#262a2e", "#eceeef", "#9aa1a7", "#f6f6f7",
         "#8ab0f0", "#e0b25a", "#f08a80", "#7cc6a0", "#a8e0c0",
         "#b5ccf5", "#9ed7b7", "#e3b27a", "#9aa1a7", "#8ab0f0", "#b9a5f0", "#eceeef", "#e8a3c2",
-        accentText = "#b5ccf5", accentSoft = "#1c2536", windowIdle = "#121416",
+        accentText = "#b5ccf5", accentSoft = "#1c2536", windowIdle = "#101214",
         selection = "#323e52"),
     theme("Orchid Calm Light", "Calm", "Rose-tinted off-white with an orchid accent. Calm daylight for the Clean shell.",
         "#f8f6f7", "#ffffff", "#f1eeef", "#e7e2e4", "#1c1a1b", "#675f63", "#0e0d0e",
         "#b3477a", "#8a5a00", "#b3261e", "#276b44", "#1d5636",
-        "#7a2450", "#276b44", "#8f5a16", "#675f63", "#b04578", "#6a4fb3", "#1c1a1b", "#2d6a8a",
-        accentText = "#7a2450", accentSoft = "#f6e3ec", windowIdle = "#f4f1f2",
+        "#7a2450", "#276b44", "#8f5a16", "#675f63", "#ad4476", "#6a4fb3", "#1c1a1b", "#2d6a8a",
+        accentText = "#7a2450", accentSoft = "#f6e3ec", windowIdle = "#edeaeb",
         selection = "#e1bacc"),
     theme("Orchid Calm Dark", "Calm", "Plum-black with a soft orchid-pink accent. Calm night for the Clean shell.",
         "#121013", "#1a171a", "#221e22", "#2b262a", "#eeeaec", "#a69ca2", "#f6f4f6",
         "#e58ab4", "#e0b25a", "#f08a80", "#7cc6a0", "#a8e0c0",
         "#f2b6d0", "#9ed7b7", "#e3b27a", "#a69ca2", "#e58ab4", "#b9a5f0", "#eeeaec", "#8ec5e0",
-        accentText = "#f2b6d0", accentSoft = "#33202b", windowIdle = "#141214",
+        accentText = "#f2b6d0", accentSoft = "#33202b", windowIdle = "#131114",
         selection = "#513543"),
     theme("Ember Calm Light", "Calm", "Warm off-white with a brick-red accent. Calm daylight for the Clean shell.",
         "#f8f6f5", "#ffffff", "#f1eeec", "#e7e1df", "#1c1919", "#675f5e", "#0e0c0c",
         "#b5443f", "#8a5a00", "#b3261e", "#276b44", "#1d5636",
         "#7e2723", "#276b44", "#8f5a16", "#675f5e", "#b5443f", "#6a4fb3", "#1c1919", "#a0436b",
-        accentText = "#7e2723", accentSoft = "#f6e2e0", windowIdle = "#f4f1f0",
+        accentText = "#7e2723", accentSoft = "#f6e2e0", windowIdle = "#edeae9",
         selection = "#e2bbb9"),
     theme("Ember Calm Dark", "Calm", "Warm near-black with a coral-ember accent. Calm night for the Clean shell.",
         "#110e0e", "#1c1717", "#241e1e", "#2b2424", "#eee8e7", "#a89c9a", "#f6f4f3",
         "#e07a72", "#e0b25a", "#f08a80", "#7cc6a0", "#a8e0c0",
         "#f2b6b0", "#9ed7b7", "#e3b27a", "#a89c9a", "#e07a72", "#b9a5f0", "#eee8e7", "#e8a3c2",
-        accentText = "#f2b6b0", accentSoft = "#2f1e1d", windowIdle = "#131010",
+        accentText = "#f2b6b0", accentSoft = "#2f1e1d", windowIdle = "#120f0f",
         selection = "#573330"),
     theme("Graphite Calm Light", "Calm", "Neutral greys with a graphite accent and no hue at all. Calm daylight for the Clean shell.",
         "#f6f6f6", "#ffffff", "#eeeeee", "#e3e3e3", "#1a1b1c", "#5f6266", "#0d0e0e",
         "#55595e", "#8a5a00", "#b3261e", "#276b44", "#1d5636",
         "#2b2e31", "#276b44", "#8f5a16", "#5f6266", "#55595e", "#6a4fb3", "#1a1b1c", "#a0436b",
-        accentText = "#2b2e31", accentSoft = "#e6e7e9", windowIdle = "#f2f2f2",
+        accentText = "#2b2e31", accentSoft = "#e6e7e9", windowIdle = "#ebebeb",
         selection = "#c2c4c5"),
     theme("Graphite Calm Dark", "Calm", "Neutral near-black with a pale graphite accent. Calm night for the Clean shell.",
         "#111214", "#1b1c1e", "#212224", "#27292b", "#ecedee", "#9da0a4", "#f6f6f6",
         "#aeb2b7", "#e0b25a", "#f08a80", "#7cc6a0", "#a8e0c0",
         "#d6d9dc", "#9ed7b7", "#e3b27a", "#9da0a4", "#aeb2b7", "#b9a5f0", "#ecedee", "#e8a3c2",
-        accentText = "#d6d9dc", accentSoft = "#2a2c2f", windowIdle = "#141517",
+        accentText = "#d6d9dc", accentSoft = "#2a2c2f", windowIdle = "#131416",
         selection = "#3d3f42"),
     // ---------------------------------- Dark ----------------------------------
     // Renamed from "Obsidian Split". These two open the chrome zone, but both

@@ -58,9 +58,10 @@ fun isDarkActive(appearance: Appearance): Boolean = when (appearance) {
  *
  * Every value is produced via [argbToCss].
  *
- * The three Clean-only vars — `--t-accent-soft-solid`, `--t-clean-text-dim`
- * and `--t-clean-accent-text` — are likewise always emitted, opaque, for the
- * `data-dt-style="clean"` stylesheet block to read; Classic rules ignore them.
+ * The Clean-only vars — `--t-accent-soft-solid`, `--t-clean-text-dim`,
+ * `--t-clean-accent-text` and `--t-window-ring` — are likewise always emitted,
+ * opaque, for the `data-dt-style="clean"` stylesheet block to read; Classic
+ * rules ignore them.
  *
  * The 9 chrome/canvas vars are always emitted: [ResolvedTheme] has already
  * applied each optional token's fallback, so a theme that doesn't split its
@@ -95,6 +96,9 @@ fun ResolvedTheme.toCssVarMap(): Map<String, String> = buildMap {
     put("--t-accent-text", argbToCss(accentText))
     put("--t-selection", argbToCss(selection))
     put("--t-window-idle", argbToCss(windowIdle))
+    // Clean's focused-window ring: border nudged toward text. Classic never
+    // reads it. See ResolvedTheme.windowRing.
+    put("--t-window-ring", argbToCss(windowRing))
     // Clean-only derived tokens (LNA-19). Always emitted; Classic's rules never
     // read them. Each equals its source exactly when the source is already
     // legible — see ResolvedTheme.cleanTextDim / cleanAccentText.
@@ -158,7 +162,8 @@ fun clearCssVars(element: HTMLElement, vars: Map<String, String>) {
  * Sets `color-scheme: dark` or `color-scheme: light` on the element, which
  * lets the browser style native form controls and scrollbars to match the
  * theme. Apps typically call this on `document.documentElement` alongside
- * [applyCssVars].
+ * [applyCssVars]. Also writes the per-side tuning vars of the Depth surface
+ * ([depthTuningVars]) and of the Clean shell ([cleanTuningVars]).
  *
  * @param element the target element (e.g. `document.documentElement`)
  * @param isDark whether the current theme is the dark variant
@@ -166,7 +171,32 @@ fun clearCssVars(element: HTMLElement, vars: Map<String, String>) {
 fun applyColorScheme(element: HTMLElement, isDark: Boolean) {
     element.style.setProperty("color-scheme", if (isDark) "dark" else "light")
     applyCssVars(element, depthTuningVars(isDark))
+    applyCssVars(element, cleanTuningVars(isDark))
 }
+
+/**
+ * The light/dark tuning of the Clean shell style ([ShellStyle.Clean]), as the
+ * `--dt-clean-*` custom properties `lunula.css` reads for the focused window's
+ * lift.
+ *
+ * Written by [applyColorScheme] next to [depthTuningVars], for the same
+ * reason: the values are inert under Classic, where no rule reads them, so
+ * switching to Clean never has to wait for a theme repaint.
+ *
+ * `--dt-clean-lift` is the soft two-layer drop shadow under the focused
+ * window (a tight contact shadow plus a wide ambient one). It is black on
+ * both sides, but at about 3.5× the alpha on dark grounds, where a light
+ * theme's 5 % / 10 % would not show at all.
+ *
+ * @param isDark whether the dark variant is active.
+ * @return CSS custom property name → value.
+ * @see depthTuningVars
+ */
+fun cleanTuningVars(isDark: Boolean): Map<String, String> = if (isDark) mapOf(
+    "--dt-clean-lift" to "0 2px 4px rgba(0, 0, 0, 0.2), 0 12px 32px rgba(0, 0, 0, 0.35)",
+) else mapOf(
+    "--dt-clean-lift" to "0 2px 4px rgba(0, 0, 0, 0.05), 0 12px 32px rgba(0, 0, 0, 0.1)",
+)
 
 /**
  * The light/dark tuning of the Depth surface style ([SurfaceStyle.Depth]), as

@@ -7401,16 +7401,24 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
      - One sheet. `.dt-pane-root` becomes a single rounded sheet (14px, 1px
        `--t-border` edge) inset from the ground. Windows inside it are not
        cards: they meet with zero gutter and are split by 1px hairlines.
-     - The active window is shown by background only: `--t-surface` for the
-       focused window, the derived `--t-window-idle` for the rest. No accent
-       band, outline ring or glow.
+     - The active window is shown by background first: `--t-surface` for the
+       focused window, the derived `--t-window-idle` for the rest. It is also
+       lifted: a 1px `--t-window-ring` hairline drawn inside its edge and a
+       soft neutral drop shadow (`--dt-clean-lift`). Stacking is untouched:
+       the shadow shows wherever the window already sits above its
+       neighbours or the sheet. A lone or maximized window has neither,
+       since there is nothing for it to stand out from. Still no accent band
+       and no glow. (The first Clean brief said "background only, no ring";
+       a live preview showed that was too quiet, see "Windows" below.)
      - A 44px sentence-case titlebar with ghost window controls.
 
    Colour comes only from `--t-bg`, `--t-surface`, `--t-window-idle`,
-   `--t-border`, `--t-text` and `--t-accent`, plus three contrast-safe tokens
+   `--t-border`, `--t-text` and `--t-accent`, plus four derived tokens
    referenced with fallbacks so this block works before they exist:
-   `--t-clean-text-dim` (dim text on idle or ground), `--t-clean-accent-text`
-   and `--t-accent-soft-solid`. The chrome split (`--t-chrome-*`) and
+   `--t-clean-text-dim` (dim text on idle or ground), `--t-clean-accent-text`,
+   `--t-accent-soft-solid` and `--t-window-ring` (the focused window's
+   hairline). The lift's shadow strength is `--dt-clean-lift`, written per
+   light/dark side by `applyColorScheme` (see `cleanTuningVars`). The chrome split (`--t-chrome-*`) and
    `--t-glow` are ignored.
 
    Precedence. This block sits at the very END of the file, after the Fill
@@ -7538,22 +7546,82 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
 }
 
 /* ── Windows ─────────────────────────────────────────────────────────
-   `--dt-clean-pane-bg` is the one value the window body and its titlebar both
-   read, so they can never disagree: idle by default, surface when focused. */
+   Each window's look is carried by three variables, set here by state and read
+   once by the paint rules below, so the paint rules never have to be repeated
+   per state (they carry long selector lists to outrank Fill and Depth):
+     --dt-clean-pane-bg      body and titlebar fill: idle, or surface when focused;
+     --dt-clean-pane-shadow  hairline + rest shadow, or the focused lift;
+     --dt-clean-pane-ring    the focused window's inner ring (transparent otherwise).
+
+   The active window is lifted, not only recoloured (decided after a live
+   preview of the first, background-only Clean, which read too flat):
+     - Ring. A 1px `--t-window-ring` line (border pushed slightly toward text)
+       drawn INSIDE the window's edge by `::after`. Inside, not as an outer
+       box-shadow spread, because the sheet clips its windows
+       (`overflow: hidden` on `.dt-pane-root`): an outer ring would vanish
+       wherever a tiled window touches the sheet's edge. And a pseudo-element
+       rather than an inset shadow or a negative-offset outline, because both
+       of those paint under the titlebar, which is positioned and has its own
+       background; `::after` stacks above it.
+     - Lift. A soft two-layer neutral shadow (`--dt-clean-lift`; stronger on
+       dark grounds). Deliberately NOT paired with a z-index change: window
+       stacking belongs to the toolkit (`bringPaneToFront` and the inline
+       `--dt-fp-z`) and is not overridden by the shell style. So the shadow
+       shows only where it can: over a neighbour that sits lower in the
+       stack, and over the sheet around a floating window. Under a higher neighbour, or past the sheet's
+       clipped edge, it is simply hidden, and the inner ring alone marks the
+       window. (Under a higher tiled neighbour that neighbour's outer hairline
+       covers the shared seam pixel, so on that one side the seam reads in
+       the border tone instead of the ring tone.)
+     - A lone window (the only one in its tab) or a maximized one gets neither:
+       it fills the sheet, so a ring would only double the sheet's border and
+       the shadow would be clipped away. Its surface colour is enough. */
 :root[data-dt-style="clean"] .dt-pane {
     --dt-clean-pane-bg: var(--t-window-idle, var(--t-surface, #1e1e1e));
+    --dt-clean-pane-rest-shadow:
+        0 0 0 1px var(--t-border, rgba(255, 255, 255, 0.1)),
+        0 8px 18px -12px rgba(0, 0, 0, 0.28);
+    --dt-clean-pane-shadow: var(--dt-clean-pane-rest-shadow);
+    --dt-clean-pane-ring: transparent;
 }
 :root[data-dt-style="clean"] .dt-pane.dt-pane-focused {
     --dt-clean-pane-bg: var(--t-surface, #1e1e1e);
+    --dt-clean-pane-shadow: var(--dt-clean-lift,
+        0 2px 4px rgba(0, 0, 0, 0.05),
+        0 12px 32px rgba(0, 0, 0, 0.1));
+    --dt-clean-pane-ring: var(--t-window-ring, var(--t-border, rgba(255, 255, 255, 0.1)));
 }
-/* Square, ringless, and split by a 1px hairline. The hairline is a box-shadow
-   spread OUTSIDE the box, so where two windows meet one line paints over the
-   seam rather than two lines side by side, and along the sheet's edge it lands
-   on the sheet's own border. Floating windows keep a drop shadow (it answers
+/* Lone or maximized: no ring, no lift. "Lone" counts the window's
+   siblings in the pane area, ignoring the ghost a closing window leaves for
+   its exit animation. */
+:root[data-dt-style="clean"] .dt-pane.dt-pane-focused.dt-maximized,
+:root[data-dt-style="clean"] .dt-pane-area:not(:has(> .dt-pane:not(.dt-pane-focused):not(.dt-pane-closing-ghost))) > .dt-pane.dt-pane-focused {
+    --dt-clean-pane-shadow: var(--dt-clean-pane-rest-shadow);
+    --dt-clean-pane-ring: transparent;
+}
+/* The ring, above the titlebar and its controls (z 5), and never in the way
+   of a click. Its z-index orders it only among the window's own children (the
+   window is already a stacking context); the window's own stacking is not
+   touched. Declared on every Clean window so it can be tested and
+   transitioned; it is transparent unless the window is focused. */
+:root[data-dt-style="clean"] .dt-pane.dt-pane-floating::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--dt-clean-pane-ring);
+    pointer-events: none;
+    z-index: 6;
+}
+/* Square, and split by a 1px hairline. The hairline is a box-shadow spread
+   OUTSIDE the box, so where two windows meet one line paints over the seam
+   rather than two lines side by side, and along the sheet's edge it lands on
+   the sheet's own border. Floating windows keep a drop shadow (it answers
    "which window is in front"), softened to sit on a calm sheet:
    every window is a `.dt-pane-floating`, tiled ones included, so the shadow
    is kept short and tucked under the window (negative spread) to stay out of
    the hairline seams of a tiled layout and show only where windows overlap.
+   The focused window swaps that for its lift (see above), and its inner ring
+   marks its edge on every side.
 
    Listed selectors and why: `.dt-pane-floating.dt-pane-focused` reaches
    Depth's focused-pane lift and halo; `body.dt-pointer-active` reaches Fill's
@@ -7568,9 +7636,7 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     background: var(--dt-clean-pane-bg);
     outline: 1px solid transparent;
     outline-offset: -1px;
-    box-shadow:
-        0 0 0 1px var(--t-border, rgba(255, 255, 255, 0.1)),
-        0 8px 18px -12px rgba(0, 0, 0, 0.28);
+    box-shadow: var(--dt-clean-pane-shadow);
 }
 /* Maximized: the whole sheet, with no breathing inset (the sheet already has
    its own inset from the ground). */
@@ -7584,8 +7650,8 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
 /* ── Window bodies ───────────────────────────────────────────────────
    The toolkit's content slot normally paints `--t-bg` inside a 4px inset,
    which under Clean would show the ground tone inside every window, framed by
-   a band of the window colour. The active window is shown by background
-   only, so the slot steps aside: no inset, no fill of its own, and the body
+   a band of the window colour. The active window is shown by its background
+   (and its ring and lift, drawn on the window itself), so the slot steps aside: no inset, no fill of its own, and the body
    takes the idle or focused window colour from `.dt-pane`. A host's own
    content that paints a background (a terminal, an editor) still does, and
    has to go transparent itself to dim with the window.

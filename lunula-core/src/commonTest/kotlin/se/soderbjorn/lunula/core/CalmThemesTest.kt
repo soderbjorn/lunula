@@ -56,15 +56,18 @@ class CalmThemesTest {
     fun theBriefsStatedValuesLandVerbatim() {
         // Spot-check one theme fully against the ticket (LNA-19), in the
         // brief's order: bg / surface / windowIdle / border / text / textDim /
-        // accent / accentSoft / accentText.
+        // accent / accentSoft / accentText. windowIdle is the one exception:
+        // it was later moved a step further from surface (the brief's #141517
+        // and #f3f3f0 became #131416 and #ecece8) so the active window stands
+        // out more.
         val g = builtinTheme("Graphite Calm Dark")!!
         assertEquals(
-            listOf("#111214", "#1b1c1e", "#141517", "#27292b", "#ecedee", "#9da0a4", "#aeb2b7", "#2a2c2f", "#d6d9dc"),
+            listOf("#111214", "#1b1c1e", "#131416", "#27292b", "#ecedee", "#9da0a4", "#aeb2b7", "#2a2c2f", "#d6d9dc"),
             listOf(g.bg, g.surface, g.windowIdle, g.border, g.text, g.textDim, g.accent, g.accentSoft, g.accentText),
         )
         val m = builtinTheme("Moss Calm Light")!!
         assertEquals(
-            listOf("#f7f7f5", "#ffffff", "#f3f3f0", "#e3e3df", "#1a1c1e", "#62686d", "#2f6b4f", "#e4ece6", "#1f4d38"),
+            listOf("#f7f7f5", "#ffffff", "#ecece8", "#e3e3df", "#1a1c1e", "#62686d", "#2f6b4f", "#e4ece6", "#1f4d38"),
             listOf(m.bg, m.surface, m.windowIdle, m.border, m.text, m.textDim, m.accent, m.accentSoft, m.accentText),
         )
     }
@@ -77,6 +80,19 @@ class CalmThemesTest {
             assertNotNull(t.windowIdle, "${t.name} windowIdle")
             assertNotNull(t.selection, "${t.name} selection")
             assertNull(t.chromeBg, "${t.name} must not open a chrome zone — Clean ignores it")
+        }
+    }
+
+    @Test
+    fun everyCalmIdleWindowSitsBetweenTheGroundAndTheFocusedSurface() {
+        // Light: idle is darker than the white focused window. Dark: idle is
+        // darker than the focused surface but never darker than the ground.
+        for (t in calmThemes) {
+            val r = t.resolve()
+            assertTrue(luminance(r.windowIdle) < luminance(r.surface), "${t.name}: idle must differ from surface")
+            if (t.isDarkToned) {
+                assertTrue(luminance(r.windowIdle) >= luminance(r.bg), "${t.name}: idle darker than bg")
+            }
         }
     }
 

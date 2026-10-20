@@ -3,7 +3,8 @@
  * (LNA-18): its tone-aware derivation from `surface` when unset, the declared
  * value winning when set, its editor wiring through [Theme.token] /
  * [Theme.withToken], and its absence from the serialized form of a theme that
- * leaves it out (themes.json is shared between Lunula apps).
+ * leaves it out (themes.json is shared between Lunula apps). Also covers the
+ * derived focused-window ring that goes with it ([Theme.effectiveWindowRing]).
  */
 package se.soderbjorn.lunula.core
 
@@ -36,8 +37,8 @@ class ThemeWindowIdleTest {
         val light = base.copy(bg = "#ffffff", surface = "#ffffff")
         assertFalse(light.isDarkToned, "fixture must be light-toned")
         val idle = light.resolve().windowIdle
-        assertEquals("#f2f2f2", argbToHex(idle))
-        assertNear("#f3f3f3", idle)
+        assertEquals("#ececec", argbToHex(idle))
+        assertNear("#ececec", idle)
     }
 
     @Test
@@ -45,8 +46,24 @@ class ThemeWindowIdleTest {
         val dark = base.copy(bg = "#0d0f10", surface = "#1a1d20")
         assertTrue(dark.isDarkToned, "fixture must be dark-toned")
         val idle = dark.resolve().windowIdle
-        assertEquals("#131517", argbToHex(idle))
-        assertNear("#121416", idle)
+        assertEquals("#101214", argbToHex(idle))
+        assertNear("#101213", idle)
+        // Never sinks below the ground: still at least as light as bg.
+        assertTrue(luminance(idle) >= luminance(hexToArgb(dark.bg)), "idle darker than bg")
+    }
+
+    @Test
+    fun theWindowRingIsBorderNudgedTowardText() {
+        val light = builtinTheme("Lunicle Calm Light")!!
+        assertEquals("#d5d5d1", light.effectiveWindowRing)
+        assertEquals(hexToArgb("#d5d5d1"), light.resolve().windowRing)
+        // Always a step from the border toward the text, on either tone.
+        for (t in listOf(light, builtinTheme("Lunicle Calm Dark")!!)) {
+            val ring = t.resolve().windowRing
+            val border = hexToArgb(t.border)
+            val text = hexToArgb(t.text)
+            assertTrue(contrastRatio(ring, text) < contrastRatio(border, text), "${t.name}: ring must lean toward text")
+        }
     }
 
     @Test

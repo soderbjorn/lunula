@@ -19,7 +19,9 @@
  *    content slot transparent and un-inset, so the body shows that colour),
  *    idle titles use `--t-clean-text-dim`, the titlebar is 44px
  *    and sentence case, and the action strip's hover reveal still hides it at
- *    rest.
+ *    rest. The focused window is also lifted: an inner `--t-window-ring`
+ *    hairline and a soft drop shadow, which idle, lone and maximized windows
+ *    do not get, and which leave the toolkit's stacking (z-index) untouched.
  *
  * @see se.soderbjorn.lunula.web.applyShellStyle
  */
@@ -64,6 +66,7 @@ private val PALETTE = mapOf(
     "--t-surface" to "rgb(200, 201, 202)",
     "--t-surface-alt" to "rgb(190, 191, 192)",
     "--t-window-idle" to "rgb(180, 181, 182)",
+    "--t-window-ring" to "rgb(120, 121, 122)",
     "--t-border" to "rgb(100, 101, 102)",
     "--t-text" to "rgb(20, 21, 22)",
     "--t-text-dim" to "rgb(90, 91, 92)",
@@ -114,8 +117,15 @@ class CleanShellStyleTest {
     /**
      * Renders an app frame holding two side-by-side windows, `p1` (focused,
      * as the first visible pane) and `p2` (idle), each with one action.
+     *
+     * @param panes the windows to render; defaults to the two halves.
      */
-    private fun renderShell() {
+    private fun renderShell(
+        panes: List<FloatingPaneSpec> = listOf(
+            FloatingPaneSpec(id = "p1", title = "First window", xPct = 0.0, yPct = 0.0, widthPct = 0.5, heightPct = 1.0),
+            FloatingPaneSpec(id = "p2", title = "Second window", xPct = 0.5, yPct = 0.0, widthPct = 0.5, heightPct = 1.0),
+        ),
+    ) {
         val main = (document.createElement("div") as HTMLElement).also {
             it.className = "dt-app-frame-main"
             it.style.height = "100%"
@@ -131,12 +141,7 @@ class CleanShellStyleTest {
                 },
             ),
         ).render(
-            layout = PaneLayout(
-                floatingPanes = listOf(
-                    FloatingPaneSpec(id = "p1", title = "First window", xPct = 0.0, yPct = 0.0, widthPct = 0.5, heightPct = 1.0),
-                    FloatingPaneSpec(id = "p2", title = "Second window", xPct = 0.5, yPct = 0.0, widthPct = 0.5, heightPct = 1.0),
-                ),
-            ),
+            layout = PaneLayout(floatingPanes = panes),
             suppressSeparators = true,
         )
     }
@@ -182,6 +187,13 @@ class CleanShellStyleTest {
             el.style.transition = "none"
             val style = window.getComputedStyle(el)
             for (p in props) out["$name $p"] = style.getPropertyValue(p)
+        }
+        // The stacking, and the ring pseudo-element Clean adds, for both windows.
+        for (id in listOf("p1", "p2")) {
+            out["$id z-index"] = window.getComputedStyle(pane(id)).zIndex
+            val after = window.getComputedStyle(pane(id), "::after")
+            out["$id::after content"] = after.getPropertyValue("content")
+            out["$id::after border-top-color"] = after.borderTopColor
         }
         return out
     }
@@ -292,6 +304,68 @@ class CleanShellStyleTest {
         assertEquals(PALETTE["--t-border"], sheet.borderTopColor)
         // Zero gutter: the second window starts exactly where the first ends.
         assertEquals(pane("p1").getBoundingClientRect().right, pane("p2").getBoundingClientRect().left)
+    }
+
+    /** The ring and the lift a window shows, read off its computed style. */
+    private fun ringOf(p: HTMLElement): String = window.getComputedStyle(p, "::after").borderTopColor
+    private fun shadowOf(p: HTMLElement): String {
+        p.style.transition = "none"
+        return window.getComputedStyle(p).boxShadow
+    }
+
+    /** The focused window's lift: the second, wide layer of `--dt-clean-lift`. */
+    private val liftLayer = "0px 12px 32px"
+
+    /**
+     * Under Clean the focused window is lifted, under both selection
+     * languages: an inner ring in `--t-window-ring` and a soft drop shadow.
+     * The idle window keeps its plain hairline and no ring, and neither
+     * window's stacking moves (the toolkit owns z-index).
+     */
+    @Test
+    fun cleanLiftsTheFocusedWindowWithARingAndAShadow() {
+        renderShell()
+        val zBefore = listOf("p1", "p2").map { window.getComputedStyle(pane(it)).zIndex }
+        applyShellStyle(root, ShellStyle.Clean)
+        for (selection in SelectionStyle.entries) {
+            applySelectionStyle(root, selection)
+            val focused = pane("p1")
+            val idle = pane("p2")
+            assertEquals(PALETTE["--t-window-ring"], ringOf(focused), "focused ring, $selection")
+            assertEquals("rgba(0, 0, 0, 0)", ringOf(idle), "idle windows have no ring, $selection")
+            assertEquals("none", window.getComputedStyle(focused, "::after").getPropertyValue("pointer-events"))
+            assertTrue(liftLayer in shadowOf(focused), "focused lift, $selection: ${shadowOf(focused)}")
+            assertFalse(liftLayer in shadowOf(idle), "idle windows are not lifted, $selection: ${shadowOf(idle)}")
+            assertTrue(PALETTE["--t-border"]!! in shadowOf(idle), "idle windows keep their hairline, $selection")
+            assertEquals(zBefore, listOf("p1", "p2").map { window.getComputedStyle(pane(it)).zIndex }, "stacking, $selection")
+        }
+    }
+
+    /**
+     * A window alone in its tab fills the sheet, so it is neither ringed nor
+     * lifted; nor is a maximized one.
+     */
+    @Test
+    fun aLoneOrMaximizedWindowIsNotLifted() {
+        renderShell(listOf(FloatingPaneSpec(id = "p1", title = "Only window", xPct = 0.0, yPct = 0.0, widthPct = 1.0, heightPct = 1.0)))
+        applyShellStyle(root, ShellStyle.Clean)
+        val lone = pane("p1")
+        assertTrue(lone.classList.contains(LayoutClassNames.PANE_FOCUSED))
+        assertEquals("rgba(0, 0, 0, 0)", ringOf(lone), "lone window ring")
+        assertFalse(liftLayer in shadowOf(lone), "lone window lift: ${shadowOf(lone)}")
+        assertEquals(PALETTE["--t-surface"], window.getComputedStyle(lone).backgroundColor, "still shown as focused")
+
+        frame.innerHTML = ""
+        renderShell(
+            listOf(
+                FloatingPaneSpec(id = "p1", title = "Big", xPct = 0.0, yPct = 0.0, widthPct = 0.5, heightPct = 1.0, isMaximized = true),
+                FloatingPaneSpec(id = "p2", title = "Other", xPct = 0.5, yPct = 0.0, widthPct = 0.5, heightPct = 1.0),
+            ),
+        )
+        val maximized = pane("p1")
+        assertTrue(maximized.classList.contains("dt-maximized"))
+        assertEquals("rgba(0, 0, 0, 0)", ringOf(maximized), "maximized window ring")
+        assertFalse(liftLayer in shadowOf(maximized), "maximized window lift")
     }
 
     /** Clean restyles the controls but must leave their hover reveal alone. */

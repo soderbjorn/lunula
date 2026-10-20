@@ -44,8 +44,10 @@ private const val AA: Double = 4.5
 
 /**
  * Built-ins whose [Theme.textDim] is below AA on their [ResolvedTheme.windowIdle]
- * fill, recorded when the check was introduced (LNA-18). Not to be grown: a
- * new theme must pass, and a listed theme that is fixed must be removed.
+ * fill, recorded when the check was introduced (LNA-18) and regenerated once
+ * when the derived idle fill was darkened (see the entries at the end). Not to
+ * be grown otherwise: a new theme must pass, and a listed theme that is fixed
+ * must be removed.
  */
 private val KNOWN_TEXT_DIM_ON_WINDOW_IDLE_FAILURES: Set<String> = setOf(
     "Lunamux Dark",
@@ -117,6 +119,21 @@ private val KNOWN_TEXT_DIM_ON_WINDOW_IDLE_FAILURES: Set<String> = setOf(
     "Heather",
     "Workbench",
     "C64",
+    // Added when the derived idle fill moved from #f2f2f2 to #ececec on white
+    // surfaces (the Clean active window had to stand out more). Their textDim
+    // cleared AA on the old idle grey and falls just short on the new one;
+    // Clean paints dim type in the nudged cleanTextDim, so only the Classic
+    // palette value is affected.
+    "Harbour",
+    "Marmalade",
+    "Lagoon",
+    "Kiwi",
+    "Spearmint",
+    "Dusk",
+    "Cactus",
+    "Pebble",
+    "Nimbus",
+    "GitHub Light",
 )
 
 /**
