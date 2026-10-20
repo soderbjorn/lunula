@@ -128,6 +128,8 @@ enum class Appearance { Auto, Dark, Light }
  * @property selection        optional — opaque background of selected text; every built-in
  *   declares it, and a custom theme saved before it existed gets the legible
  *   fallback [effectiveSelection].
+ * @property windowIdle       optional — fill of an idle (unfocused, resting) window in the
+ *   Clean shell; falls back to a derivation from [surface] — see [effectiveWindowIdle].
  * @property tintAlpha        optional — diff-row tint opacity; falls back to the tone default.
  * @property group            **legacy, ignored** — the removed dark/light declaration. Kept
  *   so a `themes.json` written before the removal still decodes; see [ThemeGroup].
@@ -209,6 +211,12 @@ data class Theme(
     // nullable and never-encoded so `themes.json` (shared between Lunula
     // apps) is unchanged for a theme that leaves it out.
     @EncodeDefault(EncodeDefault.Mode.NEVER) val selection: String? = null,
+    // ---- Optional idle-window fill ----
+    // The resting fill of a window that is not the focused one, for the Clean
+    // shell (epic LNA-16). Optional and never-encoded like every token above,
+    // so a theme that leaves it out serializes exactly as before; when unset
+    // it is derived from [surface] — see [effectiveWindowIdle].
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val windowIdle: String? = null,
     // ---- Optional non-colour properties ----
     /**
      * Opacity of the diff-add/remove row tints. `null` → the tone default
@@ -370,6 +378,35 @@ data class Theme(
         return ladder.firstOrNull { apart(it) >= SELECTION_LOW_HEADROOM_APART } ?: ladder.last()
     }
 
+    /**
+     * [windowIdle] if set, else derived from [surface] so that an idle window
+     * sits one quiet step away from the focused one.
+     *
+     * The derivation depends on tone ([isDarkToned]), because "quieter" points
+     * in opposite directions on the two:
+     *
+     *  - **light** — [surface] mixed [WINDOW_IDLE_LIGHT_TOWARD_BLACK] toward
+     *    black, a faint grey (`#FFFFFF` → `#F2F2F2`);
+     *  - **dark** — [surface] mixed [WINDOW_IDLE_DARK_TOWARD_BG] toward [bg],
+     *    sinking it most of the way into the window background
+     *    (`#1A1D20` over `#0D0F10` → `#131517`).
+     *
+     * Like [effectiveSelection], this is a computed fallback for an optional
+     * token rather than a stored value; a theme that states [windowIdle] wins.
+     * Read by [resolve] and by [token] (so the editor shows the real colour).
+     *
+     * @return the idle-window fill as a `#rrggbb` hex string.
+     * @see ResolvedTheme.windowIdle
+     */
+    val effectiveWindowIdle: String
+        get() = windowIdle ?: argbToHex(
+            if (isDarkToned) {
+                mix(hexToArgb(bg), hexToArgb(surface), WINDOW_IDLE_DARK_TOWARD_BG)
+            } else {
+                mix(BLACK, hexToArgb(surface), WINDOW_IDLE_LIGHT_TOWARD_BLACK)
+            }
+        )
+
     /** [tintAlpha] if set, else the tone default (0.16 light / 0.18 dark). */
     val effectiveTintAlpha: Double
         get() = tintAlpha ?: if (isDarkToned) DARK_TINT_ALPHA else LIGHT_TINT_ALPHA
@@ -442,6 +479,8 @@ data class Theme(
         chromeAccentText = hexToArgb(effectiveChromeAccentText),
         chromeTrack = hexToArgb(effectiveChromeTrack),
         selection = hexToArgb(effectiveSelection),
+        // Declared, or derived from surface by tone — see effectiveWindowIdle.
+        windowIdle = hexToArgb(effectiveWindowIdle),
     )
 
     companion object {
@@ -476,14 +515,29 @@ data class Theme(
         const val SELECTION_TEXT_AA: Double = 4.5
 
         /**
-         * The 38 editable token ids in display order, grouped by role. Used by
+         * How far [effectiveWindowIdle]'s light-tone fallback mixes [surface]
+         * toward black: `0.05` takes `#FFFFFF` to `#F2F2F2`.
+         */
+        const val WINDOW_IDLE_LIGHT_TOWARD_BLACK: Double = 0.05
+
+        /**
+         * How far [effectiveWindowIdle]'s dark-tone fallback mixes [surface]
+         * toward [bg]: `0.55` takes `#1A1D20` over `#0D0F10` to `#131517`.
+         */
+        const val WINDOW_IDLE_DARK_TOWARD_BG: Double = 0.55
+
+        /** Opaque black, the light-tone mix target for [effectiveWindowIdle]. */
+        private const val BLACK: Long = 0xFF000000L
+
+        /**
+         * The 39 editable token ids in display order, grouped by role. Used by
          * the web editor to render one colour input per token. (The five
          * derived tokens — accentSoft / glow / addBg / removeBgTint /
          * chromeAccentSoft — are not listed; they follow the
          * accent/add/danger/chromeAccent colour automatically.)
          *
          * The optional ids — the 8 chrome/canvas ones, the 9 role-split ones
-         * and `selection` — report their *effective* value through [token], so the editor
+         * `selection` and `windowIdle` — report their *effective* value through [token], so the editor
          * always shows a real colour rather than an empty swatch, and
          * [withToken] pins an explicit one on edit.
          *
@@ -492,7 +546,7 @@ data class Theme(
          * together.
          */
         val TOKEN_IDS: List<String> = listOf(
-            "bg", "canvas", "surface", "surfaceAlt", "border",
+            "bg", "canvas", "surface", "surfaceAlt", "windowIdle", "border",
             "text", "textDim", "textBright",
             "accent", "accentOn", "accentText", "selection",
             "warn", "warnOn", "warnText",
@@ -532,6 +586,7 @@ data class Theme(
         "accentOn" -> argbToHex(effectiveAccentOn)
         "accentText" -> effectiveAccentText
         "selection" -> effectiveSelection
+        "windowIdle" -> effectiveWindowIdle
         "warnOn" -> argbToHex(effectiveWarnOn)
         "warnText" -> effectiveWarnText
         "dangerOn" -> argbToHex(effectiveDangerOn)
@@ -585,6 +640,7 @@ data class Theme(
         "accentOn" -> copy(accentOn = hex)
         "accentText" -> copy(accentText = hex)
         "selection" -> copy(selection = hex)
+        "windowIdle" -> copy(windowIdle = hex)
         "warnOn" -> copy(warnOn = hex)
         "warnText" -> copy(warnText = hex)
         "dangerOn" -> copy(dangerOn = hex)

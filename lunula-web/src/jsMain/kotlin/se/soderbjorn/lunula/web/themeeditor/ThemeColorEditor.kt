@@ -46,6 +46,7 @@ private val TOKEN_LABELS: Map<String, String> = mapOf(
     "canvas" to "Pane canvas",
     "surface" to "Surface",
     "surfaceAlt" to "Surface (sunken)",
+    "windowIdle" to "Idle window",
     "border" to "Border",
     "text" to "Text",
     "textDim" to "Text (dim)",

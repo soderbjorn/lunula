@@ -40,6 +40,10 @@ private val shapeJson = Json { ignoreUnknownKeys = true }
  * @property selectionStyle  how selection is painted; `null` → [SelectionStyle.Default].
  * @property surfaceStyle    whether surfaces carry depth (shadows, sheen, glow,
  *   ambient wash) or stay flat; `null` → [SurfaceStyle.Default] ([SurfaceStyle.Depth]).
+ * @property shellStyle      which shell composition to draw; `null` →
+ *   [ShellStyle.Default] ([ShellStyle.Classic]).
+ * @property navigationMode  whether tabs are reached through the sidebar, a tab
+ *   strip, or both; `null` → [NavigationMode.Default] ([NavigationMode.Sidebar]).
  * @see PersistKeys.APPEARANCE_SHAPE
  */
 data class AppearanceShape(
@@ -47,6 +51,8 @@ data class AppearanceShape(
     val uiDensity: UiDensity? = null,
     val selectionStyle: SelectionStyle? = null,
     val surfaceStyle: SurfaceStyle? = null,
+    val shellStyle: ShellStyle? = null,
+    val navigationMode: NavigationMode? = null,
 ) {
     /**
      * Encodes to the persisted JSON object, omitting unset fields entirely.
@@ -62,6 +68,8 @@ data class AppearanceShape(
         uiDensity?.let { put("uiDensity", JsonPrimitive(it.cssValue)) }
         selectionStyle?.let { put("selectionStyle", JsonPrimitive(it.cssValue)) }
         surfaceStyle?.let { put("surfaceStyle", JsonPrimitive(it.cssValue)) }
+        shellStyle?.let { put("shellStyle", JsonPrimitive(it.cssValue)) }
+        navigationMode?.let { put("navigationMode", JsonPrimitive(it.cssValue)) }
     }
 
     /** The persisted form as a JSON string, for flat key/value backends. */
@@ -70,7 +78,7 @@ data class AppearanceShape(
     /** True when the user has expressed no preference at all. */
     val isEmpty: Boolean
         get() = cornerRadiusPx == null && uiDensity == null && selectionStyle == null &&
-            surfaceStyle == null
+            surfaceStyle == null && shellStyle == null && navigationMode == null
 
     companion object {
         /**
@@ -98,11 +106,19 @@ data class AppearanceShape(
             val surface = SurfaceStyle.fromRaw(
                 (obj["surfaceStyle"] as? JsonPrimitive)?.contentOrNull
             )
+            val shell = ShellStyle.fromRaw(
+                (obj["shellStyle"] as? JsonPrimitive)?.contentOrNull
+            )
+            val navigation = NavigationMode.fromRaw(
+                (obj["navigationMode"] as? JsonPrimitive)?.contentOrNull
+            )
             return AppearanceShape(
                 cornerRadiusPx = radius,
                 uiDensity = density,
                 selectionStyle = selection,
                 surfaceStyle = surface,
+                shellStyle = shell,
+                navigationMode = navigation,
             )
         }
     }

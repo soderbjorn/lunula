@@ -24,8 +24,10 @@ package se.soderbjorn.lunula.web.themeeditor
 import se.soderbjorn.lunula.core.Appearance
 import se.soderbjorn.lunula.core.DEFAULT_DARK_THEME
 import se.soderbjorn.lunula.core.DEFAULT_LIGHT_THEME
+import se.soderbjorn.lunula.core.NavigationMode
 import se.soderbjorn.lunula.core.Theme
 import se.soderbjorn.lunula.core.SelectionStyle
+import se.soderbjorn.lunula.core.ShellStyle
 import se.soderbjorn.lunula.core.SurfaceStyle
 import se.soderbjorn.lunula.core.UiDensity
 
@@ -93,6 +95,10 @@ class DefaultThemeManagerState(
     var selectionStyle: SelectionStyle? = null,
     /** Surface-depth override (null → [SurfaceStyle.Default], i.e. Depth). */
     var surfaceStyle: SurfaceStyle? = null,
+    /** Shell-composition override (null → [ShellStyle.Default], i.e. Classic). */
+    var shellStyle: ShellStyle? = null,
+    /** Tab-navigation override (null → [NavigationMode.Default], i.e. Sidebar). */
+    var navigationMode: NavigationMode? = null,
     /** Per-app custom-titlebar opt-in (Electron `hiddenInset` etc.). */
     var useCustomTitleBar: Boolean = false,
 )
@@ -136,6 +142,8 @@ open class DefaultThemeManagerHost(
     override val uiDensity: UiDensity? get() = state.uiDensity
     override val selectionStyle: SelectionStyle? get() = state.selectionStyle
     override val surfaceStyle: SurfaceStyle? get() = state.surfaceStyle
+    override val shellStyle: ShellStyle? get() = state.shellStyle
+    override val navigationMode: NavigationMode? get() = state.navigationMode
     override val useCustomTitleBar: Boolean get() = state.useCustomTitleBar
 
     override fun setDarkThemeName(name: String) { state.darkThemeName = name; onChange() }
@@ -177,6 +185,8 @@ open class DefaultThemeManagerHost(
     override fun setUiDensity(value: UiDensity?) { state.uiDensity = value; onChange() }
     override fun setSelectionStyle(value: SelectionStyle?) { state.selectionStyle = value; onChange() }
     override fun setSurfaceStyle(value: SurfaceStyle?) { state.surfaceStyle = value; onChange() }
+    override fun setShellStyle(value: ShellStyle?) { state.shellStyle = value; onChange() }
+    override fun setNavigationMode(value: NavigationMode?) { state.navigationMode = value; onChange() }
     override fun setUseCustomTitleBar(value: Boolean) { state.useCustomTitleBar = value; onChange() }
 }
 

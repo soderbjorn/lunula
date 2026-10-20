@@ -96,6 +96,11 @@ data class ResolvedTheme(
     val chromeTrack: Long,
     /** Opaque background of selected text. Declared, or [Theme.effectiveSelection]'s fallback. */
     val selection: Long,
+    /**
+     * Fill of an idle (unfocused, resting) window in the Clean shell. Declared,
+     * or [Theme.effectiveWindowIdle]'s tone-aware derivation from [surface].
+     */
+    val windowIdle: Long,
 ) {
     // ----- Structural aliases (direct token references; no colour maths) -----
 

@@ -19,7 +19,9 @@ import org.w3c.dom.events.Event
 import se.soderbjorn.lunula.core.Appearance
 import se.soderbjorn.lunula.core.AppearanceFonts
 import se.soderbjorn.lunula.core.AppearanceShape
+import se.soderbjorn.lunula.core.NavigationMode
 import se.soderbjorn.lunula.core.PersistKeys
+import se.soderbjorn.lunula.core.ShellStyle
 import se.soderbjorn.lunula.core.ThemeSnapshotV2
 import se.soderbjorn.lunula.web.applyTheme
 import se.soderbjorn.lunula.web.hotkey.HotkeyBindings
@@ -543,6 +545,8 @@ fun mountAppShell(
         themeState.uiDensity = shape.uiDensity
         themeState.selectionStyle = shape.selectionStyle
         themeState.surfaceStyle = shape.surfaceStyle
+        themeState.shellStyle = shape.shellStyle
+        themeState.navigationMode = shape.navigationMode
 
         // Seed the custom-titlebar flag from the Electron bridge when present
         // so the renderer's state matches the BrowserWindow's actual
@@ -1421,6 +1425,35 @@ private class ShellState(
     }
 
     /**
+     * The shell style in effect, resolved by [applyHostFontVars] from the
+     * host's pick, then the app's [AppShellSpec.defaultAppearanceShape], then
+     * [ShellStyle.Default].
+     *
+     * Held here so the Clean-shell rendering (epic LNA-16) has one resolved
+     * value to key off. Nothing reads it yet, and no CSS or document attribute
+     * is written for it, so Classic rendering is unaffected.
+     *
+     * @see ShellStyle
+     * @see resolvedNavigationMode
+     */
+    var resolvedShellStyle: ShellStyle = ShellStyle.Default
+        private set
+
+    /**
+     * The navigation mode in effect, resolved by [applyHostFontVars] from the
+     * host's pick, then the app's [AppShellSpec.defaultAppearanceShape], then
+     * [NavigationMode.Default].
+     *
+     * Held here for the later tab-strip work (epic LNA-16); nothing reads it
+     * yet and nothing renders differently because of it.
+     *
+     * @see NavigationMode
+     * @see resolvedShellStyle
+     */
+    var resolvedNavigationMode: NavigationMode = NavigationMode.Default
+        private set
+
+    /**
      * Pushes the host's currently-persisted font preferences onto the
      * document root via the toolkit's `--dt-font-*` CSS variables. Called
      * after [applyUi] (which establishes the palette) and after any
@@ -1499,6 +1532,12 @@ private class ShellState(
             applySelectionStyle(it, host.selectionStyle ?: shapeFallback.selectionStyle)
         }
         applySurfaceStyle(host.surfaceStyle ?: shapeFallback.surfaceStyle)
+        // Shell style and navigation mode take the same ladder, but are only
+        // RESOLVED here, not applied: no CSS or `data-dt-*` stamp keys off them
+        // yet (that is later Clean-shell work), so Classic renders unchanged.
+        resolvedShellStyle = host.shellStyle ?: shapeFallback.shellStyle ?: ShellStyle.Default
+        resolvedNavigationMode = host.navigationMode ?: shapeFallback.navigationMode
+            ?: NavigationMode.Default
     }
 
     /** Last value pushed to the Electron main process; lets us skip
@@ -4796,6 +4835,8 @@ private class ShellState(
                         themeState.uiDensity,
                         themeState.selectionStyle,
                         themeState.surfaceStyle,
+                        themeState.shellStyle,
+                        themeState.navigationMode,
                     ).toJson(),
                 )
                 // ── Only what this shell's own host actually owns ────────────

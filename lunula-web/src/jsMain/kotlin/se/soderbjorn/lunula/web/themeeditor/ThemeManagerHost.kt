@@ -18,8 +18,10 @@
 package se.soderbjorn.lunula.web.themeeditor
 
 import se.soderbjorn.lunula.core.Appearance
+import se.soderbjorn.lunula.core.NavigationMode
 import se.soderbjorn.lunula.core.Theme
 import se.soderbjorn.lunula.core.SelectionStyle
+import se.soderbjorn.lunula.core.ShellStyle
 import se.soderbjorn.lunula.core.SurfaceStyle
 import se.soderbjorn.lunula.core.UiDensity
 
@@ -184,6 +186,35 @@ interface ThemeManagerHost {
      */
     val surfaceStyle: SurfaceStyle? get() = null
 
+    /**
+     * Which shell composition to draw, or `null` for [ShellStyle.Default]
+     * ([ShellStyle.Classic]).
+     *
+     * A user setting beside [surfaceStyle], not a theme property. Read by
+     * `AppShellMount`'s host-apply pass, which resolves it (host → app default
+     * → [ShellStyle.Default]); no rendering keys off it yet. The default getter
+     * returns `null`, so a host that never overrides it gets Classic — override
+     * it together with [setShellStyle] to persist a choice.
+     *
+     * @see ShellStyle
+     * @see setShellStyle
+     */
+    val shellStyle: ShellStyle? get() = null
+
+    /**
+     * How the user navigates between tabs (sidebar, tab strip, or both), or
+     * `null` for [NavigationMode.Default] ([NavigationMode.Sidebar]).
+     *
+     * A user setting beside [shellStyle]. Read by `AppShellMount`'s host-apply
+     * pass, which resolves it (host → app default → [NavigationMode.Default]);
+     * no rendering keys off it yet. The default getter returns `null` —
+     * override it together with [setNavigationMode] to persist a choice.
+     *
+     * @see NavigationMode
+     * @see setNavigationMode
+     */
+    val navigationMode: NavigationMode? get() = null
+
     /** When `true`, the host renders an in-window titlebar drag region
      *  (Electron's `titleBarStyle: hiddenInset` pattern) instead of the
      *  OS-native chrome. Default `false`. */
@@ -241,6 +272,26 @@ interface ThemeManagerHost {
      * [se.soderbjorn.lunula.web.applySurfaceStyle] right after.
      */
     fun setSurfaceStyle(value: SurfaceStyle?) {}
+
+    /**
+     * Persist a new shell-style preference. `null` clears it (back to
+     * [ShellStyle.Default]). The default implementation is a no-op, so a host
+     * that does not override it simply does not remember the choice.
+     *
+     * @param value the chosen shell style, or `null` to clear the preference.
+     * @see shellStyle
+     */
+    fun setShellStyle(value: ShellStyle?) {}
+
+    /**
+     * Persist a new navigation-mode preference. `null` clears it (back to
+     * [NavigationMode.Default]). The default implementation is a no-op, so a
+     * host that does not override it simply does not remember the choice.
+     *
+     * @param value the chosen navigation mode, or `null` to clear the preference.
+     * @see navigationMode
+     */
+    fun setNavigationMode(value: NavigationMode?) {}
 
     /** Persist the custom-titlebar toggle. */
     fun setUseCustomTitleBar(value: Boolean) {}
