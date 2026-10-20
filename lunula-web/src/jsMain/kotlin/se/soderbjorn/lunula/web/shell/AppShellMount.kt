@@ -1512,6 +1512,37 @@ private class ShellState(
     }
 
     /**
+     * Changes the user's shell style (Classic / Clean) at runtime and
+     * re-applies it, so `data-dt-style` and [resolvedShellStyle] follow at
+     * once. The entry point the Appearance settings' Style row calls (see
+     * `SettingsSidebarSpec.onPickShellStyle`).
+     *
+     * Same write-through as [setNavigationMode]: with the toolkit's own host
+     * the setter fires [onThemeManagerChanged], which re-applies via
+     * [applyHostFontVars] and persists the choice under
+     * [PersistKeys.APPEARANCE_SHAPE]; an app-supplied host persists through
+     * its own setter and is only re-applied here.
+     *
+     * Only the root stamp and the resolved value change. Anything in the
+     * chrome that is built differently per style (the top bar) is rebuilt by
+     * its own owner, not here.
+     *
+     * @param style the new style, or `null` to clear the user's pick and fall
+     *   back to the app default.
+     * @see resolvedShellStyle
+     * @see setNavigationMode
+     */
+    fun setShellStyle(style: ShellStyle?) {
+        val host = spec.settingsHost
+        if (host == null) {
+            themeHost.setShellStyle(style)
+        } else {
+            host.setShellStyle(style)
+            applyHostFontVars()
+        }
+    }
+
+    /**
      * Pushes the host's currently-persisted font preferences onto the
      * document root via the toolkit's `--dt-font-*` CSS variables. Called
      * after [applyUi] (which establishes the palette) and after any
@@ -2298,6 +2329,13 @@ private class ShellState(
                     // rings the pill it is actually painting rather than the
                     // toolkit default it is not.
                     appDefaultShape = { spec.defaultAppearanceShape() },
+                    // Style and Navigation ring what is actually in effect
+                    // (user pick, then app/brand default, then toolkit), and
+                    // write through the shell so a pick re-applies live.
+                    resolvedShellStyle = { this@ShellState.resolvedShellStyle },
+                    resolvedNavigationMode = { this@ShellState.resolvedNavigationMode },
+                    onPickShellStyle = { setShellStyle(it) },
+                    onPickNavigationMode = { setNavigationMode(it) },
                     // Size rows ring the brand's default too, for the same
                     // reason the family rows do.
                     sidebarSizeDefault = spec.defaultChromeFontSizePx() ?: 13,

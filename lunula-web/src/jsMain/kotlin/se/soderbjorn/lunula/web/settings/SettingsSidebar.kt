@@ -3,6 +3,10 @@
  * appearance / window control the toolkit owns.
  *
  * Sections rendered (in order):
+ *  0. Style (Classic / Clean) and Navigation (Sidebar / Tab strip / Both) —
+ *     the two coarsest choices, showing the resolved value (user pick, then
+ *     app/brand default, then toolkit default). While Clean is in effect the
+ *     Selection and Surfaces rows below are disabled, since Clean sets them.
  *  1. Custom title bar On/Off (Electron only).
  *  2. Corner roundness + Selection + Surfaces + Spacing — the shell's
  *     shape, its selection language, Depth vs Flat surfaces, and its density.
@@ -59,7 +63,10 @@ import se.soderbjorn.lunula.web.applyCornerRadiusPx
 import se.soderbjorn.lunula.web.applyUiDensity
 import se.soderbjorn.lunula.web.applySelectionStyle
 import se.soderbjorn.lunula.web.applySurfaceStyle
+import se.soderbjorn.lunula.web.applyShellStyle
 import se.soderbjorn.lunula.core.AppearanceShape
+import se.soderbjorn.lunula.core.NavigationMode
+import se.soderbjorn.lunula.core.ShellStyle
 import se.soderbjorn.lunula.core.SelectionStyle
 import se.soderbjorn.lunula.core.SurfaceStyle
 import se.soderbjorn.lunula.core.UiDensity
@@ -167,7 +174,46 @@ data class SettingsSidebarSpec(
      * fall through to the toolkit's own defaults.
      */
     val appDefaultShape: () -> AppearanceShape = { AppearanceShape() },
+    /**
+     * The shell style actually in effect, which the Style row rings and which
+     * decides whether Selection and Surfaces are locked.
+     *
+     * `AppShellMount` passes its own resolved value (`ShellState.resolvedShellStyle`).
+     * The default walks the same ladder from this spec alone: the host's pick,
+     * then [appDefaultShape], then [ShellStyle.Default].
+     */
+    val resolvedShellStyle: () -> ShellStyle = {
+        host.shellStyle ?: appDefaultShape().shellStyle ?: ShellStyle.Default
+    },
+    /**
+     * The navigation mode asked for (before the app's hard opt-outs), which the
+     * Navigation row rings. `AppShellMount` passes `ShellState.resolvedNavigationMode`;
+     * the default walks host → [appDefaultShape] → [NavigationMode.Default].
+     */
+    val resolvedNavigationMode: () -> NavigationMode = {
+        host.navigationMode ?: appDefaultShape().navigationMode ?: NavigationMode.Default
+    },
+    /**
+     * Called when the user picks a Style. Must store the choice and re-apply it
+     * so `data-dt-style` and [resolvedShellStyle] follow at once.
+     * `AppShellMount` routes it through `ShellState.setShellStyle` (host setter,
+     * re-apply, persist). The default stores it on [host] and stamps the root
+     * directly, for a sidebar mounted outside the shell.
+     */
+    val onPickShellStyle: (ShellStyle) -> Unit = { style ->
+        host.setShellStyle(style)
+        applyShellStyle(document.documentElement as HTMLElement, style)
+    },
+    /**
+     * Called when the user picks a Navigation mode. `AppShellMount` routes it
+     * through `ShellState.setNavigationMode`, which re-applies and redraws the
+     * chrome. The default only stores it on [host].
+     */
+    val onPickNavigationMode: (NavigationMode) -> Unit = { mode -> host.setNavigationMode(mode) },
 )
+
+/** The note shown under Selection and Surfaces while Clean sets them. */
+internal const val CLEAN_LOCKED_NOTE: String = "Set by the Clean style"
 
 /**
  * The radius the corner row highlights when the host has stored none.
@@ -379,6 +425,63 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
     // surface. Rely on the topbar icon — leave the settings sidebar
     // for genuinely distinct surfaces (font, notifications, titlebar).
 
+    // ── Style and Navigation ────────────────────────────────────────
+    // The two coarsest choices, so they lead the panel. Both ring the
+    // resolved value, so a brand default shows as selected even when the
+    // user has stored nothing. Selection and Surfaces (below) are locked
+    // while Clean is in effect; [lockForClean] re-reads after every pick.
+    val selectionSection = buildSelectionStyleSection(
+        currentValue = {
+            spec.host.selectionStyle
+                ?: spec.appDefaultShape().selectionStyle
+                ?: SelectionStyle.Default
+        },
+        onPick = { st ->
+            spec.host.setSelectionStyle(st)
+            applySelectionStyle(document.documentElement as HTMLElement, st)
+        },
+    )
+    val surfaceSection = buildSurfaceStyleSection(
+        currentValue = {
+            spec.host.surfaceStyle
+                ?: spec.appDefaultShape().surfaceStyle
+                ?: SurfaceStyle.Default
+        },
+        onPick = { st ->
+            spec.host.setSurfaceStyle(st)
+            applySurfaceStyle(st)
+        },
+    )
+    val lockForClean = {
+        val locked = spec.resolvedShellStyle() == ShellStyle.Clean
+        setChoiceSectionLocked(selectionSection, if (locked) CLEAN_LOCKED_NOTE else null)
+        setChoiceSectionLocked(surfaceSection, if (locked) CLEAN_LOCKED_NOTE else null)
+    }
+    body.appendChild(buildChoiceSection(
+        settingId = "style",
+        title = "Style",
+        hint = "Classic is the original shell; Clean is a calmer, quieter one.",
+        options = listOf("Classic" to ShellStyle.Classic, "Clean" to ShellStyle.Clean),
+        currentValue = spec.resolvedShellStyle,
+        onPick = { st ->
+            spec.onPickShellStyle(st)
+            lockForClean()
+        },
+    ))
+    body.appendChild(buildChoiceSection(
+        settingId = "navigation",
+        title = "Navigation",
+        hint = "How you move between tabs: the sidebar, a tab strip along the top, or both.",
+        options = listOf(
+            "Sidebar" to NavigationMode.Sidebar,
+            "Tab strip" to NavigationMode.TabStrip,
+            "Both" to NavigationMode.Both,
+        ),
+        currentValue = spec.resolvedNavigationMode,
+        onPick = { mode -> spec.onPickNavigationMode(mode) },
+    ))
+    lockForClean()
+
     // ── Custom title bar (Electron only) ────────────────────────────
     // Pinned to the top of the panel: it's the most disruptive
     // appearance toggle (window chrome reflows on flip) and users
@@ -408,28 +511,9 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
             applyCornerRadiusPx(px)
         },
     ))
-    body.appendChild(buildSelectionStyleSection(
-        currentValue = {
-            spec.host.selectionStyle
-                ?: spec.appDefaultShape().selectionStyle
-                ?: SelectionStyle.Default
-        },
-        onPick = { st ->
-            spec.host.setSelectionStyle(st)
-            applySelectionStyle(document.documentElement as HTMLElement, st)
-        },
-    ))
-    body.appendChild(buildSurfaceStyleSection(
-        currentValue = {
-            spec.host.surfaceStyle
-                ?: spec.appDefaultShape().surfaceStyle
-                ?: SurfaceStyle.Default
-        },
-        onPick = { st ->
-            spec.host.setSurfaceStyle(st)
-            applySurfaceStyle(st)
-        },
-    ))
+    // Built above, beside the Style row that locks them; placed here.
+    body.appendChild(selectionSection)
+    body.appendChild(surfaceSection)
     body.appendChild(buildDensitySection(
         currentValue = {
             spec.host.uiDensity ?: spec.appDefaultShape().uiDensity ?: UiDensity.Compact
@@ -905,6 +989,7 @@ private fun buildSelectionStyleSection(
         "Selection",
         "How the focused window, active tab and active sidebar row are marked.",
     )
+    section.element.setAttribute("data-dt-setting", "selection")
     val row = section.row
     val current = currentValue()
     for ((label, value) in listOf(
@@ -947,6 +1032,7 @@ private fun buildSurfaceStyleSection(
         "Surfaces",
         "Depth lifts windows on soft shadows and gives accents a glow; Flat keeps everything on one plane.",
     )
+    section.element.setAttribute("data-dt-setting", "surfaces")
     val row = section.row
     val current = currentValue()
     for ((label, value) in listOf(
@@ -996,4 +1082,89 @@ private fun buildToggleSection(
         row.appendChild(btn)
     }
     return section.element
+}
+
+/**
+ * Builds a labelled segmented-choice row: one `.dt-settings-choice-btn` per
+ * option, the current one marked `.dt-selected`, picked optimistically with
+ * the caller doing the store + apply. Same look and behaviour as
+ * [buildSelectionStyleSection] and [buildSurfaceStyleSection], for any value
+ * type. Used by [renderSettingsBody] for the Style and Navigation rows.
+ *
+ * @param settingId    stamped as `data-dt-setting` on the section, so the row
+ *   can be found without matching on its (translatable) label.
+ * @param title        the row's label.
+ * @param hint         the muted line under the label.
+ * @param options      label → value pairs, in render order.
+ * @param currentValue reader for the value to ring (already resolved through
+ *   user → app → toolkit default by the caller).
+ * @param onPick       called with the clicked value.
+ * @return the section element.
+ */
+private fun <T> buildChoiceSection(
+    settingId: String,
+    title: String,
+    hint: String,
+    options: List<Pair<String, T>>,
+    currentValue: () -> T,
+    onPick: (T) -> Unit,
+): HTMLElement {
+    val section = makeSection(title, hint)
+    section.element.setAttribute("data-dt-setting", settingId)
+    val row = section.row
+    val current = currentValue()
+    for ((label, value) in options) {
+        val btn = document.createElement("button") as HTMLElement
+        btn.setAttribute("type", "button")
+        btn.className = "dt-settings-choice-btn" + if (value == current) " dt-selected" else ""
+        btn.textContent = label
+        btn.addEventListener("click", {
+            // Optimistic selection update — see [buildFontFaceSection].
+            val rowChildren = row.children
+            for (i in 0 until rowChildren.length) {
+                (rowChildren.item(i) as? HTMLElement)?.classList?.remove("dt-selected")
+            }
+            btn.classList.add("dt-selected")
+            onPick(value)
+        })
+        row.appendChild(btn)
+    }
+    return section.element
+}
+
+/**
+ * Locks or unlocks a segmented-choice section built by this file.
+ *
+ * Locked: every choice button becomes a real `disabled` button with
+ * `aria-disabled="true"`, and a muted `.dt-settings-locked-note` line naming
+ * what sets the value is shown; the section carries `dt-locked`. Unlocked
+ * reverses all of it. The `.dt-selected` mark is left alone, so the stored
+ * value stays visible and applies again once unlocked — nothing is written to
+ * the host either way.
+ *
+ * Called by [renderSettingsBody] for Selection and Surfaces whenever the
+ * resolved shell style is (re)read: on render and after each Style pick.
+ *
+ * @param section the section element (as returned by its builder).
+ * @param note    the reason to show, or `null` to unlock.
+ */
+private fun setChoiceSectionLocked(section: HTMLElement, note: String?) {
+    val locked = note != null
+    val buttons = section.querySelectorAll(".dt-settings-choice-btn")
+    for (i in 0 until buttons.length) {
+        val btn = buttons.item(i) as? HTMLButtonElement ?: continue
+        btn.disabled = locked
+        if (locked) btn.setAttribute("aria-disabled", "true") else btn.removeAttribute("aria-disabled")
+    }
+    if (locked) section.classList.add("dt-locked") else section.classList.remove("dt-locked")
+    val existing = section.querySelector(".dt-settings-locked-note") as? HTMLElement
+    if (!locked) {
+        existing?.remove()
+        return
+    }
+    val noteEl = existing ?: (document.createElement("div") as HTMLElement).also {
+        it.className = "dt-settings-hint dt-settings-locked-note"
+        section.appendChild(it)
+    }
+    noteEl.textContent = note
 }

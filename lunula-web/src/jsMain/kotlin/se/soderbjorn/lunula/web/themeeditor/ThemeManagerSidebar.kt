@@ -118,6 +118,24 @@ fun toggleThemeManagerSidebar(requestRebuild: () -> Unit) {
 }
 
 /**
+ * Force-closes the Theme Manager sidebar synchronously (no animation), the
+ * counterpart of `closeSettingsSidebar`: tears the manager down and forgets
+ * the mounted element, so the next host rebuild leaves the right slot to
+ * whichever panel is open instead.
+ *
+ * Internal: used by tests that share this module-wide state across mounts,
+ * where a panel left open by one test (its element already detached, so its
+ * close transition can never end) would otherwise hold the slot in the next.
+ *
+ * @see toggleThemeManagerSidebar
+ */
+internal fun closeThemeManagerSidebar() {
+    closeThemeManager()
+    sidebarOpen = false
+    currentSidebar = null
+}
+
+/**
  * Build the right-sidebar `<aside>` element that hosts the Theme Manager.
  *
  * The element is returned to the caller for them to pass into their
