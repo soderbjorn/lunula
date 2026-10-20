@@ -7527,10 +7527,20 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
 }
 /* The canvas rectangle is no longer a surface of its own: it is only the room
    around the sheet. A small inset toward the top bar and sidebar, a wider one
-   toward the window edges. */
+   toward the window edges.
+
+   The left side counts as a window edge unless an open left sidebar actually
+   sits there: Navigation = Tab strip only leaves the left slot empty, and a
+   sidebar the user collapsed leaves only its 0-width placeholder
+   (`.dt-sidebar-collapsed`). Either way the sheet would otherwise sit 4px from
+   the viewport edge, so the wide inset is the default and the small one is
+   granted only next to a drawn sidebar. */
 :root[data-dt-style="clean"] .dt-app-frame-main {
     border-radius: 0;
-    padding: 4px 16px 16px 4px;
+    padding: 4px 16px 16px 16px;
+}
+:root[data-dt-style="clean"] .dt-app-frame-sidebar-left:has(> .dt-sidebar:not(.dt-sidebar-collapsed):not(.dt-hidden)) + .dt-app-frame-main {
+    padding-left: 4px;
 }
 
 /* ── Sheet ───────────────────────────────────────────────────────────

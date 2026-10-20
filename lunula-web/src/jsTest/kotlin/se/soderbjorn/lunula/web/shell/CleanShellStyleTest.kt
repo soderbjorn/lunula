@@ -379,4 +379,74 @@ class CleanShellStyleTest {
         assertEquals("0", style.opacity)
         assertEquals("none", style.getPropertyValue("pointer-events").trim())
     }
+
+    /**
+     * Builds the real frame row (`.dt-app-frame-body` holding the left slot
+     * and the main area, as `renderAppFrame` does) with the left slot in one
+     * of the states the shell produces, and returns the main area.
+     *
+     * @param sidebar `"open"` mounts an open `.dt-sidebar`, `"collapsed"` the
+     *   0-width `.dt-sidebar-collapsed` placeholder, `"none"` leaves the slot
+     *   empty (Navigation = Tab strip only).
+     */
+    private fun renderFrameRow(sidebar: String): HTMLElement {
+        val body = (document.createElement("div") as HTMLElement).also {
+            it.className = AppFrameClassNames.BODY
+            it.style.height = "100%"
+            frame.appendChild(it)
+        }
+        val slot = (document.createElement("div") as HTMLElement).also {
+            it.className = AppFrameClassNames.SIDEBAR_LEFT
+            body.appendChild(it)
+        }
+        if (sidebar != "none") {
+            (document.createElement("aside") as HTMLElement).also {
+                it.className = "dt-sidebar dt-sidebar-left"
+                if (sidebar == "collapsed") {
+                    it.classList.add("dt-sidebar-collapsed")
+                    it.style.width = "0px"
+                    it.style.setProperty("min-width", "0")
+                } else {
+                    it.style.width = "200px"
+                }
+                slot.appendChild(it)
+            }
+        }
+        return (document.createElement("div") as HTMLElement).also {
+            it.className = AppFrameClassNames.MAIN
+            body.appendChild(it)
+        }
+    }
+
+    /**
+     * Under Clean the main area's left inset is the small sidebar-side one
+     * only when an open sidebar is drawn beside it. With the slot empty (Tab
+     * strip only) or holding the collapsed placeholder, the sheet would
+     * otherwise sit 4px from the viewport edge, so the left inset matches
+     * the right and bottom ones there.
+     */
+    @Test
+    fun cleanInsetsTheSheetFromTheViewportWhenNoSidebarIsDrawn() {
+        applyShellStyle(root, ShellStyle.Clean)
+        for (state in listOf("none", "collapsed", "open")) {
+            frame.innerHTML = ""
+            val style = window.getComputedStyle(renderFrameRow(state))
+            assertEquals("16px", style.paddingRight, "right inset, $state")
+            assertEquals("16px", style.paddingBottom, "bottom inset, $state")
+            val expectedLeft = if (state == "open") "4px" else "16px"
+            assertEquals(expectedLeft, style.paddingLeft, "left inset, $state")
+        }
+    }
+
+    /** Classic keeps its one even frame padding whatever the sidebar does. */
+    @Test
+    fun classicInsetIsEvenWhateverTheSidebarDoes() {
+        applyShellStyle(root, ShellStyle.Classic)
+        for (state in listOf("none", "collapsed", "open")) {
+            frame.innerHTML = ""
+            val style = window.getComputedStyle(renderFrameRow(state))
+            assertEquals(style.paddingRight, style.paddingLeft, "left vs right, $state")
+            assertEquals(style.paddingBottom, style.paddingLeft, "left vs bottom, $state")
+        }
+    }
 }
