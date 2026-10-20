@@ -165,4 +165,28 @@ class StylesheetIntegrityTest {
             )
         }
     }
+
+    @Test
+    fun theCleanSidebarTreeRulesSurviveParsing() {
+        // LNA-21: the sidebar tree under Clean. The selectors below are the
+        // ones whose loss would quietly bring back a Classic piece (uppercase
+        // headers, the Fill pill on the active row, Classic's active-row inset)
+        // inside an otherwise Clean sidebar.
+        val clean = parsedSelectors().filter { it.contains("data-dt-style=\"clean\"") }
+        for (selector in listOf(
+            ".dt-sidebar-section-header",
+            ".dt-sidebar-section.active-tab > .dt-sidebar-section-header",
+            ".dt-sidebar-section-chevron",
+            ".dt-sidebar-section.active-tab .dt-sidebar-row",
+            ".dt-sidebar-row.dt-active",
+            "[data-dt-selection] .dt-sidebar-row.dt-active",
+            ".dt-sidebar-row-icon",
+            ".dt-sidebar-footer",
+        )) {
+            assertTrue(
+                clean.any { it.contains(selector) },
+                "Clean sidebar tree has no rule for $selector — survived: $clean",
+            )
+        }
+    }
 }
