@@ -189,4 +189,25 @@ class StylesheetIntegrityTest {
             )
         }
     }
+
+    @Test
+    fun theCleanTopBarRulesSurviveParsing() {
+        // LNA-23: the top bar under Clean. Losing any of these brings back a
+        // Classic piece (30px square buttons, the accent chip on an open
+        // button, the 1px hairline) inside an otherwise Clean top bar.
+        val clean = parsedSelectors().filter { it.contains("data-dt-style=\"clean\"") }
+        for (selector in listOf(
+            ".dt-topbar-trailing",
+            ".dt-topbar-icon-button",
+            ".dt-topbar-icon-button > svg",
+            ".dt-topbar-icon-button:hover",
+            ".dt-topbar-icon-button.dt-active",
+            ".dt-topbar-icon-button[aria-expanded=\"true\"]",
+        )) {
+            assertTrue(
+                clean.any { it.contains(selector) },
+                "Clean top bar has no rule for $selector — survived: $clean",
+            )
+        }
+    }
 }

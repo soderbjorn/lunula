@@ -38,6 +38,7 @@ import se.soderbjorn.lunula.web.layout.PaneAction
 import se.soderbjorn.lunula.web.layout.PaneActions
 import se.soderbjorn.lunula.web.layout.PaneCallbacks
 import se.soderbjorn.lunula.web.layout.PaneHeaderSpec
+import se.soderbjorn.lunula.web.layout.PaneMenuItem
 import se.soderbjorn.lunula.web.layout.PaneMenuSpec
 import se.soderbjorn.lunula.web.layout.openPaneMenu
 import se.soderbjorn.lunula.web.layout.triggerPaneRename
@@ -666,6 +667,10 @@ fun mountAppShell(
 
         override fun setNavigationMode(mode: NavigationMode?) {
             state.setNavigationMode(mode)
+        }
+
+        override fun setShellStyle(style: ShellStyle?) {
+            state.setShellStyle(style)
         }
 
         override fun refresh() {
@@ -1515,7 +1520,8 @@ private class ShellState(
      * Changes the user's shell style (Classic / Clean) at runtime and
      * re-applies it, so `data-dt-style` and [resolvedShellStyle] follow at
      * once. The entry point the Appearance settings' Style row calls (see
-     * `SettingsSidebarSpec.onPickShellStyle`).
+     * `SettingsSidebarSpec.onPickShellStyle`); also exposed as
+     * [AppShellHandle.setShellStyle].
      *
      * Same write-through as [setNavigationMode]: with the toolkit's own host
      * the setter fires [onThemeManagerChanged], which re-applies via
@@ -1523,9 +1529,10 @@ private class ShellState(
      * [PersistKeys.APPEARANCE_SHAPE]; an app-supplied host persists through
      * its own setter and is only re-applied here.
      *
-     * Only the root stamp and the resolved value change. Anything in the
-     * chrome that is built differently per style (the top bar) is rebuilt by
-     * its own owner, not here.
+     * The chrome that is built differently per style (the top bar, LNA-23)
+     * is rebuilt by [applyHostFontVars] itself when the resolved style
+     * changes (see [applyNavigation]), so this path, a host push and a
+     * settings pick all redraw it alike.
      *
      * @param style the new style, or `null` to clear the user's pick and fall
      *   back to the app default.
@@ -1623,10 +1630,14 @@ private class ShellState(
         applySurfaceStyle(host.surfaceStyle ?: shapeFallback.surfaceStyle)
         // Shell style takes the same ladder and is stamped as `data-dt-style`
         // (only for Clean, so Classic renders exactly as before).
+        val previousShellStyle = resolvedShellStyle
         resolvedShellStyle = host.shellStyle ?: shapeFallback.shellStyle ?: ShellStyle.Default
         (document.documentElement as? HTMLElement)?.let { applyShellStyle(it, resolvedShellStyle) }
         // Navigation takes the same ladder too, then the app's hard opt-outs
-        // win over it (see resolveNavigationLayout).
+        // win over it (see resolveNavigationLayout). A style change rides the
+        // same "rebuild only if it changed" rerender: the top bar's trailing
+        // cluster differs between Classic and Clean (LNA-23), and CSS alone
+        // cannot add or remove its buttons.
         applyNavigation(
             resolveNavigationLayout(
                 userMode = host.navigationMode,
@@ -1634,6 +1645,7 @@ private class ShellState(
                 appAllowsSidebar = spec.showSidebar,
                 appAllowsTabStrip = spec.showTabStrip,
             ),
+            shellStyleChanged = previousShellStyle != resolvedShellStyle,
         )
     }
 
@@ -1652,17 +1664,25 @@ private class ShellState(
      * new layout) and when only the requested mode changed but not what is
      * drawn (e.g. switching to Tab strip in an app that hard-disables it).
      *
+     * The same single rebuild also serves a change of shell style, which
+     * [applyHostFontVars] reports through [shellStyleChanged]: the top bar
+     * is assembled differently under Classic and Clean (LNA-23), so a style
+     * switch must rebuild it, and folding both reasons into one check means
+     * a change of both at once still costs one rerender.
+     *
      * Called only by [applyHostFontVars].
      *
      * @param layout the newly resolved navigation.
+     * @param shellStyleChanged `true` when [resolvedShellStyle] has just
+     *   changed, which forces the rebuild even if the drawn surfaces did not.
      */
-    private fun applyNavigation(layout: NavigationLayout) {
+    private fun applyNavigation(layout: NavigationLayout, shellStyleChanged: Boolean = false) {
         val previous = navigationLayout
         navigationLayout = layout
         (document.documentElement as? HTMLElement)?.let { applyNavigationAttribute(it, layout) }
         val surfacesChanged = previous.showsSidebar != layout.showsSidebar ||
             previous.showsTabStrip != layout.showsTabStrip
-        if (surfacesChanged && topBarSlot != null) rerender()
+        if ((surfacesChanged || shellStyleChanged) && topBarSlot != null) rerender()
     }
 
     /** Last value pushed to the Electron main process; lets us skip
@@ -2937,6 +2957,236 @@ private class ShellState(
         else -> emptyList()
     }
 
+    /**
+     * Advances the appearance Auto → Dark → Light → Auto, repaints and
+     * persists it.
+     *
+     * The one implementation behind the Classic top bar's appearance cycle
+     * button ([buildAppearanceCycleButton]) and the Clean settings menu's
+     * "Appearance: …" row ([buildCleanSettingsMenuButton]), so the two can
+     * never behave differently.
+     */
+    private fun cycleAppearanceFromTopBar() {
+        val cur = snapshot.appearance
+        val next = when (cur) {
+            Appearance.Auto -> Appearance.Dark
+            Appearance.Dark -> Appearance.Light
+            Appearance.Light -> Appearance.Auto
+        }
+        // Flip the appearance on the stored snapshot; [resolve]
+        // picks the slot theme for the new appearance from the
+        // snapshot's own slot bindings (built-ins ∪ custom),
+        // falling back to the slot default when unbound.
+        val flipped = snapshot.copy(appearance = next)
+        applyThemeSnapshot(flipped)
+        // Pass [flipped] explicitly rather than relying on
+        // [persistUi] reading `this.snapshot`. The synchronous
+        // [applyThemeSnapshot] above runs `rerender()`, which
+        // fires `spec.onAfterRefresh`; hosts that bridge the
+        // toolkit's `setThemeSnapshot` back into their own state
+        // read from their backing model — which still holds the
+        // *previous* appearance at this point. That bridge call
+        // lands `syncThemeFromHost(staleSnapshot)` which would
+        // overwrite `this.snapshot` back to the previous value, so
+        // we persist the explicit `flipped` instead.
+        persistUi(flipped)
+    }
+
+    /**
+     * Opens or closes the theme manager sidebar.
+     *
+     * Behind the Classic palette button ([buildThemeManagerButton]) and the
+     * Clean settings menu's "Themes…" row.
+     */
+    private fun toggleThemeManagerFromTopBar() {
+        // Mutually exclusive with the other two right-side
+        // panels. If either Settings or App Settings is
+        // currently open, animate it closed first; the
+        // close-transition completion then opens the theme
+        // manager. Without the chained call, we'd either
+        // snap-close the open panel (no animation) or end
+        // up briefly painting two panels.
+        when {
+            isSettingsSidebarOpen() -> toggleSettingsSidebar {
+                rerender()
+                toggleThemeManagerSidebar(::rerender)
+            }
+            isAppSettingsSidebarOpen() -> toggleAppSettingsSidebar {
+                rerender()
+                toggleThemeManagerSidebar(::rerender)
+            }
+            isHotkeysSidebarOpen() -> toggleHotkeysSidebar {
+                rerender()
+                toggleThemeManagerSidebar(::rerender)
+            }
+            isNotificationsSidebarOpen() -> toggleNotificationsSidebar {
+                rerender()
+                toggleThemeManagerSidebar(::rerender)
+            }
+            else -> toggleThemeManagerSidebar(::rerender)
+        }
+    }
+
+    /**
+     * Opens or closes the Appearance ("Aa") settings sidebar.
+     *
+     * Behind the Classic "Aa" button ([buildSettingsGearButton]) and the
+     * Clean settings menu's "Appearance…" row.
+     */
+    private fun toggleAppearanceSidebarFromTopBar() {
+        // Same animated hand-off as the theme button: if
+        // either sibling sidebar is open, ride its close
+        // transition before opening settings.
+        when {
+            isThemeManagerSidebarOpen() -> toggleThemeManagerSidebar {
+                rerender()
+                toggleSettingsSidebar(::rerender)
+            }
+            isAppSettingsSidebarOpen() -> toggleAppSettingsSidebar {
+                rerender()
+                toggleSettingsSidebar(::rerender)
+            }
+            isHotkeysSidebarOpen() -> toggleHotkeysSidebar {
+                rerender()
+                toggleSettingsSidebar(::rerender)
+            }
+            isNotificationsSidebarOpen() -> toggleNotificationsSidebar {
+                rerender()
+                toggleSettingsSidebar(::rerender)
+            }
+            else -> toggleSettingsSidebar(::rerender)
+        }
+    }
+
+    /**
+     * What "App settings" does in this app, or `null` when the top bar
+     * should not offer it at all.
+     *
+     * Host-supplied content, or a host-supplied action. `null` when the app
+     * asked for neither, so apps that haven't opted in don't get a phantom
+     * icon (or menu row), and `null` again when `isAppSettingsAvailable`
+     * says no (a permission-gated settings surface: omitted, not disabled).
+     *
+     * `onAppSettingsActivate` wins over `appSettingsContent` when both
+     * are set: the app has told us where its settings live, and opening
+     * a sidebar as well would put the same settings in two places.
+     *
+     * Read on every top-bar build by [buildTopBar]: Classic wires the result
+     * to [buildAppSettingsButton], Clean to the settings menu's
+     * "App settings" row.
+     *
+     * @return the action, or `null` to leave App settings out.
+     */
+    private fun appSettingsTopBarAction(): (() -> Unit)? {
+        val appSettingsActivate = spec.onAppSettingsActivate
+        val wantsAppSettings = spec.appSettingsContent != null || appSettingsActivate != null
+        if (!wantsAppSettings || spec.isAppSettingsAvailable?.invoke() == false) return null
+        return appSettingsActivate ?: {
+            when {
+                isThemeManagerSidebarOpen() -> toggleThemeManagerSidebar {
+                    rerender()
+                    toggleAppSettingsSidebar(::rerender)
+                }
+                isSettingsSidebarOpen() -> toggleSettingsSidebar {
+                    rerender()
+                    toggleAppSettingsSidebar(::rerender)
+                }
+                isHotkeysSidebarOpen() -> toggleHotkeysSidebar {
+                    rerender()
+                    toggleAppSettingsSidebar(::rerender)
+                }
+                isNotificationsSidebarOpen() -> toggleNotificationsSidebar {
+                    rerender()
+                    toggleAppSettingsSidebar(::rerender)
+                }
+                else -> toggleAppSettingsSidebar(::rerender)
+            }
+        }
+    }
+
+    /**
+     * Builds the Clean top bar's settings button (LNA-23) and the menu it
+     * drops, which holds what Classic shows as separate buttons:
+     *
+     *  - "Appearance: Auto / Light / Dark" — [cycleAppearanceFromTopBar];
+     *  - "Themes…" — [toggleThemeManagerFromTopBar];
+     *  - "Appearance…" — [toggleAppearanceSidebarFromTopBar];
+     *  - "Layout" — the same [LayoutDropdown] Classic shows, opened under the
+     *    settings button;
+     *  - "App settings" — [appSettingsAction], when the app offers it.
+     *
+     * The rows call the same functions as the Classic buttons, so behaviour
+     * (including the animated hand-off between right-side panels) is
+     * identical. The button reads as pressed while one of the panels the
+     * menu opens is showing.
+     *
+     * Called only by [buildTopBar], under [ShellStyle.Clean].
+     *
+     * @param layoutDropdown the top bar's layout dropdown, built by
+     *   [buildTopBar] exactly as for Classic.
+     * @param appSettingsAction what "App settings" does, from
+     *   [appSettingsTopBarAction]; `null` leaves the row out.
+     * @return the settings button.
+     * @see buildSettingsMenuButton
+     */
+    private fun buildCleanSettingsMenuButton(
+        layoutDropdown: LayoutDropdown,
+        appSettingsAction: (() -> Unit)?,
+    ): HTMLElement {
+        val appSettingsOpen = spec.onAppSettingsActivate == null && isAppSettingsSidebarOpen()
+        lateinit var button: HTMLElement
+        button = buildSettingsMenuButton(
+            isActive = isThemeManagerSidebarOpen() || isSettingsSidebarOpen() ||
+                (appSettingsAction != null && appSettingsOpen),
+            // A layout grid raised from this menu hangs off this button; put
+            // it away before the menu comes back over it.
+            onBeforeOpen = { layoutDropdown.close() },
+            items = {
+                val (appearanceIcon, appearanceLabel) = appearanceCycleIconAndLabel(snapshot.appearance)
+                buildList {
+                    add(PaneMenuItem(appearanceLabel, appearanceIcon, ::cycleAppearanceFromTopBar))
+                    add(
+                        PaneMenuItem(
+                            "Themes…",
+                            ICON_THEME_MANAGER,
+                            ::toggleThemeManagerFromTopBar,
+                            isActive = isThemeManagerSidebarOpen(),
+                        ),
+                    )
+                    add(
+                        PaneMenuItem(
+                            "Appearance…",
+                            ICON_APPEARANCE,
+                            ::toggleAppearanceSidebarFromTopBar,
+                            isActive = isSettingsSidebarOpen(),
+                        ),
+                    )
+                    add(PaneMenuItem("", isSeparator = true))
+                    add(
+                        PaneMenuItem("Layout", ICON_LAYOUT, {
+                            // Same dropdown, same choices, same apply path
+                            // as Classic's Layout button; only the anchor
+                            // differs, since that button is not drawn.
+                            layoutDropdown.openAnchoredTo(button, takeFocus = true)
+                        }),
+                    )
+                    if (appSettingsAction != null) {
+                        add(PaneMenuItem("", isSeparator = true))
+                        add(
+                            PaneMenuItem(
+                                "App settings",
+                                ICON_APP_SETTINGS,
+                                appSettingsAction,
+                                isActive = appSettingsOpen,
+                            ),
+                        )
+                    }
+                }
+            },
+        )
+        return button
+    }
+
     private fun buildTopBar(): HTMLElement {
         val view = viewTabs()
         val activeId = viewActiveTabId()
@@ -3161,7 +3411,8 @@ private class ShellState(
         spec.topbarLeading?.invoke()?.let { leading.appendChild(it) }
 
         // Trailing slot order:
-        //   spec.extraTopbarBeforeStandard …  ‖  NewPane · Layout · ThemeToggle · ThemeMgr  ‖  spec.extraTopbarTrailing …
+        //   Classic: spec.extraTopbarBeforeStandard …  ‖  NewPane · Layout · ThemeToggle · ThemeMgr · Aa · AppSettings  ‖  spec.extraTopbarTrailing …
+        //   Clean:   spec.extraTopbarBeforeStandard …  ‖  NewPane · Settings (menu)  ‖  spec.extraTopbarTrailing …
         // The two ‖ markers are non-interactive `dt-topbar-trailing-divider`
         // spans rendered when both flanks are non-empty, giving the
         // standard cluster a small breathing margin from app-supplied
@@ -3305,149 +3556,57 @@ private class ShellState(
             onDefaultClick = { addPaneToActiveTab() },
         )
         if (newButtonHasAnyAction) trailing.appendChild(newPaneButton)
-        trailing.appendChild(layoutDropdown.triggerButton)
-        // Three-state cycle: Auto → Dark → Light → Auto. Helper paints
-        // the per-state SVG (sun / moon / half-disc) so the icon
-        // reflects the current appearance every rerender.
-        trailing.appendChild(
-            buildAppearanceCycleButton(
-                appearance = snapshot.appearance,
-                onCycle = {
-                    val cur = snapshot.appearance
-                    val next = when (cur) {
-                        Appearance.Auto -> Appearance.Dark
-                        Appearance.Dark -> Appearance.Light
-                        Appearance.Light -> Appearance.Auto
-                    }
-                    // Flip the appearance on the stored snapshot; [resolve]
-                    // picks the slot theme for the new appearance from the
-                    // snapshot's own slot bindings (built-ins ∪ custom),
-                    // falling back to the slot default when unbound.
-                    val flipped = snapshot.copy(appearance = next)
-                    applyThemeSnapshot(flipped)
-                    // Pass [flipped] explicitly rather than relying on
-                    // [persistUi] reading `this.snapshot`. The synchronous
-                    // [applyThemeSnapshot] above runs `rerender()`, which
-                    // fires `spec.onAfterRefresh`; hosts that bridge the
-                    // toolkit's `setThemeSnapshot` back into their own state
-                    // read from their backing model — which still holds the
-                    // *previous* appearance at this point. That bridge call
-                    // lands `syncThemeFromHost(staleSnapshot)` which would
-                    // overwrite `this.snapshot` back to the previous value, so
-                    // we persist the explicit `flipped` instead.
-                    persistUi(flipped)
-                },
-            )
-        )
-        trailing.appendChild(
-            buildThemeManagerButton(
-                isOpen = isThemeManagerSidebarOpen(),
-                onToggle = {
-                    // Mutually exclusive with the other two right-side
-                    // panels. If either Settings or App Settings is
-                    // currently open, animate it closed first; the
-                    // close-transition completion then opens the theme
-                    // manager. Without the chained call, we'd either
-                    // snap-close the open panel (no animation) or end
-                    // up briefly painting two panels.
-                    when {
-                        isSettingsSidebarOpen() -> toggleSettingsSidebar {
-                            rerender()
-                            toggleThemeManagerSidebar(::rerender)
-                        }
-                        isAppSettingsSidebarOpen() -> toggleAppSettingsSidebar {
-                            rerender()
-                            toggleThemeManagerSidebar(::rerender)
-                        }
-                        isHotkeysSidebarOpen() -> toggleHotkeysSidebar {
-                            rerender()
-                            toggleThemeManagerSidebar(::rerender)
-                        }
-                        isNotificationsSidebarOpen() -> toggleNotificationsSidebar {
-                            rerender()
-                            toggleThemeManagerSidebar(::rerender)
-                        }
-                        else -> toggleThemeManagerSidebar(::rerender)
-                    }
-                },
-            )
-        )
-        // Settings gear — always present. Defaults to the toolkit's
-        // managed theme host so any app using `mountAppShell` gets the
-        // settings sidebar for free; apps with their own host pass it
-        // through `AppShellSpec.settingsHost` to override.
-        trailing.appendChild(
-            buildSettingsGearButton(
-                isOpen = isSettingsSidebarOpen(),
-                onToggle = {
-                    // Same animated hand-off as the theme button: if
-                    // either sibling sidebar is open, ride its close
-                    // transition before opening settings.
-                    when {
-                        isThemeManagerSidebarOpen() -> toggleThemeManagerSidebar {
-                            rerender()
-                            toggleSettingsSidebar(::rerender)
-                        }
-                        isAppSettingsSidebarOpen() -> toggleAppSettingsSidebar {
-                            rerender()
-                            toggleSettingsSidebar(::rerender)
-                        }
-                        isHotkeysSidebarOpen() -> toggleHotkeysSidebar {
-                            rerender()
-                            toggleSettingsSidebar(::rerender)
-                        }
-                        isNotificationsSidebarOpen() -> toggleNotificationsSidebar {
-                            rerender()
-                            toggleSettingsSidebar(::rerender)
-                        }
-                        else -> toggleSettingsSidebar(::rerender)
-                    }
-                },
-            )
-        )
-        // App Settings — host-supplied content, or a host-supplied action.
-        // Suppressed entirely when the app asked for neither, so apps that
-        // haven't opted in don't get a phantom icon, and suppressed again
-        // when `isAppSettingsAvailable` says no (a permission-gated settings
-        // surface: omitted, not disabled). Sits immediately to the right of
-        // the Appearance gear so the toolkit's appearance-related cluster
-        // (theme / appearance / app-settings) reads as a left-to-right
-        // grouping.
-        //
-        // `onAppSettingsActivate` wins over `appSettingsContent` when both
-        // are set: the app has told us where its settings live, and opening
-        // a sidebar as well would put the same settings in two places.
-        val appSettingsActivate = spec.onAppSettingsActivate
-        val wantsAppSettings = spec.appSettingsContent != null || appSettingsActivate != null
-        if (wantsAppSettings && spec.isAppSettingsAvailable?.invoke() != false) {
+        // Every action below is a method of its own (cycleAppearanceFromTopBar,
+        // toggleThemeManagerFromTopBar, …) so Classic's buttons and Clean's
+        // settings menu run the very same code: a menu row is the old button,
+        // moved, never a copy of it.
+        val appSettingsAction = appSettingsTopBarAction()
+        if (resolvedShellStyle == ShellStyle.Clean) {
+            // Clean (LNA-23): Layout, the appearance cycle, the theme manager,
+            // the "Aa" Appearance sidebar and App settings fold into one
+            // settings menu. Classic, below, is untouched.
+            trailing.appendChild(buildCleanSettingsMenuButton(layoutDropdown, appSettingsAction))
+        } else {
+            trailing.appendChild(layoutDropdown.triggerButton)
+            // Three-state cycle: Auto → Dark → Light → Auto. Helper paints
+            // the per-state SVG (sun / moon / half-disc) so the icon
+            // reflects the current appearance every rerender.
             trailing.appendChild(
-                buildAppSettingsButton(
-                    // Nothing to reflect when the app owns the surface — there
-                    // is no toolkit sidebar whose open state this could track.
-                    isOpen = appSettingsActivate == null && isAppSettingsSidebarOpen(),
-                    onToggle = appSettingsActivate ?: {
-                        when {
-                            isThemeManagerSidebarOpen() -> toggleThemeManagerSidebar {
-                                rerender()
-                                toggleAppSettingsSidebar(::rerender)
-                            }
-                            isSettingsSidebarOpen() -> toggleSettingsSidebar {
-                                rerender()
-                                toggleAppSettingsSidebar(::rerender)
-                            }
-                            isHotkeysSidebarOpen() -> toggleHotkeysSidebar {
-                                rerender()
-                                toggleAppSettingsSidebar(::rerender)
-                            }
-                            isNotificationsSidebarOpen() -> toggleNotificationsSidebar {
-                                rerender()
-                                toggleAppSettingsSidebar(::rerender)
-                            }
-                            else -> toggleAppSettingsSidebar(::rerender)
-                        }
-                    },
+                buildAppearanceCycleButton(
+                    appearance = snapshot.appearance,
+                    onCycle = ::cycleAppearanceFromTopBar,
                 )
             )
+            trailing.appendChild(
+                buildThemeManagerButton(
+                    isOpen = isThemeManagerSidebarOpen(),
+                    onToggle = ::toggleThemeManagerFromTopBar,
+                )
+            )
+            // Settings gear — always present. Defaults to the toolkit's
+            // managed theme host so any app using `mountAppShell` gets the
+            // settings sidebar for free; apps with their own host pass it
+            // through `AppShellSpec.settingsHost` to override.
+            trailing.appendChild(
+                buildSettingsGearButton(
+                    isOpen = isSettingsSidebarOpen(),
+                    onToggle = ::toggleAppearanceSidebarFromTopBar,
+                )
+            )
+            // App Settings — see [appSettingsTopBarAction] for when it is
+            // offered. Sits immediately to the right of the Appearance gear
+            // so the toolkit's appearance-related cluster (theme /
+            // appearance / app-settings) reads as a left-to-right grouping.
+            if (appSettingsAction != null) {
+                trailing.appendChild(
+                    buildAppSettingsButton(
+                        // Nothing to reflect when the app owns the surface — there
+                        // is no toolkit sidebar whose open state this could track.
+                        isOpen = spec.onAppSettingsActivate == null && isAppSettingsSidebarOpen(),
+                        onToggle = appSettingsAction,
+                    )
+                )
+            }
         }
         if (spec.extraTopbarTrailing.isNotEmpty()) {
             trailing.appendChild(buildTopbarTrailingDivider())

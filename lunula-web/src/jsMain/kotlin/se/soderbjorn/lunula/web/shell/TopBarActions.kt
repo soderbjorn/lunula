@@ -87,7 +87,7 @@ private const val ICON_NEW_WINDOW: String =
  * `#theme-button` SVG verbatim — a curved palette outline with four
  * colour-dot punctures inside. The 24-unit viewbox + 2px stroke matches.
  */
-private const val ICON_THEME_MANAGER: String =
+internal const val ICON_THEME_MANAGER: String =
     "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" " +
         "viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" " +
         "stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" " +
@@ -255,12 +255,28 @@ fun buildAppearanceCycleButton(
     appearance: se.soderbjorn.lunula.core.Appearance,
     onCycle: () -> Unit,
 ): HTMLElement {
-    val (icon, label) = when (appearance) {
-        se.soderbjorn.lunula.core.Appearance.Light -> ICON_APPEARANCE_LIGHT to "Appearance: Light"
-        se.soderbjorn.lunula.core.Appearance.Dark -> ICON_APPEARANCE_DARK to "Appearance: Dark"
-        se.soderbjorn.lunula.core.Appearance.Auto -> ICON_APPEARANCE_AUTO to "Appearance: Auto"
-    }
+    val (icon, label) = appearanceCycleIconAndLabel(appearance)
     return buildTopbarIconButton(icon, label, onCycle)
+}
+
+/**
+ * The icon and label that stand for [appearance] on the appearance cycle:
+ * sun / moon / half-disc, and "Appearance: Light" / "Dark" / "Auto".
+ *
+ * Shared by [buildAppearanceCycleButton] (Classic top bar) and the Clean
+ * settings menu's appearance row (see [buildSettingsMenuButton]'s caller in
+ * `AppShellMount`), so the two can never disagree about what the current
+ * mode is called or looks like.
+ *
+ * @param appearance the current appearance.
+ * @return the inline SVG and the human label, in that order.
+ */
+internal fun appearanceCycleIconAndLabel(
+    appearance: se.soderbjorn.lunula.core.Appearance,
+): Pair<String, String> = when (appearance) {
+    se.soderbjorn.lunula.core.Appearance.Light -> ICON_APPEARANCE_LIGHT to "Appearance: Light"
+    se.soderbjorn.lunula.core.Appearance.Dark -> ICON_APPEARANCE_DARK to "Appearance: Dark"
+    se.soderbjorn.lunula.core.Appearance.Auto -> ICON_APPEARANCE_AUTO to "Appearance: Auto"
 }
 
 /**
@@ -291,7 +307,7 @@ fun buildThemeManagerButton(
  * pills) without overloading the gear glyph used by app-level
  * preferences elsewhere. Sized to match the other 16×16 top-bar icons.
  */
-private const val ICON_APPEARANCE: String =
+internal const val ICON_APPEARANCE: String =
     "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"currentColor\" " +
         "aria-hidden=\"true\">" +
         "<text x=\"1\" y=\"18\" font-family=\"-apple-system, BlinkMacSystemFont, " +
@@ -334,7 +350,7 @@ fun buildSettingsGearButton(
  * right-sidebar toggles read as separate surfaces at a glance. Sized to
  * match the family (16×16, 24-unit viewbox, 2px currentColor stroke).
  */
-private const val ICON_APP_SETTINGS: String =
+internal const val ICON_APP_SETTINGS: String =
     "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" " +
         "viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" " +
         "stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\">" +
@@ -374,6 +390,90 @@ fun buildAppSettingsButton(
 ): HTMLElement {
     val btn = buildTopbarIconButton(ICON_APP_SETTINGS, tooltip, onToggle)
     if (isOpen) btn.classList.add("dt-active")
+    return btn
+}
+
+/**
+ * Toolkit DOM class on the Clean top bar's settings button (see
+ * [buildSettingsMenuButton]). Stable so stylesheets and tests can find it.
+ */
+const val SETTINGS_MENU_BUTTON_CLASS: String = "dt-topbar-settings-button"
+
+/**
+ * The settings button of the Clean top bar (epic LNA-16, LNA-23): a gear
+ * that drops a menu holding the actions Classic spreads over separate
+ * buttons (appearance cycle, theme manager, the "Aa" Appearance sidebar,
+ * the layout dropdown and app settings).
+ *
+ * The button only owns the trigger: what the rows are, and what they do,
+ * comes from [items], which the shell builds from the same action functions
+ * the Classic buttons call. The menu is the toolkit's shared menu surface
+ * ([openPaneMenu], `.dt-pane-menu`), marked as a chrome-zone menu.
+ *
+ * Accessibility: `aria-label` "Settings" (or [tooltip]), `aria-haspopup`
+ * "menu", and `aria-expanded` kept in step with the menu by [openPaneMenu].
+ * A click toggles the menu. Opening from the keyboard (`Enter` / `Space`,
+ * which arrive as a click with `detail == 0`, or `ArrowDown`) focuses the
+ * first row; the arrows then move between rows and `Escape` returns focus
+ * here.
+ *
+ * Called by `AppShellState.buildTopBar` when the resolved shell style is
+ * Clean. Classic never calls it.
+ *
+ * @param isActive `true` while one of the panels the menu opens (theme
+ *   manager, Appearance sidebar, app settings) is showing, so the button
+ *   reads as pressed the way the Classic buttons do. Paints `.dt-active`.
+ * @param tooltip  hover text and accessible name. Defaults to "Settings".
+ * @param onBeforeOpen invoked just before the menu opens, e.g. to put away
+ *   a layout grid the menu raised earlier. Defaults to nothing.
+ * @param items lazy provider of the menu rows, evaluated on every open so a
+ *   row's label (e.g. "Appearance: Dark") reflects the live state.
+ * @return a freshly-built button.
+ * @see openPaneMenu
+ * @see appearanceCycleIconAndLabel
+ */
+fun buildSettingsMenuButton(
+    isActive: Boolean = false,
+    tooltip: String = "Settings",
+    onBeforeOpen: () -> Unit = {},
+    items: () -> List<PaneMenuItem>,
+): HTMLElement {
+    val btn = buildTopbarIconButton(ICON_APP_SETTINGS, tooltip, { /* bound below */ })
+    btn.classList.add(SETTINGS_MENU_BUTTON_CLASS)
+    btn.setAttribute("aria-label", tooltip)
+    btn.setAttribute("aria-haspopup", "menu")
+    btn.setAttribute("aria-expanded", "false")
+    if (isActive) btn.classList.add("dt-active")
+    var closeMenu: (() -> Unit)? = null
+    val open: (Boolean) -> Unit = { fromKeyboard ->
+        onBeforeOpen()
+        closeMenu = openPaneMenu(
+            anchor = btn,
+            spec = PaneMenuSpec(items()),
+            extraClass = MenuTriggerClassNames.CHROME,
+            keyboardNavigation = true,
+            focusFirstItem = fromKeyboard,
+        )
+    }
+    btn.addEventListener("click", { ev: Event ->
+        // openPaneMenu keeps aria-expanded truthful, including after the
+        // menu closed itself (outside click, Escape, a row firing), so it is
+        // the one place to ask whether this press opens or closes.
+        if (btn.getAttribute("aria-expanded") == "true") {
+            closeMenu?.invoke()
+            closeMenu = null
+        } else {
+            // A keyboard-activated button dispatches a click with detail 0.
+            open((ev.asDynamic().detail as? Int ?: 0) == 0)
+        }
+    })
+    btn.addEventListener("keydown", { ev: Event ->
+        val ke = ev as? org.w3c.dom.events.KeyboardEvent ?: return@addEventListener
+        if (ke.key == "ArrowDown" && btn.getAttribute("aria-expanded") != "true") {
+            ke.preventDefault()
+            open(true)
+        }
+    })
     return btn
 }
 

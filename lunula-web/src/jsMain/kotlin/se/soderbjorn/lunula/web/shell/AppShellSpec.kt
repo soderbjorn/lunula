@@ -12,6 +12,7 @@ import org.w3c.dom.HTMLElement
 import se.soderbjorn.lunula.core.AppearanceShape
 import se.soderbjorn.lunula.core.NavigationMode
 import se.soderbjorn.lunula.core.Persister
+import se.soderbjorn.lunula.core.ShellStyle
 import se.soderbjorn.lunula.core.ThemeSnapshotV2
 import se.soderbjorn.lunula.web.layout.LayoutPreset
 import se.soderbjorn.lunula.web.layout.PaneAction
@@ -1410,6 +1411,27 @@ interface AppShellHandle {
      *   fall back to the app default.
      */
     fun setNavigationMode(mode: NavigationMode?) {}
+
+    /**
+     * Changes the user's shell style (Classic / Clean) and redraws the chrome
+     * to match, without a remount: `data-dt-style` is restamped on `:root`
+     * and the top bar is rebuilt, since its trailing cluster differs between
+     * the two styles (under Clean the layout, appearance, theme and
+     * Appearance buttons fold into one settings menu).
+     *
+     * Persists exactly like [setNavigationMode]: through
+     * [AppShellSpec.settingsHost] when the app supplies one, otherwise
+     * through the toolkit's own theme host under
+     * [se.soderbjorn.lunula.core.PersistKeys.APPEARANCE_SHAPE].
+     *
+     * Called by a settings control or by an app reacting to its own settings
+     * (e.g. a `style=` query parameter). The default implementation is a
+     * no-op so hand-written fakes of this interface keep compiling.
+     *
+     * @param style the new style, or `null` to clear the user's choice and
+     *   fall back to the app default.
+     */
+    fun setShellStyle(style: ShellStyle?) {}
 
     /**
      * Triggers a full shell rerender — top bar, sidebars, bottom bar

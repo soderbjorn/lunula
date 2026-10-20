@@ -7430,9 +7430,10 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
        framing it with an inset (see "Window bodies" below), so the window
        colour reaches the body; content that paints its own background still
        does.
-     - The top bar layout (LNA-23). Only its chrome background and edge move
-       onto the ground here. (The sidebar tree is restyled at the end of this
-       block, see "Sidebar tree".)
+     - The top bar's contents beyond paint. Which buttons it holds under
+       Clean is decided in Kotlin (LNA-23); see "Top bar" below for how they
+       are drawn. (The sidebar tree is restyled at the end of this block, see
+       "Sidebar tree".)
      - What a host mounts in the sidebar footer slot, or in an app-supplied
        sidebar section's body.
      - The action strip's hover reveal (`.dt-pane-actions` opacity and
@@ -7768,16 +7769,57 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     font-size: 13px;
 }
 
-/* ── Selection and surface visuals the top bar still carries ─────────
-   The top bar (LNA-23) is restyled later, but the Depth sheen and glow must
-   not survive on its active icon button under Clean. It falls back to the
-   brief's single active treatment: the accent-soft tint with accent text, no
-   ring, no gradient, no glow. The `:hover` copy reaches the Depth selector it
-   replaces. */
+/* ── Top bar (LNA-23) ────────────────────────────────────────────────
+   52px on the ground (the height comes from `--dt-topbar-h` on the frame
+   above; the ground from the Ground rules). Under Clean the trailing cluster
+   is only the app's own buttons, "+" and a settings button whose menu holds
+   what Classic spreads over Layout, the appearance cycle, the theme manager,
+   "Aa" and App settings; that is Kotlin's doing (AppShellMount.buildTopBar),
+   these rules only paint it.
+
+   Every top-bar icon button, the sidebar toggle included, is a ghost: 34×34,
+   radius 8, an 18px glyph in the Clean dim, and the derived hover chip with
+   `--t-text` on hover. Border-box with a 9px block padding and no bottom
+   hairline, so the bar measures exactly 52px around a 34px row. The left
+   padding is wider than the right, as in the design; the macOS
+   traffic-light reservation (`body.dt-electron-mac…`) is more specific and
+   still wins. */
+:root[data-dt-style="clean"] .dt-topbar {
+    box-sizing: border-box;
+    padding: 9px 16px 9px 20px;
+    border-bottom-width: 0;
+}
+:root[data-dt-style="clean"] .dt-topbar-trailing {
+    gap: 4px;
+}
+:root[data-dt-style="clean"] .dt-topbar-icon-button {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    color: var(--dt-clean-text-dim);
+}
+:root[data-dt-style="clean"] .dt-topbar-icon-button > svg {
+    width: 18px;
+    height: 18px;
+}
+:root[data-dt-style="clean"] .dt-topbar-icon-button:hover {
+    background: var(--dt-clean-hover);
+    color: var(--t-text, #e6e6e6);
+}
+
+/* The open settings button, and any top-bar button whose panel is showing.
+   Replaces the LNA-20 placeholder (an accent-soft tint): Clean marks an open
+   top-bar button with a quiet `--t-border`-toned chip and `--t-text`, never
+   the accent, so the chrome stays calm. No ring, no gradient, no glow. The
+   `:hover` copies match the Depth sheen selectors they replace in
+   specificity and win by coming later; `aria-expanded` covers a button whose
+   menu is up (the settings menu, "+"). */
 :root[data-dt-style="clean"] .dt-topbar-icon-button.dt-active,
-:root[data-dt-style="clean"] .dt-topbar-icon-button.dt-active:hover {
-    background: var(--dt-clean-accent-soft);
-    color: var(--dt-clean-accent-text);
+:root[data-dt-style="clean"] .dt-topbar-icon-button.dt-active:hover,
+:root[data-dt-style="clean"] .dt-topbar-icon-button[aria-expanded="true"],
+:root[data-dt-style="clean"] .dt-topbar-icon-button[aria-expanded="true"]:hover {
+    background: color-mix(in srgb, var(--t-border, rgba(255, 255, 255, 0.1)) 70%, transparent);
+    color: var(--t-text, #e6e6e6);
     box-shadow: none;
     filter: none;
 }
