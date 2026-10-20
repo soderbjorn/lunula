@@ -7407,7 +7407,11 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
    back untouched when they switch to Classic.
 
    Not restyled here:
-     - `.dt-pane-content`. Pane content is the host's, always.
+     - What is inside `.dt-pane-content`. Pane content is the host's, always.
+       Clean only stops the toolkit's own slot from painting `--t-bg` and
+       framing it with an inset (see "Window bodies" below), so the window
+       colour reaches the body; content that paints its own background still
+       does.
      - The sidebar tree (LNA-21) and the top bar layout (LNA-23). Only their
        chrome backgrounds and edges move onto the ground here.
      - The action strip's hover reveal (`.dt-pane-actions` opacity and
@@ -7553,6 +7557,25 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     top: 0;
     width: 100%;
     height: 100%;
+}
+
+/* ── Window bodies ───────────────────────────────────────────────────
+   The toolkit's content slot normally paints `--t-bg` inside a 4px inset,
+   which under Clean would show the ground tone inside every window, framed by
+   a band of the window colour. The active window is shown by background
+   only, so the slot steps aside: no inset, no fill of its own, and the body
+   takes the idle or focused window colour from `.dt-pane`. A host's own
+   content that paints a background (a terminal, an editor) still does, and
+   has to go transparent itself to dim with the window.
+
+   The inset is declared on `.dt-pane`, closer to the slot than the
+   `.dt-app-frame` scope a host uses to retune it, because under Clean the
+   frame band is never wanted. */
+:root[data-dt-style="clean"] .dt-pane {
+    --dt-pane-content-inset: 0px;
+}
+:root[data-dt-style="clean"] .dt-pane-content {
+    background: transparent;
 }
 
 /* ── Titlebar ────────────────────────────────────────────────────────

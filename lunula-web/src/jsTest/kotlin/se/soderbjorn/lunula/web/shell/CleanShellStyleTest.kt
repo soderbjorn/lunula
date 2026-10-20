@@ -15,7 +15,9 @@
  *    guarantee that lets Clean ship with Classic as the default.
  *  - Clean actually paints. With the style Clean the attribute is stamped and
  *    the rules win over Fill and Depth: the focused window sits on
- *    `--t-surface`, the idle one on `--t-window-idle`, the titlebar is 44px
+ *    `--t-surface`, the idle one on `--t-window-idle` (with the toolkit's
+ *    content slot transparent and un-inset, so the body shows that colour),
+ *    idle titles use `--t-clean-text-dim`, the titlebar is 44px
  *    and sentence case, and the action strip's hover reveal still hides it at
  *    rest.
  *
@@ -69,6 +71,13 @@ private val PALETTE = mapOf(
     "--t-accent-soft" to "rgb(220, 225, 240)",
     "--t-accent-on" to "rgb(255, 255, 254)",
     "--t-accent-text" to "rgb(25, 50, 150)",
+    // The Clean-only tokens. A real theme derives them from the ones above
+    // (`ResolvedTheme.cleanTextDim` nudges textDim for contrast), so they are
+    // stated here too: left out, whatever theme an earlier test applied to
+    // :root would decide them, and the assertions would test that theme.
+    "--t-clean-text-dim" to "rgb(70, 71, 72)",
+    "--t-clean-accent-text" to "rgb(24, 48, 140)",
+    "--t-accent-soft-solid" to "rgb(221, 226, 241)",
 )
 
 /** Whether the test browser hovers, which the action strip's hide is gated on. */
@@ -152,7 +161,7 @@ class CleanShellStyleTest {
             "background-color", "background-image", "border-top-width", "border-radius",
             "box-shadow", "outline-color", "outline-width", "height", "padding-left",
             "color", "font-size", "font-weight", "text-transform", "letter-spacing",
-            "left", "width",
+            "left", "width", "margin-left", "margin-bottom",
         )
         val elements = mapOf(
             "frame" to frame,
@@ -165,6 +174,8 @@ class CleanShellStyleTest {
             "p1.title" to pane("p1").child(LayoutClassNames.PANE_TITLE),
             "p2.title" to pane("p2").child(LayoutClassNames.PANE_TITLE),
             "p1.action" to pane("p1").child(PaneHeaderClassNames.ACTION),
+            "p1.content" to pane("p1").child(LayoutClassNames.PANE_CONTENT),
+            "p2.content" to pane("p2").child(LayoutClassNames.PANE_CONTENT),
         )
         for ((name, el) in elements) {
             // Transitions would report mid-flight values after a style flip.
@@ -235,7 +246,22 @@ class CleanShellStyleTest {
             val focusedTitle = window.getComputedStyle(focused.child(LayoutClassNames.PANE_TITLE))
             assertEquals(PALETTE["--t-text"], focusedTitle.color, "focused title colour, $selection")
             assertEquals("600", focusedTitle.fontWeight)
-            assertEquals(PALETTE["--t-text-dim"], window.getComputedStyle(idle.child(LayoutClassNames.PANE_TITLE)).color)
+            assertEquals(
+                PALETTE["--t-clean-text-dim"],
+                window.getComputedStyle(idle.child(LayoutClassNames.PANE_TITLE)).color,
+                "idle title takes the contrast-safe Clean dim, $selection",
+            )
+            // Window bodies: the toolkit's content slot paints nothing and has
+            // no inset, so the body area is the window's own colour.
+            for ((p, token) in listOf(focused to "--t-surface", idle to "--t-window-idle")) {
+                val slot = p.child(LayoutClassNames.PANE_CONTENT)
+                val slotStyle = window.getComputedStyle(slot)
+                assertEquals("rgba(0, 0, 0, 0)", slotStyle.backgroundColor, "content slot must be transparent, $selection")
+                assertEquals("0px", slotStyle.marginLeft, "content slot inset, $selection")
+                assertEquals("0px", slotStyle.marginBottom, "content slot inset, $selection")
+                assertEquals(p.getBoundingClientRect().width, slot.getBoundingClientRect().width, "slot fills the window, $selection")
+                assertEquals(PALETTE[token], window.getComputedStyle(p).backgroundColor, "body colour behind the slot, $selection")
+            }
         }
     }
 
