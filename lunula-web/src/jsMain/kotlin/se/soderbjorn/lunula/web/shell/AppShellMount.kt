@@ -58,6 +58,7 @@ import se.soderbjorn.lunula.web.applyCornerRadiusPx
 import se.soderbjorn.lunula.web.applyUiDensity
 import se.soderbjorn.lunula.web.applySelectionStyle
 import se.soderbjorn.lunula.web.applySurfaceStyle
+import se.soderbjorn.lunula.web.applyShellStyle
 import se.soderbjorn.lunula.web.setDtCustomTitleBarBodyClass
 import se.soderbjorn.lunula.web.settings.AppSettingsSidebarSpec
 import se.soderbjorn.lunula.web.settings.HotkeysSidebarSpec
@@ -1434,8 +1435,9 @@ private class ShellState(
      * [ShellStyle.Default].
      *
      * Held here so the Clean-shell rendering (epic LNA-16) has one resolved
-     * value to key off. Nothing reads it yet, and no CSS or document attribute
-     * is written for it, so Classic rendering is unaffected.
+     * value to key off. [applyHostFontVars] stamps it on the document root via
+     * [applyShellStyle] (`data-dt-style="clean"`, or no attribute for Classic,
+     * so Classic rendering is unaffected).
      *
      * @see ShellStyle
      * @see resolvedNavigationMode
@@ -1587,10 +1589,10 @@ private class ShellState(
             applySelectionStyle(it, host.selectionStyle ?: shapeFallback.selectionStyle)
         }
         applySurfaceStyle(host.surfaceStyle ?: shapeFallback.surfaceStyle)
-        // Shell style takes the same ladder, but is only RESOLVED here: no CSS
-        // or `data-dt-*` stamp keys off it yet (that is later Clean-shell
-        // work), so Classic renders unchanged.
+        // Shell style takes the same ladder and is stamped as `data-dt-style`
+        // (only for Clean, so Classic renders exactly as before).
         resolvedShellStyle = host.shellStyle ?: shapeFallback.shellStyle ?: ShellStyle.Default
+        (document.documentElement as? HTMLElement)?.let { applyShellStyle(it, resolvedShellStyle) }
         // Navigation takes the same ladder too, then the app's hard opt-outs
         // win over it (see resolveNavigationLayout).
         applyNavigation(

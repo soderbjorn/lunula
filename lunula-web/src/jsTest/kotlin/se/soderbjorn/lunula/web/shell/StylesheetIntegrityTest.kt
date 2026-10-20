@@ -144,4 +144,25 @@ class StylesheetIntegrityTest {
             )
         }
     }
+
+    @Test
+    fun theCleanShellRulesSurviveParsing() {
+        // Gated by applyShellStyle(): Clean is data-dt-style="clean" on :root.
+        // Every surface the Clean block restyles is listed, because losing any
+        // one leaves a half-Clean shell (say, square sheet with Classic
+        // titlebars) that still looks wired from Kotlin's side.
+        val clean = parsedSelectors().filter { it.contains("data-dt-style=\"clean\"") }
+        assertTrue(clean.isNotEmpty(), "no Clean shell rules survived parsing")
+        for (surface in listOf(
+            ".dt-app-frame", ".dt-app-frame-main", ".dt-pane-root", ".dt-pane", ".dt-pane-focused",
+            ".dt-pane-floating", ".dt-pane-header", ".dt-pane-title", ".dt-pane-action",
+            ".dt-pane-action-separator", ".dt-tab", ".dt-pane-dock", ".dt-pane-dock-item",
+            ".dt-sidebar", ".dt-topbar",
+        )) {
+            assertTrue(
+                clean.any { it.contains(surface) },
+                "Clean shell style has no rule for $surface — survived: $clean",
+            )
+        }
+    }
 }

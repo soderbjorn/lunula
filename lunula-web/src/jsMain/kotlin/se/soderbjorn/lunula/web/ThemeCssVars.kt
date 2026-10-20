@@ -21,6 +21,7 @@ import org.w3c.dom.HTMLElement
 import se.soderbjorn.lunula.core.Appearance
 import se.soderbjorn.lunula.core.ResolvedTheme
 import se.soderbjorn.lunula.core.SelectionStyle
+import se.soderbjorn.lunula.core.ShellStyle
 import se.soderbjorn.lunula.core.SurfaceStyle
 import se.soderbjorn.lunula.core.UiDensity
 import se.soderbjorn.lunula.core.argbToCss
@@ -491,4 +492,41 @@ fun applySurfaceStyle(style: SurfaceStyle?) {
     val root = kotlinx.browser.document.documentElement as? HTMLElement ?: return
     if ((style ?: SurfaceStyle.Default) == SurfaceStyle.Flat) root.setAttribute("data-dt-surface", "flat")
     else root.removeAttribute("data-dt-surface")
+}
+
+/**
+ * Apply [style] as the shell's overall composition (epic LNA-16).
+ *
+ * Stamps `data-dt-style="clean"` on [element] for [ShellStyle.Clean] and
+ * removes the attribute otherwise. `null` resolves to [ShellStyle.Default]
+ * (Classic). `lunula.css` writes every Clean rule under
+ * `:root[data-dt-style="clean"]`, in one block at the end of the file, so
+ * Classic is exactly the stylesheet as it was before Clean existed and the
+ * default needs no attribute. This is the same asymmetry as
+ * [applySurfaceStyle] and [applySelectionStyle].
+ *
+ * Clean is layered over the user's other shape settings rather than writing
+ * them: the stylesheet forces a 14px corner and Comfortable spacing, and
+ * cancels the Fill selection and Depth surface visuals, while those settings
+ * keep their stored values (and their own `data-dt-*` stamps) for when the
+ * user switches back to Classic.
+ *
+ * Like the other shape settings this is a user setting, not a theme property:
+ * it rides the host-apply pass in `AppShellMount` (`applyHostFontVars`, which
+ * resolves user pick, then app default, then [ShellStyle.Default]) and is
+ * untouched by theme changes.
+ *
+ * @param element the themed root (e.g. `document.documentElement`); the
+ *   stylesheet keys off `:root`, so any other element has no visual effect.
+ * @param style   the shell style, or `null` for [ShellStyle.Default].
+ * @see ShellStyle
+ * @see applySurfaceStyle
+ * @see applySelectionStyle
+ */
+fun applyShellStyle(element: HTMLElement, style: ShellStyle?) {
+    if ((style ?: ShellStyle.Default) == ShellStyle.Clean) {
+        element.setAttribute("data-dt-style", ShellStyle.Clean.cssValue)
+    } else {
+        element.removeAttribute("data-dt-style")
+    }
 }
