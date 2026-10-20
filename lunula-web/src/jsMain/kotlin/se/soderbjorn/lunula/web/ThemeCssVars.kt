@@ -530,3 +530,23 @@ fun applyShellStyle(element: HTMLElement, style: ShellStyle?) {
         element.removeAttribute("data-dt-style")
     }
 }
+
+/**
+ * Reads back the shell style [applyShellStyle] last stamped on [element]:
+ * [ShellStyle.Clean] when `data-dt-style="clean"` is present, otherwise
+ * [ShellStyle.Classic].
+ *
+ * The stamp on `:root` is the RESOLVED style (user pick, then app/brand
+ * default, then [ShellStyle.Default], resolved by `AppShellMount`'s
+ * host-apply pass), so this is how code without access to the shell — the
+ * Theme Manager's picker ordering (`calmFirst`) — follows a Clean default
+ * the user never picked, which the host's own `shellStyle` getter (null in
+ * that case) cannot tell it. Before anything is stamped it reads Classic, the
+ * same as what is painted.
+ *
+ * @param element the themed root, normally `document.documentElement`.
+ * @return the style in effect on [element].
+ * @see applyShellStyle
+ */
+fun appliedShellStyle(element: HTMLElement): ShellStyle =
+    if (element.getAttribute("data-dt-style") == ShellStyle.Clean.cssValue) ShellStyle.Clean else ShellStyle.Classic

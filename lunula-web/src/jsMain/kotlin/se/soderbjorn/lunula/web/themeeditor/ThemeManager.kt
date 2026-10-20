@@ -41,6 +41,7 @@ import se.soderbjorn.lunula.core.allThemes
 import se.soderbjorn.lunula.core.argbToCss
 import se.soderbjorn.lunula.core.builtinTheme
 import se.soderbjorn.lunula.core.filterThemesForPicker
+import se.soderbjorn.lunula.web.appliedShellStyle
 import se.soderbjorn.lunula.web.isDarkActive
 import se.soderbjorn.lunula.web.layout.PaneMenuItem
 import se.soderbjorn.lunula.web.layout.PaneMenuSpec
@@ -486,8 +487,9 @@ internal fun pokeManager() {
 /**
  * Renders the theme catalog into [container] as a single reflowing thumbnail
  * grid — one flat list with no "Dark"/"Light" section headings (issue #107).
- * The themes are ordered starred first, then — when the host reports
- * [ShellStyle.Clean] — the calm themes drawn for that style, then the house
+ * The themes are ordered starred first, then — when the resolved shell style
+ * is [ShellStyle.Clean] (read from `:root` by [appliedShellStyle], so an app or
+ * brand default counts) — the calm themes drawn for that style, then the house
  * themes, then the rest by name, and narrowed by the header's category dropdown and filter box, all by
  * [filterThemesForPicker]; each card is built by [renderThemeCard].
  * The grid packs as many thumbnails per row as the (resizable) sidebar width
@@ -509,7 +511,9 @@ private fun renderThemeList(container: HTMLElement, onOpen: (String, Boolean) ->
         favorites = host.favoriteThemeNames,
         category = themeFilterCategory,
         query = themeFilterQuery,
-        calmFirst = host.shellStyle == ShellStyle.Clean,
+        // The resolved style, as stamped on :root — not host.shellStyle, which
+        // is null when Clean comes from an app or brand default.
+        calmFirst = appliedShellStyle(document.documentElement as HTMLElement) == ShellStyle.Clean,
     )
     if (matching.isEmpty()) {
         container.appendChild(buildNoThemesMatchRow())
