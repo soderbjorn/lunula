@@ -10,6 +10,7 @@ package se.soderbjorn.lunula.web.shell
 
 import org.w3c.dom.HTMLElement
 import se.soderbjorn.lunula.core.AppearanceShape
+import se.soderbjorn.lunula.core.NavigationMode
 import se.soderbjorn.lunula.core.Persister
 import se.soderbjorn.lunula.core.ThemeSnapshotV2
 import se.soderbjorn.lunula.web.layout.LayoutPreset
@@ -943,6 +944,10 @@ data class AppShellSpec(
      *
      * Distinct from [AppShellHandle.setSidebarOpen]`(false)`, which
      * merely collapses a sidebar that still exists and can be re-opened.
+     *
+     * A hard opt-out: it always wins over the user's navigation mode
+     * ([AppShellHandle.setNavigationMode]). When it is `true`, the mode
+     * decides at runtime whether the sidebar is shown.
      */
     val showSidebar: Boolean = true,
     /**
@@ -972,6 +977,10 @@ data class AppShellSpec(
      * and the trailing actions. Tab-related affordances that live in
      * the strip (dot menus, overflow, drag-reorder) are unreachable
      * while hidden, which is the point.
+     *
+     * A hard opt-out: it always wins over the user's navigation mode
+     * ([AppShellHandle.setNavigationMode]). When it is `true`, the mode
+     * decides at runtime whether the strip is shown.
      */
     val showTabStrip: Boolean = true,
     /**
@@ -1377,6 +1386,30 @@ interface AppShellHandle {
 
     /** Toggles the left sidebar's open state. */
     fun setSidebarOpen(open: Boolean)
+
+    /**
+     * Changes the user's navigation mode (Sidebar / Tab strip / Both) and
+     * shows or hides the left sidebar and the tab strip at once, without a
+     * remount. The active tab, the active pane and the sidebar's collapsed
+     * state are kept.
+     *
+     * Writes through [AppShellSpec.settingsHost] when the app supplies one
+     * (which then owns persisting it), otherwise through the toolkit's own
+     * theme host, which persists it under
+     * [se.soderbjorn.lunula.core.PersistKeys.APPEARANCE_SHAPE]. The app's
+     * [AppShellSpec.showSidebar] / [AppShellSpec.showTabStrip] `= false`
+     * still win over the mode; when they would leave nothing to navigate
+     * with, the shell shows whichever surface the app does allow.
+     *
+     * Called by a settings control (the Appearance control is LNA-24) or by
+     * an app reacting to its own settings (e.g. a `nav=` query parameter).
+     * The default implementation is a no-op so hand-written fakes of this
+     * interface keep compiling.
+     *
+     * @param mode the new mode, or `null` to clear the user's choice and
+     *   fall back to the app default.
+     */
+    fun setNavigationMode(mode: NavigationMode?) {}
 
     /**
      * Triggers a full shell rerender — top bar, sidebars, bottom bar

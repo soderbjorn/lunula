@@ -97,7 +97,7 @@ class DefaultThemeManagerState(
     var surfaceStyle: SurfaceStyle? = null,
     /** Shell-composition override (null → [ShellStyle.Default], i.e. Classic). */
     var shellStyle: ShellStyle? = null,
-    /** Tab-navigation override (null → [NavigationMode.Default], i.e. Sidebar). */
+    /** Tab-navigation override (null → [NavigationMode.Default], i.e. Both). */
     var navigationMode: NavigationMode? = null,
     /** Per-app custom-titlebar opt-in (Electron `hiddenInset` etc.). */
     var useCustomTitleBar: Boolean = false,

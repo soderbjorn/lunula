@@ -13,7 +13,10 @@
  *       - "Move to workspace"      (when `onMoveToWorld` is set)
  *       - "Hide / Show in tab bar" (when `onSetHidden` is set)
  *       - "Hide / Show in side bar"(when `onSetHiddenFromSidebar` is set)
- *     Called from [buildTabElement] for every visible tab.
+ *     plus, above them, a "Windows" list of the tab's panes (when
+ *     `tabWindows` / `onSelectWindow` are set — the shell does so while the
+ *     navigation mode hides the sidebar, LNA-22). On a fixed strip only that
+ *     list is offered. Called from [buildTabElement] for every visible tab.
  *
  *  2. The far-right **overflow menu** (`appendTabBarOverflowMenu`) — the
  *     `⋮` button after the last tab. It now holds only the cross-tab
@@ -97,6 +100,13 @@ internal object TabMenuClassNames {
 
     /** A trailing icon button inside a row ("Show in tab bar"). */
     const val ROW_ACTION = "dt-menu-row-action"
+
+    /**
+     * Marks a row in a tab dot menu's "Windows" section; the row also
+     * carries the pane's `data-pane-id`. Structural only — the row is
+     * painted by the shared menu surface.
+     */
+    const val WINDOW_ROW = "dt-tab-menu-window"
 }
 
 /**
@@ -126,6 +136,13 @@ private const val SUBMENU_HIDE_GRACE_MS = 220
  * Rename, on [TabSpec.isRenamable]). When none apply, no button is rendered
  * so read-only tabs stay chromeless.
  *
+ * Above those it can list the tab's windows ([TabBarCallbacks.tabWindows]),
+ * each row switching to that window through
+ * [TabBarCallbacks.onSelectWindow] — the way to reach a window when the
+ * navigation mode hides the sidebar. On a fixed strip ([TabBarSpec.isFixed])
+ * the edit rows are withheld and only this list remains, since picking a
+ * window selects rather than edits.
+ *
  * @param tabEl the `.dt-tab` element to attach the menu button to (the
  *   panel is mounted on `document.body` when the button is pressed).
  * @param tab   the tab this menu acts on.
@@ -135,12 +152,20 @@ private const val SUBMENU_HIDE_GRACE_MS = 220
  */
 internal fun appendTabDotMenu(tabEl: HTMLElement, tab: TabSpec, spec: TabBarSpec) {
     val cb = spec.callbacks
-    val canRename = tab.isRenamable && cb.onRename != null
-    val canClose = cb.onClose != null
-    val canMoveWorld = cb.onMoveToWorld != null && cb.moveToWorlds.isNotEmpty()
-    val canHide = cb.onSetHidden != null
-    val canHideSidebar = cb.onSetHiddenFromSidebar != null
-    if (!canRename && !canClose && !canMoveWorld && !canHide && !canHideSidebar) return
+    // Every edit is withheld on a fixed strip: the flag wins over the
+    // callbacks (see TabBarSpec.isFixed).
+    val editable = !spec.isFixed
+    val canRename = editable && tab.isRenamable && cb.onRename != null
+    val canClose = editable && cb.onClose != null
+    val canMoveWorld = editable && cb.onMoveToWorld != null && cb.moveToWorlds.isNotEmpty()
+    val canHide = editable && cb.onSetHidden != null
+    val canHideSidebar = editable && cb.onSetHiddenFromSidebar != null
+    val listWindows = cb.tabWindows
+    val selectWindow = cb.onSelectWindow
+    val canListWindows = listWindows != null && selectWindow != null &&
+        listWindows(tab.id).isNotEmpty()
+    if (!canListWindows && !canRename && !canClose && !canMoveWorld && !canHide && !canHideSidebar) return
+    val hasEdits = canRename || canClose || canMoveWorld || canHide || canHideSidebar
 
     val menuWrap = document.createElement("div") as HTMLElement
     menuWrap.className = "dt-tab-menu"
@@ -156,6 +181,30 @@ internal fun appendTabDotMenu(tabEl: HTMLElement, tab: TabSpec, spec: TabBarSpec
     menuBtn.addEventListener("mousedown", { ev: Event -> ev.stopPropagation() })
 
     wireDotMenu(menuWrap, menuBtn) { panel, closeMenu ->
+        // The tab's windows first: with the sidebar hidden this is how the
+        // user gets to them, so it leads. Re-queried here rather than reusing
+        // the build-time list, which may be stale by the time the menu opens.
+        if (canListWindows) {
+            val windows = listWindows!!(tab.id)
+            if (windows.isNotEmpty()) {
+                panel.appendChild(menuHeading("Windows"))
+                for (window in windows) {
+                    val row = menuRow(window.label, window.iconHtml) {
+                        closeMenu()
+                        selectWindow!!(tab.id, window.id)
+                    }
+                    row.classList.add(TabMenuClassNames.WINDOW_ROW)
+                    row.setAttribute("data-pane-id", window.id)
+                    if (window.isActive) {
+                        row.classList.add("dt-menu-selected")
+                        row.setAttribute("aria-current", "true")
+                    }
+                    panel.appendChild(row)
+                }
+                if (hasEdits) panel.appendChild(menuSeparator())
+            }
+        }
+
         // The dot menu only exists on tabs that are actually in the strip (a
         // hidden tab is rendered only while active), so the label is always in
         // the DOM here and inline rename can target it.

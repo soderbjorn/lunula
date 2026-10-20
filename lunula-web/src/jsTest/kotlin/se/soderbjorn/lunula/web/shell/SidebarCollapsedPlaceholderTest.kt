@@ -206,4 +206,33 @@ class SidebarCollapsedPlaceholderTest {
             host.remove()
         }
     }
+
+    /**
+     * The navigation mode (LNA-22) hides the sidebar by simply not mounting
+     * it, so the controller must come back from an unmounted stretch exactly
+     * as it was left: a sidebar toggled closed before the user switched to
+     * Tab strip is still closed — and still strip-less — when they switch
+     * back, and an open one reopens at its width.
+     */
+    @Test
+    fun collapseStateSurvivesAStretchWithNoMount() {
+        val controller = SidebarController(defaultWidthPx = 240)
+        controller.setInitial(open = true, widthPx = 312)
+        controller.mountSidebarOrPlaceholder(leftSidebarSpec(), onLeft = true, requestRebuild = { })
+        controller.toggle { }
+
+        // …mode hides the sidebar: rebuilds happen, none of them mount it…
+
+        val back = controller.mountSidebarOrPlaceholder(leftSidebarSpec(), onLeft = true, requestRebuild = { })
+        assertFalse(controller.isOpen, "a toggle collapse outlives the mode change")
+        assertTrue(back.classList.contains("dt-sidebar-collapsed"))
+        assertNull(back.resizeHandle(), "and it is still the strip-less toggle placeholder")
+
+        val open = SidebarController(defaultWidthPx = 240)
+        open.setInitial(open = true, widthPx = 312)
+        val reopened = open.mountSidebarOrPlaceholder(leftSidebarSpec(), onLeft = true, requestRebuild = { })
+        assertTrue(open.isOpen)
+        assertFalse(reopened.classList.contains("dt-sidebar-collapsed"))
+        assertTrue(open.widthPx == 312, "an open sidebar keeps the width the user gave it")
+    }
 }
