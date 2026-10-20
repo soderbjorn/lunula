@@ -4,11 +4,11 @@
  *
  * A USER setting, not a theme property — it sits beside the other shell
  * preferences in [AppearanceShape] and is persisted per-app under
- * [PersistKeys.APPEARANCE_SHAPE]. It belongs to the "Clean" shell work (epic
- * LNA-16). The web shell resolves it in `applyHostFontVars` (user → app
- * default → [NavigationMode.Default]), lets an app's hard opt-outs
- * (`AppShellSpec.showSidebar` / `showTabStrip = false`) override it, and
- * shows or hides the sidebar and tab strip at runtime to match (LNA-22).
+ * [PersistKeys.APPEARANCE_SHAPE]. The web shell resolves it in
+ * `applyHostFontVars` (user → app default → [NavigationMode.Default]), lets an
+ * app's hard opt-outs (`AppShellSpec.showSidebar` / `showTabStrip = false`)
+ * override it, and shows or hides the sidebar and tab strip at runtime to
+ * match.
  */
 package se.soderbjorn.lunula.core
 
@@ -73,10 +73,10 @@ enum class NavigationMode(val cssValue: String) {
          * [Both], because that is what the shell drew before this setting
          * existed (`AppShellSpec.showSidebar` and `showTabStrip` both default
          * to `true`). Any other value would change every app's chrome on
-         * upgrade for users who never touched the setting, which the Clean
-         * epic (LNA-16) rules out: nothing changes for anyone who doesn't
-         * opt in. An app that wants a different default for its users says
-         * so through its `AppearanceShape` default instead.
+         * upgrade for users who never touched the setting: nothing changes
+         * for anyone who doesn't opt in. An app that wants a different
+         * default for its users says so through its `AppearanceShape`
+         * default instead.
          */
         val Default: NavigationMode = Both
 
