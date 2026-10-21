@@ -381,6 +381,54 @@ class CleanShellStyleTest {
     }
 
     /**
+     * Under Clean the hidden action strip reserves no room in the titlebar, so
+     * a long title gets the whole row instead of being cut short by invisible
+     * buttons; under Classic the strip stays in flow as before. The strip is
+     * still revealed by keyboard focus, and keeps its stacking.
+     */
+    @Test
+    fun cleanHiddenActionStripTakesNoRoomFromTheTitle() {
+        if (!hasHoverPointer()) return
+        val long = "A window title long enough that it can never fit in half the frame"
+        renderShell(
+            listOf(
+                FloatingPaneSpec(id = "p1", title = long, xPct = 0.0, yPct = 0.0, widthPct = 0.5, heightPct = 1.0),
+                FloatingPaneSpec(id = "p2", title = "Second window", xPct = 0.5, yPct = 0.0, widthPct = 0.5, heightPct = 1.0),
+            ),
+        )
+        val title = pane("p1").child(LayoutClassNames.PANE_TITLE)
+        val actions = pane("p1").child(PaneHeaderClassNames.ACTIONS)
+        fun titleWidth(): Double = title.getBoundingClientRect().width
+        fun titleWidthWithoutStrip(): Double {
+            actions.style.display = "none"
+            val w = titleWidth()
+            actions.style.removeProperty("display")
+            return w
+        }
+
+        applyShellStyle(root, ShellStyle.Classic)
+        assertTrue(
+            titleWidth() < titleWidthWithoutStrip() - 1.0,
+            "under Classic the hidden strip should still take its room, so this test proves something",
+        )
+
+        applyShellStyle(root, ShellStyle.Clean)
+        assertEquals("absolute", window.getComputedStyle(actions).position)
+        assertEquals(titleWidthWithoutStrip(), titleWidth(), "under Clean the hidden strip must not shrink the title")
+        assertEquals("5", window.getComputedStyle(actions).zIndex, "the strip keeps its stacking above the corner grip")
+        val style = window.getComputedStyle(actions)
+        assertEquals("0", style.opacity, "the strip is still hidden at rest")
+
+        // Keyboard focus still reveals it.
+        val button = actions.querySelector("button") as HTMLElement
+        actions.style.transition = "none"
+        button.focus()
+        assertEquals("1", window.getComputedStyle(actions).opacity)
+        assertEquals("auto", window.getComputedStyle(actions).getPropertyValue("pointer-events").trim())
+        button.blur()
+    }
+
+    /**
      * Builds the real frame row (`.dt-app-frame-body` holding the left slot
      * and the main area, as `renderAppFrame` does) with the left slot in one
      * of the states the shell produces, and returns the main area.

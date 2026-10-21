@@ -7775,6 +7775,35 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     margin: 0 4px;
     background: var(--t-border, rgba(255, 255, 255, 0.12));
 }
+/* The hidden strip takes no room. In flow, the strip keeps its box while it
+   is invisible (see "Hidden until the pointer comes near"), and Clean's 28px
+   buttons make that box wide enough to cut a half-width window's title to
+   a few letters. Under Clean the strip is lifted out of flow instead and
+   pinned to the titlebar's right edge, so the title and trailing label get
+   the whole row. Revealed, it sits over the end of the row on the
+   titlebar's own colour (`--dt-clean-header-bg`, which follows focus and
+   hover), with a short fade so a title running under it does not end on a
+   hard cut. The reveal itself is untouched: the same opacity and
+   pointer-events rules show it on hover, pointer movement, keyboard focus
+   and an open menu, and its stacking (z-index 5, above the corner grip) is
+   kept; `position: relative` on the header gives it no z-index, so the
+   header does not become a stacking context. Gated like the hide: on a
+   device without a hovering pointer the strip is always shown, so it stays
+   in flow there. */
+@media (hover: hover) and (pointer: fine) {
+    :root[data-dt-style="clean"] .dt-pane-header {
+        position: relative;
+    }
+    :root[data-dt-style="clean"] .dt-pane-header > .dt-pane-actions {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        margin-left: 0;
+        padding: 0 8px 0 16px;
+        background: linear-gradient(to right, transparent, var(--dt-clean-header-bg) 16px);
+    }
+}
 
 /* ── Tabs (when the strip is shown) ──────────────────────────────────
    Quiet text tabs: no pill border, no lift, dim label. The selected tab takes
