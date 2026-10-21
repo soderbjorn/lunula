@@ -429,6 +429,46 @@ class CleanShellStyleTest {
     }
 
     /**
+     * Floating dialogs and menus: Classic keeps its look exactly (the modal's
+     * 2px accent frame included), and Clean gives each the calm card: the
+     * surface colour, a 1px `--t-border` hairline and no accent anywhere on
+     * the frame.
+     */
+    @Test
+    fun cleanCalmsDialogsAndMenusAndLeavesClassicAlone() {
+        val classes = listOf("dt-modal", "pane-modal", "dt-name-prompt", "dt-hover-menu", "dt-pane-menu", "dt-popover-menu", "dt-scheme-menu")
+        val els = classes.map { cls ->
+            (document.createElement("div") as HTMLElement).also {
+                it.className = cls
+                it.style.transition = "none"
+                document.body!!.appendChild(it)
+            }
+        }
+        val props = listOf("background-color", "border-top-width", "border-top-color", "border-radius", "box-shadow")
+        fun snap(): Map<String, String> = els.flatMap { el ->
+            val st = window.getComputedStyle(el)
+            props.map { "${el.className} $it" to st.getPropertyValue(it) }
+        }.toMap()
+        try {
+            applyShellStyle(root, null)
+            val before = snap()
+            assertEquals("2px", before["dt-modal border-top-width"], "Classic's modal frame is the 2px accent")
+            applyShellStyle(root, ShellStyle.Clean)
+            for (el in els) {
+                val st = window.getComputedStyle(el)
+                assertEquals(PALETTE["--t-surface"], st.backgroundColor, "${el.className} background")
+                assertEquals("1px", st.borderTopWidth, "${el.className} border width")
+                assertEquals(PALETTE["--t-border"], st.borderTopColor, "${el.className} border colour")
+                assertFalse(PALETTE["--t-accent"]!! in st.boxShadow, "${el.className} shadow carries the accent")
+            }
+            applyShellStyle(root, ShellStyle.Classic)
+            assertEquals(before, snap(), "a round trip through Clean changed a dialog under Classic")
+        } finally {
+            els.forEach { it.parentElement?.removeChild(it) }
+        }
+    }
+
+    /**
      * Builds the real frame row (`.dt-app-frame-body` holding the left slot
      * and the main area, as `renderAppFrame` does) with the left slot in one
      * of the states the shell produces, and returns the main area.

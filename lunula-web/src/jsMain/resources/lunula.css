@@ -8055,3 +8055,33 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     color: var(--dt-clean-text-dim);
     font-size: 12.5px;
 }
+
+/* ── Dialogs, menus and popovers ─────────────────────────────────────
+   Floating surfaces get the same calm card as the sheet: the theme's
+   `--t-surface`, a 1px `--t-border` hairline, the brief's card radius and
+   the focused window's soft neutral lift (`--dt-clean-lift`, written on
+   :root by `applyColorScheme`, so it reaches panels mounted on <body>
+   outside `.dt-app-frame`). Under Classic the modals carry a 2px accent
+   border and an accent glow (`--t-glow`); Clean uses the accent only for
+   the few marks the brief lists, so both go. Content, layout, padding and
+   stacking are untouched, and so are the rows inside (selected options and
+   hovered menu items keep their own colours). */
+:root[data-dt-style="clean"] .dt-modal,
+:root[data-dt-style="clean"] .pane-modal,
+:root[data-dt-style="clean"] .dt-name-prompt,
+:root[data-dt-style="clean"] .dt-hotkeys-panel {
+    background: var(--t-surface, #1e1e1e);
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
+    border-radius: 12px;
+    box-shadow: var(--dt-clean-lift, 0 2px 4px rgba(0, 0, 0, 0.05), 0 12px 32px rgba(0, 0, 0, 0.1));
+}
+:root[data-dt-style="clean"] .dt-hover-menu,
+:root[data-dt-style="clean"] .dt-pane-menu,
+:root[data-dt-style="clean"] .dt-popover-menu,
+:root[data-dt-style="clean"] .dt-scheme-menu,
+:root[data-dt-style="clean"] .theme-manager-menu {
+    background: var(--t-surface, #1e1e1e);
+    border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
+    border-radius: 10px;
+    box-shadow: var(--dt-clean-lift, 0 2px 4px rgba(0, 0, 0, 0.05), 0 12px 32px rgba(0, 0, 0, 0.1));
+}
