@@ -141,7 +141,7 @@ class AutoAppearanceFollowsSystemTest {
             )
 
             awaitThis("topbar rendered") {
-                root.querySelector("button[title=\"Theme manager\"]") != null
+                root.querySelector("button[title=\"Themes and appearance\"]") != null
             }
             awaitThis("shell painted the light slot") { paintedColorScheme() == "light" }
 

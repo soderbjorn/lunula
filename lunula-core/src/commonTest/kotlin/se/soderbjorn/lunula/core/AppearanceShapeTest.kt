@@ -1,6 +1,9 @@
 /* AppearanceShapeTest.kt
  * Round-trip and leniency for the shell's shape/density/selection/surface/
- * shell-style/navigation preferences.
+ * chrome/windows/focus/labels/navigation preferences, the legacy `shellStyle`
+ * look shorthand ([AppearanceShape.lookLayer], [AppearanceShape.withLookExpanded]),
+ * and the split between the shared part and the per-mode part of a shape
+ * ([AppearanceShape.sharedPart], [AppearanceShape.styleOnly]).
  *
  * These settings are persisted as one hand-editable JSON blob that a
  * deployment's brand manifest can also seed, so the decoder's failure
@@ -25,10 +28,161 @@ class AppearanceShapeTest {
             uiDensity = UiDensity.Spacious,
             selectionStyle = SelectionStyle.Fill,
             surfaceStyle = SurfaceStyle.Flat,
-            shellStyle = ShellStyle.Clean,
+            shellStyle = ShellStyle.Calm,
             navigationMode = NavigationMode.Both,
+            chromeStyle = ChromeStyle.Blended,
+            windowLayout = WindowLayout.Sheet,
+            focusStyle = FocusStyle.Tone,
+            labelCase = LabelCase.Sentence,
         )
         assertEquals(shape, AppearanceShape.fromJson(shape.toJson()))
+    }
+
+    @Test
+    fun theStyleSettingsRoundTripEveryValue() {
+        for (c in ChromeStyle.entries) for (w in WindowLayout.entries) for (f in FocusStyle.entries) for (l in LabelCase.entries) {
+            val shape = AppearanceShape(chromeStyle = c, windowLayout = w, focusStyle = f, labelCase = l)
+            assertTrue(!shape.isEmpty)
+            assertEquals(shape, AppearanceShape.fromJson(shape.toJson()), "$c/$w/$f/$l")
+        }
+        for (sel in SelectionStyle.entries) for (surf in SurfaceStyle.entries) {
+            val shape = AppearanceShape(selectionStyle = sel, surfaceStyle = surf)
+            assertEquals(shape, AppearanceShape.fromJson(shape.toJson()), "$sel/$surf")
+        }
+        assertEquals(
+            "{\"chromeStyle\":\"blended\",\"windowLayout\":\"sheet\",\"focusStyle\":\"tone\",\"labelCase\":\"sentence\"}",
+            AppearanceShape(
+                chromeStyle = ChromeStyle.Blended,
+                windowLayout = WindowLayout.Sheet,
+                focusStyle = FocusStyle.Tone,
+                labelCase = LabelCase.Sentence,
+            ).toJson(),
+        )
+    }
+
+    @Test
+    fun eachStyleSettingAloneMakesTheShapeNonEmpty() {
+        assertTrue(!AppearanceShape(chromeStyle = ChromeStyle.Themed).isEmpty)
+        assertTrue(!AppearanceShape(windowLayout = WindowLayout.Cards).isEmpty)
+        assertTrue(!AppearanceShape(focusStyle = FocusStyle.Accent).isEmpty)
+        assertTrue(!AppearanceShape(labelCase = LabelCase.Uppercase).isEmpty)
+    }
+
+    @Test
+    fun anUnknownStyleSettingCostsOnlyItsOwnField() {
+        val decoded = AppearanceShape.fromJson(
+            """{"chromeStyle":"glossy","windowLayout":"sheet","focusStyle":7,"labelCase":"sentence"}"""
+        )
+        assertNull(decoded.chromeStyle)
+        assertNull(decoded.focusStyle)
+        assertEquals(WindowLayout.Sheet, decoded.windowLayout)
+        assertEquals(LabelCase.Sentence, decoded.labelCase)
+    }
+
+    @Test
+    fun theStyleSettingsParseBothSpellings() {
+        assertEquals(ChromeStyle.Blended, ChromeStyle.fromRaw(" Blended "))
+        assertEquals(WindowLayout.Sheet, WindowLayout.fromRaw("SHEET"))
+        assertEquals(FocusStyle.Tone, FocusStyle.fromRaw("tone"))
+        assertEquals(LabelCase.Sentence, LabelCase.fromRaw("Sentence"))
+        assertEquals(SelectionStyle.Soft, SelectionStyle.fromRaw("soft"))
+        assertEquals(SurfaceStyle.Soft, SurfaceStyle.fromRaw("Soft"))
+        assertNull(ChromeStyle.fromRaw(""))
+        assertNull(WindowLayout.fromRaw(null))
+    }
+
+    @Test
+    fun theStyleSettingDefaultsAreTheClassicShell() {
+        assertEquals(ChromeStyle.Themed, ChromeStyle.Default)
+        assertEquals(WindowLayout.Cards, WindowLayout.Default)
+        assertEquals(FocusStyle.Accent, FocusStyle.Default)
+        assertEquals(LabelCase.Uppercase, LabelCase.Default)
+    }
+
+    // ── The legacy look shorthand ──
+
+    @Test
+    fun aLegacyShellStyleStandsForTheMatchingLook() {
+        assertEquals(Looks.Calm.shape, AppearanceShape(shellStyle = ShellStyle.Calm).lookLayer())
+        assertEquals(Looks.Classic.shape, AppearanceShape(shellStyle = ShellStyle.Classic).lookLayer())
+        assertTrue(AppearanceShape().lookLayer().isEmpty, "no shorthand, no layer")
+        // The layer is the look alone: the shape's own fields are not in it.
+        assertEquals(
+            Looks.Calm.shape,
+            AppearanceShape(shellStyle = ShellStyle.Calm, cornerRadiusPx = 2).lookLayer(),
+        )
+    }
+
+    @Test
+    fun aLegacyCleanBlobResolvesToTheWholeCalmLook() {
+        // A blob saved by a build that only had the single switch, before the
+        // preset was renamed from "Clean" to "Calm".
+        val legacy = AppearanceShape.fromJson("""{"shellStyle":"clean"}""")
+        assertEquals(ShellStyle.Calm, legacy.shellStyle)
+        assertTrue(Looks.Calm.matches(resolveAppearance(*appearanceLadder(legacy, AppearanceShape()))))
+    }
+
+    @Test
+    fun aCalmBlobResolvesToTheWholeCalmLook() {
+        val shape = AppearanceShape.fromJson("""{"shellStyle":"calm"}""")
+        assertEquals(ShellStyle.Calm, shape.shellStyle)
+        assertTrue(Looks.Calm.matches(resolveAppearance(*appearanceLadder(shape, AppearanceShape()))))
+    }
+
+    @Test
+    fun theOldCleanSpellingIsReadAsCalmButNeverWritten() {
+        assertEquals("calm", ShellStyle.Calm.cssValue)
+        assertEquals(ShellStyle.Calm, ShellStyle.fromRaw("clean"))
+        assertEquals(ShellStyle.Calm, ShellStyle.fromRaw("calm"))
+        // Re-saving a legacy blob writes the new spelling.
+        assertEquals(
+            """{"shellStyle":"calm"}""",
+            AppearanceShape.fromJson("""{"shellStyle":"clean"}""").toJson(),
+        )
+    }
+
+    @Test
+    fun withLookExpandedFoldsTheShorthandIntoUnsetFields() {
+        val shape = AppearanceShape(
+            shellStyle = ShellStyle.Calm,
+            cornerRadiusPx = 4,
+            labelCase = LabelCase.Uppercase,
+            navigationMode = NavigationMode.Sidebar,
+        )
+        val expanded = shape.withLookExpanded()
+        assertNull(expanded.shellStyle, "the shorthand itself is cleared")
+        assertEquals(4, expanded.cornerRadiusPx, "the shape's own field wins over the look")
+        assertEquals(LabelCase.Uppercase, expanded.labelCase)
+        assertEquals(NavigationMode.Sidebar, expanded.navigationMode, "navigation is carried as-is")
+        assertEquals(Looks.Calm.shape.uiDensity, expanded.uiDensity)
+        assertEquals(Looks.Calm.shape.selectionStyle, expanded.selectionStyle)
+        assertEquals(Looks.Calm.shape.surfaceStyle, expanded.surfaceStyle)
+        assertEquals(Looks.Calm.shape.chromeStyle, expanded.chromeStyle)
+        assertEquals(Looks.Calm.shape.windowLayout, expanded.windowLayout)
+        assertEquals(Looks.Calm.shape.focusStyle, expanded.focusStyle)
+        // And it paints exactly what the unexpanded shape resolved to.
+        assertEquals(
+            resolveAppearance(*appearanceLadder(shape, AppearanceShape())),
+            resolveAppearance(expanded),
+        )
+    }
+
+    @Test
+    fun withLookExpandedWithoutAShorthandChangesNothing() {
+        val shape = AppearanceShape(cornerRadiusPx = 9, focusStyle = FocusStyle.Tone)
+        assertEquals(shape, shape.withLookExpanded())
+    }
+
+    @Test
+    fun sharedPartKeepsOnlyNavigation() {
+        val shape = Looks.Calm.shape.copy(navigationMode = NavigationMode.TabStrip, shellStyle = ShellStyle.Calm)
+        assertEquals(AppearanceShape(navigationMode = NavigationMode.TabStrip), shape.sharedPart())
+    }
+
+    @Test
+    fun styleOnlyDropsNavigationAndTheShorthand() {
+        val shape = Looks.Calm.shape.copy(navigationMode = NavigationMode.TabStrip, shellStyle = ShellStyle.Calm)
+        assertEquals(Looks.Calm.shape, shape.styleOnly())
     }
 
     @Test
@@ -135,9 +289,9 @@ class AppearanceShapeTest {
             assertEquals(shape, AppearanceShape.fromJson(shape.toJson()))
         }
         assertEquals(
-            "{\"shellStyle\":\"clean\",\"navigationMode\":\"tabstrip\"}",
+            "{\"shellStyle\":\"calm\",\"navigationMode\":\"tabstrip\"}",
             AppearanceShape(
-                shellStyle = ShellStyle.Clean,
+                shellStyle = ShellStyle.Calm,
                 navigationMode = NavigationMode.TabStrip,
             ).toJson(),
         )
@@ -162,8 +316,8 @@ class AppearanceShapeTest {
         assertEquals(SurfaceStyle.Flat, decoded.surfaceStyle, "its neighbours survive")
         assertEquals(6, decoded.cornerRadiusPx)
 
-        val mixed = AppearanceShape.fromJson("""{"shellStyle":"clean","navigationMode":42}""")
-        assertEquals(ShellStyle.Clean, mixed.shellStyle)
+        val mixed = AppearanceShape.fromJson("""{"shellStyle":"calm","navigationMode":42}""")
+        assertEquals(ShellStyle.Calm, mixed.shellStyle)
         assertNull(mixed.navigationMode)
     }
 
@@ -192,8 +346,12 @@ class AppearanceShapeTest {
     fun shellStyleFromRawIsLenient() {
         assertEquals(ShellStyle.Classic, ShellStyle.fromRaw("classic"))
         assertEquals(ShellStyle.Classic, ShellStyle.fromRaw("Classic"))
-        assertEquals(ShellStyle.Clean, ShellStyle.fromRaw("  CLEAN \n"))
-        assertEquals(ShellStyle.Clean, ShellStyle.fromRaw("Clean"))
+        assertEquals(ShellStyle.Calm, ShellStyle.fromRaw("calm"))
+        assertEquals(ShellStyle.Calm, ShellStyle.fromRaw("  CALM \n"))
+        assertEquals(ShellStyle.Calm, ShellStyle.fromRaw("Calm"))
+        // The legacy spelling, in either case, is still the Calm look.
+        assertEquals(ShellStyle.Calm, ShellStyle.fromRaw("  CLEAN \n"))
+        assertEquals(ShellStyle.Calm, ShellStyle.fromRaw("Clean"))
         assertNull(ShellStyle.fromRaw("minimal"))
         assertNull(ShellStyle.fromRaw(""))
         assertNull(ShellStyle.fromRaw("   "))

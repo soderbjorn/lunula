@@ -12,11 +12,12 @@
  * it exists, including a user's own clone, and new kinds of theme can be
  * detected by adding a predicate here rather than by re-tagging the catalog.
  *
- * The four palette categories form a **partition**: every theme lands in
+ * The five palette categories form a **partition**: every theme lands in
  * exactly one of [ThemeCategory.Dark], [ThemeCategory.Light],
- * [ThemeCategory.DarkLightSplit] and [ThemeCategory.WhiteTwoTone], decided by
- * two tone readings (content and chrome) and, when both are light, whether the
- * theme splits its chrome from its content at all.
+ * [ThemeCategory.WhiteOneTone], [ThemeCategory.WhiteTwoTone] and
+ * [ThemeCategory.DarkLightSplit], decided by two tone readings (content and
+ * chrome), and, when both are light, whether the theme splits its chrome from
+ * its content at all and whether its windows are white.
  */
 package se.soderbjorn.lunula.core
 
@@ -24,9 +25,9 @@ package se.soderbjorn.lunula.core
  * A filter offered by the theme picker's category dropdown.
  *
  * [All] and [Starred] are selection filters — they ask about the user, not
- * about the palette. [Clean] is a curated filter: the calm themes drawn for the
- * Clean shell, which also appear under their palette category. The remaining
- * four are palette filters and partition the catalog, so switching between
+ * about the palette. [Calm] is a curated filter: the calm themes, which also
+ * appear under their palette category. The remaining
+ * five are palette filters and partition the catalog, so switching between
  * them shows every theme exactly once across the set.
  *
  * ### Callers
@@ -58,17 +59,17 @@ enum class ThemeCategory(val label: String) {
     Starred("Starred"),
 
     /**
-     * The calm themes drawn for the Clean shell style (LNA-19): the ten
-     * "<Hue> Calm Light/Dark" built-ins and any theme tagged
-     * [CALM_THEME_TAG], decided by [isCalmTheme].
+     * The calm themes (LNA-19): the ten "<Hue> Calm Light/Dark" built-ins and
+     * any theme tagged [CALM_THEME_TAG], decided by [isCalmTheme]. Quiet,
+     * near-neutral palettes that pair well with the Calm look.
      *
      * Not part of the palette partition — a calm theme is also Dark or Light,
-     * and [paletteCategoryOf] never returns this. It is a shortcut for a user
-     * who picked Clean and wants the palettes made for it.
+     * and [paletteCategoryOf] never returns this. It is a curated shortcut,
+     * offered whatever the style settings are.
      *
      * @see CALM_THEME_NAMES
      */
-    Clean("Clean"),
+    Calm("Calm"),
 
     /**
      * Dark throughout: dark content in dark chrome. Includes the two-zone dark
@@ -78,20 +79,23 @@ enum class ThemeCategory(val label: String) {
      */
     Dark("Dark"),
 
-    /** Light throughout, with no chrome zone splitting it — a plain light theme. */
+    /**
+     * Light throughout, with no chrome zone splitting it, on a tinted palette:
+     * cream, pink, green, lavender and the like ("Paper", "Sakura", "Matcha").
+     * A light, unsplit theme whose windows are plain white is a
+     * [WhiteOneTone] instead.
+     */
     Light("Light"),
 
     /**
-     * The two zones disagree in tone: the classic dark title bar / tab bar /
-     * sidebar wrapped around a light workspace ("Lunamux Split", "Nord",
-     * "Solarized Split", …).
-     *
-     * Defined as tone *disagreement* rather than literally "dark chrome, light
-     * content" so the inverse — a light shell around dark content — also lands
-     * here rather than falling out of the partition. No built-in does that
-     * today; a user's clone may.
+     * Light throughout, with no chrome zone splitting it, and windows of
+     * neutral near-white ([Theme.hasWhiteWindows]): one white tone with the
+     * accent as the only colour ("GitHub Light", "High Contrast", "Lunamux
+     * Light", the light Calm themes). The unsplit counterpart of
+     * [WhiteTwoTone].
      */
-    DarkLightSplit("Dark/Light Split"),
+    WhiteOneTone("White one-tone"),
+
 
     /**
      * Light in both zones, but still split into two: the shell is as white as
@@ -106,6 +110,18 @@ enum class ThemeCategory(val label: String) {
      * unset, or sets them to exactly the content values, is a plain [Light].
      */
     WhiteTwoTone("White two-tone"),
+
+    /**
+     * The two zones disagree in tone: the classic dark title bar / tab bar /
+     * sidebar wrapped around a light workspace ("Lunamux Split", "Nord",
+     * "Solarized Split", …).
+     *
+     * Defined as tone *disagreement* rather than literally "dark chrome, light
+     * content" so the inverse — a light shell around dark content — also lands
+     * here rather than falling out of the partition. No built-in does that
+     * today; a user's clone may.
+     */
+    DarkLightSplit("Dark/Light Split"),
 }
 
 /**
@@ -128,11 +144,33 @@ val Theme.hasDistinctChromeZone: Boolean
         effectiveChromeAccent != accent
 
 /**
+ * Whether [this] theme's windows are neutral near-white: every channel of
+ * [Theme.surface] at least [WHITE_WINDOW_MIN_CHANNEL], and no two more than
+ * [WHITE_WINDOW_MAX_SPREAD] apart (so a faint cream or blush does not count).
+ *
+ * @return true for white windows.
+ * @see ThemeCategory.WhiteOneTone
+ */
+val Theme.hasWhiteWindows: Boolean
+    get() {
+        val argb = hexToArgb(surface)
+        val channels = listOf((argb shr 16) and 0xFF, (argb shr 8) and 0xFF, argb and 0xFF)
+        return channels.min() >= WHITE_WINDOW_MIN_CHANNEL &&
+            channels.max() - channels.min() <= WHITE_WINDOW_MAX_SPREAD
+    }
+
+/** The least value of each surface channel for [Theme.hasWhiteWindows] (`#F8`). */
+const val WHITE_WINDOW_MIN_CHANNEL: Long = 0xF8
+
+/** The widest spread between surface channels for [Theme.hasWhiteWindows]. */
+const val WHITE_WINDOW_MAX_SPREAD: Long = 3
+
+/**
  * The single palette category [theme] belongs to.
  *
  * Never returns [ThemeCategory.All], [ThemeCategory.Starred] or
- * [ThemeCategory.Clean] — those are about the user's selection or a curated
- * set, not the palette. The four it can return partition
+ * [ThemeCategory.Calm] — those are about the user's selection or a curated
+ * set, not the palette. The five it can return partition
  * the catalog, so this is a total function with no overlap.
  *
  * @param theme the theme to classify.
@@ -146,6 +184,7 @@ fun paletteCategoryOf(theme: Theme): ThemeCategory {
         contentDark != chromeDark -> ThemeCategory.DarkLightSplit
         contentDark -> ThemeCategory.Dark
         theme.hasDistinctChromeZone -> ThemeCategory.WhiteTwoTone
+        theme.hasWhiteWindows -> ThemeCategory.WhiteOneTone
         else -> ThemeCategory.Light
     }
 }
@@ -167,7 +206,7 @@ fun matchesThemeCategory(
 ): Boolean = when (category) {
     ThemeCategory.All -> true
     ThemeCategory.Starred -> theme.name in favorites
-    ThemeCategory.Clean -> isCalmTheme(theme)
+    ThemeCategory.Calm -> isCalmTheme(theme)
     else -> paletteCategoryOf(theme) == category
 }
 
@@ -206,9 +245,6 @@ fun matchesThemeQuery(theme: Theme, query: String): Boolean {
  * @param favorites the user's starred theme names.
  * @param category  the selected dropdown entry; defaults to [ThemeCategory.All].
  * @param query     the filter box contents; defaults to empty (no search).
- * @param calmFirst whether the calm themes lead the list (after the stars) —
- *   passed `true` by the web layer when the shell style is Clean; see
- *   [orderThemesForPicker]. Defaults to `false`, the Classic order.
  * @return the themes to render, in picker order.
  * @see orderThemesForPicker
  */
@@ -217,6 +253,5 @@ fun filterThemesForPicker(
     favorites: Set<String>,
     category: ThemeCategory = ThemeCategory.All,
     query: String = "",
-    calmFirst: Boolean = false,
-): List<Theme> = orderThemesForPicker(themes, favorites, calmFirst)
+): List<Theme> = orderThemesForPicker(themes, favorites)
     .filter { matchesThemeCategory(it, category, favorites) && matchesThemeQuery(it, query) }

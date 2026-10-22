@@ -5,7 +5,7 @@
  * Two things are worth pinning here. First, that categorising by *measuring*
  * the palette actually reproduces what the hand-written labels used to say:
  * the dark/light tone counts, and the tint-alpha default that used to read the
- * label, must not have moved. Second, that the four palette categories really
+ * label, must not have moved. Second, that the five palette categories really
  * do partition the catalog — the property the dropdown's usefulness rests on,
  * since a theme that fell into two of them (or none) would appear twice as the
  * user cycles the filter, or vanish entirely.
@@ -19,10 +19,11 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** The four categories a palette can be sorted into (i.e. not All/Starred). */
+/** The five categories a palette can be sorted into (i.e. not All/Starred/Calm). */
 private val paletteCategories = listOf(
     ThemeCategory.Dark,
     ThemeCategory.Light,
+    ThemeCategory.WhiteOneTone,
     ThemeCategory.DarkLightSplit,
     ThemeCategory.WhiteTwoTone,
 )
@@ -63,7 +64,7 @@ class ThemeCategoriesTest {
         assertEquals(0.1, builtinTheme("Harbour")!!.effectiveTintAlpha)
     }
 
-    // ── The four palette categories partition the catalog ──
+    // ── The five palette categories partition the catalog ──
 
     @Test
     fun everyThemeLandsInExactlyOnePaletteCategory() {
@@ -79,6 +80,14 @@ class ThemeCategoriesTest {
             builtinThemes.count { matchesThemeCategory(it, c, emptySet()) }
         }
         assertEquals(builtinThemes.size, counted)
+    }
+
+    @Test
+    fun theDropdownListsWhiteOneToneBetweenLightAndWhiteTwoTone() {
+        assertEquals(
+            listOf("All", "Starred", "Calm", "Dark", "Light", "White one-tone", "White two-tone", "Dark/Light Split"),
+            ThemeCategory.entries.map { it.label },
+        )
     }
 
     // ── Each category picks out the themes it is meant to ──
@@ -122,11 +131,48 @@ class ThemeCategoriesTest {
     }
 
     @Test
-    fun aPlainLightThemeIsLightNotTwoTone() {
+    fun aPlainWhiteThemeIsWhiteOneToneNotTwoTone() {
         val t = builtinTheme("Lunamux Light")!!
         assertNull(t.chromeBg, "fixture must not declare a chrome zone")
         assertFalse(t.hasDistinctChromeZone)
-        assertEquals(ThemeCategory.Light, paletteCategoryOf(t))
+        assertTrue(t.hasWhiteWindows, "fixture must have white windows")
+        assertEquals(ThemeCategory.WhiteOneTone, paletteCategoryOf(t))
+    }
+
+    @Test
+    fun whiteOneToneHoldsTheUnsplitThemesWithWhiteWindows() {
+        for (name in listOf("GitHub Light", "High Contrast", "Lunamux Light", "Lunicle Calm Light")) {
+            assertEquals(ThemeCategory.WhiteOneTone, paletteCategoryOf(builtinTheme(name)!!), name)
+        }
+    }
+
+    @Test
+    fun aTintedLightThemeStaysLight() {
+        // Cream, blush and the like are not white, so they stay plain Light.
+        for (name in listOf("Paper", "Sakura", "Solarized Light")) {
+            val t = builtinTheme(name)!!
+            assertFalse(t.hasWhiteWindows, "$name has tinted windows")
+            assertEquals(ThemeCategory.Light, paletteCategoryOf(t), name)
+        }
+    }
+
+    @Test
+    fun whiteWindowsDoNotPullATwoToneOutOfWhiteTwoTone() {
+        // A white two-tone has white windows too; its chrome zone decides first.
+        val twoTones = builtinThemes.filter { it.hasDistinctChromeZone && !it.isDarkToned && !it.isChromeDarkToned }
+        assertTrue(twoTones.any { it.hasWhiteWindows }, "fixture must include a white-windowed two-tone")
+        for (t in twoTones) assertEquals(ThemeCategory.WhiteTwoTone, paletteCategoryOf(t), t.name)
+    }
+
+    @Test
+    fun whiteWindowsNeedEveryChannelAtF8AndASpreadOfAtMostThree() {
+        val base = builtinTheme("Paper")!!
+        fun white(surface: String) = base.copy(surface = surface).hasWhiteWindows
+        assertTrue(white("#ffffff"), "pure white")
+        assertTrue(white("#f8f8f8"), "every channel exactly at the floor")
+        assertFalse(white("#f7f7f7"), "one step below the floor")
+        assertFalse(white("#fffbfa"), "a blush: spread 5")
+        assertTrue(white("#fbfdfb"), "a faint green within the spread of 3")
     }
 
     // ── Starred, search, and the combined filter ──

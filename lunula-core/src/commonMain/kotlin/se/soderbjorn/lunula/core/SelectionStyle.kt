@@ -25,9 +25,9 @@ package se.soderbjorn.lunula.core
 import kotlinx.serialization.Serializable
 
 /**
- * The two selection languages the toolkit ships.
+ * The selection languages the toolkit ships.
  *
- * These are not two intensities of one idea — they put the accent on opposite
+ * [Tint] and [Fill] are not two intensities of one idea — they put the accent on opposite
  * sides of the figure/ground relationship, which is why this is an enum and not
  * a strength dial:
  *
@@ -38,6 +38,9 @@ import kotlinx.serialization.Serializable
  *    field's declared foreground ([Theme.accentOn] / [Theme.chromeAccentOn]).
  *    The accent *is* the surface, and the content sits on it. This is
  *    [Default] — see the companion for why the toolkit changed its mind.
+ *  - [Soft] — a quieter cousin of [Tint]: the wash is opaque and slightly
+ *    stronger, there is no ring, and the label takes the accent's legible text
+ *    colour. Split out of the original single Calm switch (epic LNA-16).
  *
  * The choice lands in three places at once — the focused pane header, the
  * active tab, and the active sidebar row — because they are one idea wearing
@@ -48,7 +51,8 @@ import kotlinx.serialization.Serializable
  *
  * Consumed on the web through the `data-dt-selection` attribute written by
  * `applySelectionStyle`; `lunula.css` keys the selection and outline/glow rules
- * off it.
+ * off it. Tint is the base stylesheet (no attribute); Fill and Soft each have
+ * their own rules.
  *
  * @property cssValue the token written to `data-dt-selection`.
  * @see AppearanceShape
@@ -61,6 +65,15 @@ enum class SelectionStyle(val cssValue: String) {
 
     /** Accent as a solid field, label in the fill's `…On` foreground. The default. */
     Fill("fill"),
+
+    /**
+     * Accent as a soft, opaque wash ([Theme.effectiveAccentSoftSolid]) with the
+     * label in [ResolvedTheme.accentSoftText], the accent text made legible on
+     * that wash. No ring and no solid field: the quiet selection of
+     * [Looks.Calm]. Under [FocusStyle.Accent] the focused window's title bar
+     * takes the same wash.
+     */
+    Soft("soft"),
     ;
 
     companion object {

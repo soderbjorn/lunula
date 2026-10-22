@@ -4870,10 +4870,8 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     box-shadow: inset 0 0 0 1px var(--t-accent, #ff8a3d);
     font-weight: 600;
 }
-/* A choice row another setting overrides (SettingsSidebar
-   `setChoiceSectionLocked`: Selection and Surfaces while the Clean style is
-   in effect). The buttons are really `disabled`; the stored pick keeps its
-   ring, dimmed, so the user can see what returns under Classic. */
+/* A choice button that cannot be clicked. Selected, it keeps its ring,
+   dimmed. */
 .dt-settings-choice-btn:disabled,
 .dt-settings-choice-btn:disabled:hover {
     opacity: 0.5;
@@ -4884,9 +4882,165 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
 .dt-settings-choice-btn.dt-selected:disabled {
     color: var(--t-text, #e6e6e6);
 }
-.dt-settings-locked-note {
-    margin-top: 0;
+/* The Appearance settings' two groups (SettingsSidebar `makeGroup`): "Style
+   for dark/light mode", whose settings follow the appearance like the theme
+   does, and "Shared by both modes". A heading and a hint, the group's
+   sections below, and a hairline between the groups so the split reads at a
+   glance. */
+.dt-settings-group {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.dt-settings-group + .dt-settings-group {
+    border-top: 1px solid var(--t-border, rgba(255,255,255,0.08));
+    padding-top: 16px;
+    margin-top: 4px;
+}
+.dt-settings-group-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--t-text-bright, var(--t-text, #e6e6e6));
+}
+.dt-settings-group-hint {
+    font-size: 11px;
+    line-height: 1.35;
+    color: var(--t-text-dim, #9a9a9a);
+    margin-top: -10px;
+}
+
+/* The Presets block (SettingsSidebar `buildPresetsSection`) at the head of the
+   "Style for … mode" group. A preset is not a setting of its own: picking one
+   sets all the settings below it. So it is framed as a box of its own above
+   them, its options are cards that name and describe what they apply rather
+   than pills, and a status line says which preset the current settings match,
+   if any. */
+.dt-settings-presets {
+    padding: 10px 12px 12px;
+    border: 1px solid var(--t-border, rgba(255,255,255,0.10));
+    border-radius: 8px;
+    background: var(--t-surface-alt, rgba(255,255,255,0.03));
+}
+.dt-settings-preset-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 8px;
+}
+.dt-settings-preset-btn {
+    appearance: none;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+    padding: 8px 10px;
+    text-align: left;
+    font: inherit;
+    background: var(--t-surface, rgba(255,255,255,0.04));
+    color: var(--t-text, #e6e6e6);
+    border: 1px solid var(--t-border, rgba(255,255,255,0.10));
+    border-radius: 6px;
+    cursor: pointer;
+    transition: border-color 0.12s, background 0.12s;
+}
+.dt-settings-preset-btn:hover {
+    border-color: var(--t-accent, #4f8cff);
+}
+.dt-settings-preset-btn.dt-selected {
+    border-color: var(--t-accent, #4f8cff);
+    box-shadow: inset 0 0 0 1px var(--t-accent, #4f8cff);
+}
+.dt-settings-preset-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.dt-settings-preset-name {
+    font-size: 12px;
+    font-weight: 600;
+}
+.dt-settings-preset-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--t-accent, #4f8cff);
+    color: var(--t-accent-on, #000000);
+}
+.dt-settings-preset-desc {
+    font-size: 11px;
+    line-height: 1.35;
+    color: var(--t-text-dim, #9a9a9a);
+}
+.dt-settings-preset-status {
+    font-size: 11px;
+    color: var(--t-text-dim, #9a9a9a);
+}
+.dt-settings-preset-status[data-dt-look="custom"] {
     font-style: italic;
+}
+
+/* ── The Appearance pane (ThemeManagerSidebar `mountAppearancePane`) ──
+   One right sidebar with two tabs, Themes and Appearance, opened from the
+   top bar's palette button. The tab strip names the tab and closes the pane,
+   so the two bodies' own titles and close buttons are hidden here (their
+   filters and controls stay). */
+.dt-appearance-pane .dt-appearance-tabs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 12px 0 16px;
+    border-bottom: 1px solid var(--t-border, rgba(255,255,255,0.08));
+    background: var(--t-surface, rgba(255,255,255,0.03));
+    flex: 0 0 auto;
+}
+.dt-appearance-tab {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    padding: 6px 10px 9px;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--t-text-dim, #9a9a9a);
+    cursor: pointer;
+}
+.dt-appearance-tab:hover {
+    color: var(--t-text, #e6e6e6);
+}
+.dt-appearance-tab.dt-selected {
+    color: var(--t-text-bright, var(--t-text, #e6e6e6));
+    font-weight: 600;
+    border-bottom-color: var(--t-accent, #4f8cff);
+}
+.dt-appearance-pane-close {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    margin-left: auto;
+    margin-bottom: 6px;
+    color: var(--t-text-dim, #b8b8b8);
+    cursor: pointer;
+    font-size: 22px;
+    line-height: 1;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+.dt-appearance-pane-close:hover {
+    background: var(--t-surface-alt, rgba(255,255,255,0.08));
+    color: var(--t-text, #e6e6e6);
+}
+.dt-appearance-pane-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+.dt-appearance-pane .dt-theme-manager-title,
+.dt-appearance-pane .dt-theme-manager-close,
+.dt-appearance-pane .dt-settings-sidebar-header {
+    display: none;
 }
 /* Fonts section (SettingsSidebar `buildFontsSection` / `buildFontLine`): one
    line per surface — its name, a button naming the painted font (drawn in
@@ -7208,9 +7362,11 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
    costs nothing extra.
 
    `SurfaceStyle.Flat` is the opt-out, and it is written as the ABSENCE of
-   these rules: `applySurfaceStyle` stamps `data-dt-surface="flat"` on :root,
-   every rule below is gated on `:root:not([data-dt-surface="flat"])`, and so
-   Flat is the base stylesheet exactly as it was before depth existed.
+   these rules: `applySurfaceStyle` stamps `data-dt-surface="flat"` (or
+   `"soft"`) on :root, every rule below is gated on
+   `:root:not([data-dt-surface])`, and so Flat is the base stylesheet exactly
+   as it was before depth existed. Soft starts from the same base and adds its
+   calm cards at the end of the file.
 
    ── Tuning tokens (reusable from app CSS) ──
    The light/dark tuning is written onto :root inline by `applyColorScheme`
@@ -7225,7 +7381,7 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
      --dt-depth-wash-2      bottom-right wash strength (16% / 11%)
    Composites, built from those (declared under the depth gate, so they are
    undefined under Flat — an app rule using them should sit under the same
-   `:root:not([data-dt-surface="flat"])` gate):
+   `:root:not([data-dt-surface])` gate):
      --dt-depth-shadow-{8,10,14,24,28,30}  the shadow colour at that alpha
                             (× strength), e.g. `--dt-depth-shadow-14`
      --dt-depth-elevation   the full pane lift (highlight + three shadows)
@@ -7239,7 +7395,7 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     --dt-depth-wash: 26%;
     --dt-depth-wash-2: 16%;
 }
-:root:not([data-dt-surface="flat"]) {
+:root:not([data-dt-surface]) {
     --dt-depth-shadow-8: color-mix(in srgb, var(--dt-depth-shadow) calc(8% * var(--dt-depth-strength)), transparent);
     --dt-depth-shadow-10: color-mix(in srgb, var(--dt-depth-shadow) calc(10% * var(--dt-depth-strength)), transparent);
     --dt-depth-shadow-14: color-mix(in srgb, var(--dt-depth-shadow) calc(14% * var(--dt-depth-strength)), transparent);
@@ -7267,18 +7423,18 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
    to repaint chrome-bg over it go transparent (same base colour, so nothing
    changes but the wash showing through), and so does the canvas behind the
    panes: one backdrop for the whole window. */
-:root:not([data-dt-surface="flat"]) .dt-app-frame {
+:root:not([data-dt-surface]) .dt-app-frame {
     background: var(--dt-depth-wash-image), var(--t-chrome-bg, var(--t-bg, #1e1e1e));
     background-attachment: fixed;
 }
-:root:not([data-dt-surface="flat"]) .dt-topbar,
-:root:not([data-dt-surface="flat"]) .dt-bottombar,
-:root:not([data-dt-surface="flat"]) .dt-sidebar {
+:root:not([data-dt-surface]) .dt-topbar,
+:root:not([data-dt-surface]) .dt-bottombar,
+:root:not([data-dt-surface]) .dt-sidebar {
     background: transparent;
 }
-:root:not([data-dt-surface="flat"]) .dt-app-frame-main,
-:root:not([data-dt-surface="flat"]) .dt-pane-root,
-:root:not([data-dt-surface="flat"]) .dt-pane-dock {
+:root:not([data-dt-surface]) .dt-app-frame-main,
+:root:not([data-dt-surface]) .dt-pane-root,
+:root:not([data-dt-surface]) .dt-pane-dock {
     /* One backdrop for the whole window: the canvas behind the panes shows
        the frame's chrome-bg + wash instead of repainting its own tone, so
        where `--t-canvas` differs from `--t-chrome-bg` (most light themes)
@@ -7292,33 +7448,33 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
    panes float above both. A hairline, or an inset shadow (always darkest
    right at the box edge), would draw a seam across the wash — most visibly
    between a wash-lit sidebar and the focused pane's halo. */
-:root:not([data-dt-surface="flat"]) .dt-sidebar {
+:root:not([data-dt-surface]) .dt-sidebar {
     border-top-color: transparent;
 }
-:root:not([data-dt-surface="flat"]) .dt-sidebar-left {
+:root:not([data-dt-surface]) .dt-sidebar-left {
     border-right-color: transparent;
 }
-:root:not([data-dt-surface="flat"]) .dt-sidebar-right {
+:root:not([data-dt-surface]) .dt-sidebar-right {
     border-left-color: transparent;
 }
 /* Section dividers inside a sidebar at half strength, so they read as
    grouping rather than as edges. */
-:root:not([data-dt-surface="flat"]) .dt-sidebar-section {
+:root:not([data-dt-surface]) .dt-sidebar-section {
     border-bottom-color: color-mix(in srgb, var(--t-chrome-border, transparent) 45%, transparent);
 }
 
 /* Pane elevation. Selectors mirror the flat rules' shapes one level more
    specific, so the lift wins over both the Tint glow and Fill's "no halo" and
    floating drop-shadow rules regardless of source order. */
-:root:not([data-dt-surface="flat"]) .dt-pane,
-:root:not([data-dt-surface="flat"]) .dt-pane.dt-pane-floating {
+:root:not([data-dt-surface]) .dt-pane,
+:root:not([data-dt-surface]) .dt-pane.dt-pane-floating {
     box-shadow: var(--dt-depth-elevation);
 }
 /* Focused pane: lift AND halo in one box-shadow (box-shadow does not stack
    across rules, so splitting them would let the glow replace the lift). The
    far shadow gives way to the accent glow, which does its job here. */
-:root:not([data-dt-surface="flat"]) .dt-pane.dt-pane-focused,
-:root:not([data-dt-surface="flat"]) .dt-pane.dt-pane-floating.dt-pane-focused {
+:root:not([data-dt-surface]) .dt-pane.dt-pane-focused,
+:root:not([data-dt-surface]) .dt-pane.dt-pane-floating.dt-pane-focused {
     box-shadow:
         inset 0 1px 0 var(--dt-depth-highlight),
         0 0 0 1px color-mix(in srgb, var(--t-accent, #4f8cff) 30%, transparent),
@@ -7334,7 +7490,7 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
    paint layer — above the static content, so the shadow shows — without
    making it a stacking context, which would trap `.dt-pane-actions`'
    z-index 5 beneath the corner resize grip and swallow Close clicks. */
-:root:not([data-dt-surface="flat"]) .dt-pane-header {
+:root:not([data-dt-surface]) .dt-pane-header {
     position: relative;
     box-shadow:
         inset 0 1px 0 var(--dt-depth-highlight),
@@ -7344,7 +7500,7 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
 /* Resting tabs: a small lift so they read as objects on the bar. Not the
    selected tab — Tint's ring lives in its box-shadow, and Fill's gets the
    sheen below. */
-:root:not([data-dt-surface="flat"]) .dt-tab:not(.dt-selected) {
+:root:not([data-dt-surface]) .dt-tab:not(.dt-selected) {
     box-shadow: var(--dt-depth-lift);
 }
 
@@ -7353,181 +7509,117 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
    chrome surfaces (Framna-style themes fill the two differently). The pane
    header's glow is left to the pane's halo, so it only takes the edges and
    its content shadow. */
-:root:not([data-dt-surface="flat"])[data-dt-selection="fill"] .dt-pane.dt-pane-focused .dt-pane-header {
+:root:not([data-dt-surface])[data-dt-selection="fill"] .dt-pane.dt-pane-focused .dt-pane-header {
     --dt-sheen-base: var(--t-accent, #4f8cff);
 }
-:root:not([data-dt-surface="flat"])[data-dt-selection="fill"] .dt-tab.dt-selected,
-:root:not([data-dt-surface="flat"])[data-dt-selection="fill"] .dt-sidebar-row.dt-active,
-:root:not([data-dt-surface="flat"]) .dt-topbar-icon-button.dt-active,
-:root:not([data-dt-surface="flat"]) .dt-topbar-icon-button.dt-active:hover {
+:root:not([data-dt-surface])[data-dt-selection="fill"] .dt-tab.dt-selected,
+:root:not([data-dt-surface])[data-dt-selection="fill"] .dt-sidebar-row.dt-active,
+:root:not([data-dt-surface]) .dt-topbar-icon-button.dt-active,
+:root:not([data-dt-surface]) .dt-topbar-icon-button.dt-active:hover {
     --dt-sheen-base: var(--t-chrome-accent, var(--t-chrome-text, #e6e6e6));
 }
-:root:not([data-dt-surface="flat"])[data-dt-selection="fill"] .dt-pane.dt-pane-focused .dt-pane-header,
-:root:not([data-dt-surface="flat"])[data-dt-selection="fill"] .dt-tab.dt-selected,
-:root:not([data-dt-surface="flat"])[data-dt-selection="fill"] .dt-sidebar-row.dt-active,
-:root:not([data-dt-surface="flat"]) .dt-topbar-icon-button.dt-active,
-:root:not([data-dt-surface="flat"]) .dt-topbar-icon-button.dt-active:hover {
+:root:not([data-dt-surface])[data-dt-selection="fill"] .dt-pane.dt-pane-focused .dt-pane-header,
+:root:not([data-dt-surface])[data-dt-selection="fill"] .dt-tab.dt-selected,
+:root:not([data-dt-surface])[data-dt-selection="fill"] .dt-sidebar-row.dt-active,
+:root:not([data-dt-surface]) .dt-topbar-icon-button.dt-active,
+:root:not([data-dt-surface]) .dt-topbar-icon-button.dt-active:hover {
     background: linear-gradient(180deg,
         color-mix(in oklab, var(--dt-sheen-base), white 20%),
         var(--dt-sheen-base) 55%,
         color-mix(in oklab, var(--dt-sheen-base), black 14%));
 }
-:root:not([data-dt-surface="flat"])[data-dt-selection="fill"] .dt-tab.dt-selected,
-:root:not([data-dt-surface="flat"])[data-dt-selection="fill"] .dt-sidebar-row.dt-active,
-:root:not([data-dt-surface="flat"]) .dt-topbar-icon-button.dt-active {
+:root:not([data-dt-surface])[data-dt-selection="fill"] .dt-tab.dt-selected,
+:root:not([data-dt-surface])[data-dt-selection="fill"] .dt-sidebar-row.dt-active,
+:root:not([data-dt-surface]) .dt-topbar-icon-button.dt-active {
     box-shadow:
         inset 0 1px 0 rgb(255 255 255 / 0.3),
         inset 0 -1px 0 rgb(0 0 0 / 0.15),
         0 6px 16px -5px color-mix(in srgb, var(--dt-sheen-base) var(--dt-depth-glow), transparent);
 }
-:root:not([data-dt-surface="flat"])[data-dt-selection="fill"] .dt-pane.dt-pane-focused .dt-pane-header {
+:root:not([data-dt-surface])[data-dt-selection="fill"] .dt-pane.dt-pane-focused .dt-pane-header {
     box-shadow:
         inset 0 1px 0 rgb(255 255 255 / 0.3),
         inset 0 -1px 0 rgb(0 0 0 / 0.15),
         0 4px 10px -6px var(--dt-depth-shadow-28);
 }
 
-/* ══ Shell style: Clean (data-dt-style="clean") ═════════════════════
-   `ShellStyle.Clean` (epic LNA-16): a calm shell layered over the active
-   theme. `applyShellStyle` stamps `data-dt-style="clean"` on :root, and every
-   rule in this block is gated on it. Classic is the ABSENCE of the attribute,
-   so with the default style nothing below matches and the stylesheet above
-   renders exactly as it did before Clean existed.
+/* ══ Style settings: Sheet, Blended, Tone, Sentence case, Soft ════════
+   The parts of what used to be the single "original single Calm switch" (epic
+   LNA-16), now separate user settings, each with its own :root attribute,
+   written by `applyAppearance`:
 
-   What Clean draws:
-     - One ground. The window, top bar, sidebars and bottom bar all sit on
-       `--t-bg`: no chrome surface, no hairlines between bars, no ambient wash
-       and no glow.
-     - One sheet. `.dt-pane-root` becomes a single rounded sheet (14px, 1px
-       `--t-border` edge) inset from the ground. Windows inside it are not
-       cards: they meet with zero gutter and are split by 1px hairlines.
-     - The active window is shown by background first: `--t-surface` for the
-       focused window, the derived `--t-window-idle` for the rest. It is also
-       lifted: a 1px `--t-window-ring` hairline drawn inside its edge and a
-       soft neutral drop shadow (`--dt-clean-lift`). Stacking is untouched:
-       the shadow shows wherever the window already sits above its
-       neighbours or the sheet. A lone or maximized window has neither,
-       since there is nothing for it to stand out from. Still no accent band
-       and no glow. (The first Clean brief said "background only, no ring";
-       a live preview showed that was too quiet, see "Windows" below.)
-     - A 44px sentence-case titlebar with ghost window controls.
+     data-dt-windows="sheet"     WindowLayout.Sheet   one sheet of windows
+     data-dt-chrome="blended"    ChromeStyle.Blended  chrome on the ground
+     data-dt-focus="tone"        FocusStyle.Tone      active window by tone
+     data-dt-labels="sentence"   LabelCase.Sentence   sentence-case labels
+     data-dt-selection="soft"    SelectionStyle.Soft  soft selection wash
+     data-dt-surface="soft"      SurfaceStyle.Soft    calm floating cards
 
-   Colour comes only from `--t-bg`, `--t-surface`, `--t-window-idle`,
-   `--t-border`, `--t-text` and `--t-accent`, plus four derived tokens
-   referenced with fallbacks so this block works before they exist:
-   `--t-clean-text-dim` (dim text on idle or ground), `--t-clean-accent-text`,
-   `--t-accent-soft-solid` and `--t-window-ring` (the focused window's
-   hairline). The lift's shadow strength is `--dt-clean-lift`, written per
-   light/dark side by `applyColorScheme` (see `cleanTuningVars`). The chrome split (`--t-chrome-*`) and
-   `--t-glow` are ignored.
+   Each default is the ABSENCE of its attribute (Soft's two share their
+   attribute with Fill and Flat), so with every setting at its default
+   nothing below matches and the stylesheet above renders exactly as it did
+   before these settings existed. `Looks.Calm` is all six non-defaults
+   together, plus 14px corners and Comfortable spacing, which are ordinary
+   values of the corner and spacing settings.
+
+   Any combination is valid, so a rule here may only assume its own
+   setting. Where one block has to defer to another it says so, and the
+   colour rules are written so a block never paints over another block's
+   signal (Blended leaves the accent band of an Accent window alone; Tone
+   wins over every selection style on window headers, because under Tone
+   the window is not accent-marked at all).
+
+   Colour comes only from theme tokens: `--t-bg`, `--t-surface`,
+   `--t-window-idle`, `--t-window-active`, `--t-window-ring`, `--t-border`,
+   `--t-text` and `--t-accent`, plus the legible derivations
+   `--t-text-dim-legible`, `--t-accent-soft-solid` and
+   `--t-accent-soft-text`, each read with a fallback so this block works
+   before a theme is applied. The lift's shadow strength is
+   `--dt-soft-lift`, written per light/dark side by `applyColorScheme`.
 
    Precedence. This block sits at the very END of the file, after the Fill
-   selection rules and the Depth surface rules, so a Clean rule wins over any
+   selection rules and the Depth surface rules, so a rule here wins over any
    of them with EQUAL specificity. Where Fill or Depth wrote a more specific
-   selector, the Clean rule restates that selector's shape with the
-   `[data-dt-style="clean"]` gate added (e.g. `[data-dt-selection]` or
-   `body.dt-pointer-active` appear in a selector list below) so it reaches the
-   same specificity. That is deliberate, not an `!important`: app stylesheets
-   can still retune Clean with an ordinary, more specific rule. The Fill and
-   Depth stamps themselves stay on :root, so the user's stored choices come
-   back untouched when they switch to Classic.
+   selector, the rule here restates that selector's shape with its own gate
+   added (e.g. `[data-dt-selection]` or `body.dt-pointer-active` appear in a
+   selector list below) so it reaches the same specificity. That is
+   deliberate, not an `!important`: app stylesheets can still retune any of
+   it with an ordinary, more specific rule.
 
-   Not restyled here:
-     - What is inside `.dt-pane-content`. Pane content is the host's, always.
-       Clean only stops the toolkit's own slot from painting `--t-bg` and
-       framing it with an inset (see "Window bodies" below), so the window
-       colour reaches the body; content that paints its own background still
-       does.
-     - The top bar's contents. Clean shows the same buttons in the same
-       order as Classic (LNA-23); see "Top bar" below for how they are
-       drawn. (The sidebar tree is restyled at the end of this block, see
-       "Sidebar tree".)
-     - What a host mounts in the sidebar footer slot, or in an app-supplied
-       sidebar section's body.
-     - The action strip's hover reveal (`.dt-pane-actions` opacity and
-       pointer-events, see "Hidden until the pointer comes near"). Only the
-       buttons' paint changes. */
+   Not restyled here: what is inside `.dt-pane-content` (pane content is the
+   host's, always; under Tone the toolkit only stops painting over it, and
+   publishes `--dt-window-bg` for content that wants to follow the window
+   colour), what a host mounts in the sidebar footer slot or an app-supplied
+   sidebar section, and the action strip's hover reveal (opacity and
+   pointer-events on `.dt-pane-actions`). */
 
-/* Shape and spacing. Clean forces a 14px corner and Comfortable density
-   whatever the user's own settings say. Restated at the same specificity as
-   the density blocks (`:root[...] .dt-app-frame`) and later in the file, so
-   these win over Spacious too. The 14px is written in place of
-   `--dt-corner-radius` rather than over it, because that variable is set
-   inline on :root by `applyCornerRadiusPx` and would beat a stylesheet. */
-:root[data-dt-style="clean"] .dt-app-frame {
-    --dt-frame-radius: 14px;
-    --dt-tab-radius: min(14px, 11px);
-    --dt-frame-pad: 14px;
-    --dt-topbar-h: 52px;
-    --dt-tab-pad: 9px 16px;
-    --dt-sidebar-row-pad: 9px 14px 9px 20px;
-    /* Windows meet inside the sheet; the hairline is their only separation. */
+/* Shared derived colours, named once on :root so every block below (and
+   panels mounted on <body>, outside `.dt-app-frame`) reads the same
+   fallback chain. Inert under the defaults: nothing above reads them. */
+:root {
+    /* Dim text that clears AA on the ground and on both window tones. */
+    --dt-dim-text: var(--t-text-dim-legible, var(--t-text-dim, #8a8a8a));
+    /* The opaque accent wash, and the accent text made legible on it. */
+    --dt-soft-bg: var(--t-accent-soft-solid, var(--t-accent-soft, rgba(79, 140, 255, 0.15)));
+    --dt-soft-text: var(--t-accent-soft-text, var(--t-accent-text, #4f8cff));
+    /* A quiet hover chip and wash: text at 6%. */
+    --dt-quiet-hover: color-mix(in srgb, var(--t-text, #e6e6e6) 6%, transparent);
+}
+
+/* ── Windows: Sheet (data-dt-windows="sheet") ────────────────────────
+   Every window of the tab sits inside one rounded sheet. Windows inside it
+   are square, meet with no gap, and are split by 1px hairlines; a
+   maximized window fills the sheet and the dock lives at its foot. The
+   sheet takes the corner-roundness setting (`--dt-frame-radius`).
+
+   Windows meet inside the sheet, so the gutter is always zero and Spacing
+   only changes the chrome around it. Declared on the frame, at the same
+   specificity as the density blocks and later, so it wins over them. */
+:root[data-dt-windows="sheet"] .dt-app-frame {
     --dt-pane-gutter: 0px;
-    /* Titlebar: 44px tall (height set on the header), 14px sentence case. */
-    --dt-pane-header-pad: 0 8px 0 16px;
-    --dt-pane-title-size: 14px;
-    --dt-pane-title-transform: none;
-    --dt-pane-title-tracking: 0;
-    /* Clean's dim text and active tint, each falling back to the theme token
-       until the contrast-safe variant exists. Named once here so the rules
-       below cannot drift apart on the fallback chain. */
-    --dt-clean-text-dim: var(--t-clean-text-dim, var(--t-text-dim, #8a8a8a));
-    --dt-clean-accent-text: var(--t-clean-accent-text, var(--t-accent-text, #4f8cff));
-    --dt-clean-accent-soft: var(--t-accent-soft-solid, var(--t-accent-soft, rgba(79, 140, 255, 0.15)));
-    /* Hover chip and hover wash, both derived rather than new tokens. */
-    --dt-clean-hover: color-mix(in srgb, var(--t-text, #e6e6e6) 6%, transparent);
-    background: var(--t-bg, #1e1e1e);
 }
-
-/* The chrome reads the non-split tokens. Remapping the `--t-chrome-*`
-   variables on the chrome containers (and nowhere else, so pane content that
-   reads them is unaffected) makes every chrome rule above, including the
-   sidebar tree and top bar that later tickets restyle, paint as if the theme
-   had no chrome split. */
-:root[data-dt-style="clean"] .dt-topbar,
-:root[data-dt-style="clean"] .dt-bottombar,
-:root[data-dt-style="clean"] .dt-sidebar,
-:root[data-dt-style="clean"] .dt-tabbar {
-    --t-chrome-bg: var(--t-bg, #1e1e1e);
-    --t-chrome-text: var(--t-text, #e6e6e6);
-    --t-chrome-text-bright: var(--t-text, #e6e6e6);
-    --t-chrome-text-dim: var(--dt-clean-text-dim);
-    --t-chrome-border: var(--t-border, rgba(255, 255, 255, 0.1));
-    --t-chrome-accent: var(--t-accent, #4f8cff);
-    --t-chrome-accent-soft: var(--dt-clean-accent-soft);
-    --t-chrome-accent-text: var(--dt-clean-accent-text);
-    --t-chrome-track: var(--dt-clean-hover);
-}
-
-/* ── Ground ──────────────────────────────────────────────────────────
-   `.dt-app-frame` paints `--t-bg` once (the shorthand also drops Depth's wash
-   layers and its fixed attachment), and everything that used to paint a
-   chrome or canvas tone over it goes transparent. */
-:root[data-dt-style="clean"] .dt-topbar,
-:root[data-dt-style="clean"] .dt-bottombar,
-:root[data-dt-style="clean"] .dt-sidebar,
-:root[data-dt-style="clean"] .dt-app-frame-main {
-    background: transparent;
-}
-/* No hairlines between the bars: the ground is one surface. */
-:root[data-dt-style="clean"] .dt-topbar {
-    border-bottom-color: transparent;
-}
-:root[data-dt-style="clean"] .dt-bottombar {
-    border-top-color: transparent;
-}
-:root[data-dt-style="clean"] .dt-sidebar {
-    border-top-color: transparent;
-}
-:root[data-dt-style="clean"] .dt-sidebar-left {
-    border-right-color: transparent;
-}
-:root[data-dt-style="clean"] .dt-sidebar-right {
-    border-left-color: transparent;
-}
-/* The canvas rectangle is no longer a surface of its own: it is only the room
-   around the sheet. A small inset toward the top bar and sidebar, a wider one
-   toward the window edges.
+/* The canvas is only the room around the sheet: a small inset toward the
+   top bar and the sidebar, a wider one toward the window edges.
 
    The left side counts as a window edge unless an open left sidebar actually
    sits there: Navigation = Tab strip only leaves the left slot empty, and a
@@ -7535,233 +7627,256 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
    (`.dt-sidebar-collapsed`). Either way the sheet would otherwise sit 4px from
    the viewport edge, so the wide inset is the default and the small one is
    granted only next to a drawn sidebar. */
-:root[data-dt-style="clean"] .dt-app-frame-main {
-    border-radius: 0;
+:root[data-dt-windows="sheet"] .dt-app-frame-main {
     padding: 4px 16px 16px 16px;
 }
-:root[data-dt-style="clean"] .dt-app-frame-sidebar-left:has(> .dt-sidebar:not(.dt-sidebar-collapsed):not(.dt-hidden)) + .dt-app-frame-main {
+:root[data-dt-windows="sheet"] .dt-app-frame-sidebar-left:has(> .dt-sidebar:not(.dt-sidebar-collapsed):not(.dt-hidden)) + .dt-app-frame-main {
     padding-left: 4px;
 }
-
-/* ── Sheet ───────────────────────────────────────────────────────────
-   Every window of the tab sits inside this one rounded sheet. It clips its
-   children, so the square windows inside take the sheet's corner. Its own
-   fill is the idle tone, which is what shows when a tab has no windows or a
-   free layout leaves a gap. */
-:root[data-dt-style="clean"] .dt-pane-root {
+/* The sheet clips its children, so the square windows inside take its
+   corner. Its own fill is the idle window tone, which is what shows when a
+   tab has no windows or a free layout leaves a gap. */
+:root[data-dt-windows="sheet"] .dt-pane-root {
     background: var(--t-window-idle, var(--t-surface, #1e1e1e));
     border: 1px solid var(--t-border, rgba(255, 255, 255, 0.1));
-    border-radius: 14px;
+    border-radius: var(--dt-frame-radius, 18px);
     overflow: hidden;
-}
-
-/* ── Windows ─────────────────────────────────────────────────────────
-   Each window's look is carried by three variables, set here by state and read
-   once by the paint rules below, so the paint rules never have to be repeated
-   per state (they carry long selector lists to outrank Fill and Depth):
-     --dt-clean-pane-bg      body and titlebar fill: idle, or surface when focused;
-     --dt-clean-pane-shadow  hairline + rest shadow, or the focused lift;
-     --dt-clean-pane-ring    the focused window's inner ring (transparent otherwise).
-
-   The active window is lifted, not only recoloured (decided after a live
-   preview of the first, background-only Clean, which read too flat):
-     - Ring. A 1px `--t-window-ring` line (border pushed slightly toward text)
-       drawn INSIDE the window's edge by `::after`. Inside, not as an outer
-       box-shadow spread, because the sheet clips its windows
-       (`overflow: hidden` on `.dt-pane-root`): an outer ring would vanish
-       wherever a tiled window touches the sheet's edge. And a pseudo-element
-       rather than an inset shadow or a negative-offset outline, because both
-       of those paint under the titlebar, which is positioned and has its own
-       background; `::after` stacks above it.
-     - Lift. A soft two-layer neutral shadow (`--dt-clean-lift`; stronger on
-       dark grounds). Deliberately NOT paired with a z-index change: window
-       stacking belongs to the toolkit (`bringPaneToFront` and the inline
-       `--dt-fp-z`) and is not overridden by the shell style. So the shadow
-       shows only where it can: over a neighbour that sits lower in the
-       stack, and over the sheet around a floating window. Under a higher neighbour, or past the sheet's
-       clipped edge, it is simply hidden, and the inner ring alone marks the
-       window. (Under a higher tiled neighbour that neighbour's outer hairline
-       covers the shared seam pixel, so on that one side the seam reads in
-       the border tone instead of the ring tone.)
-     - A lone window (the only one in its tab) or a maximized one gets neither:
-       it fills the sheet, so a ring would only double the sheet's border and
-       the shadow would be clipped away. Its surface colour is enough. */
-:root[data-dt-style="clean"] .dt-pane {
-    --dt-clean-pane-bg: var(--t-window-idle, var(--t-surface, #1e1e1e));
-    --dt-clean-pane-rest-shadow:
-        0 0 0 1px var(--t-border, rgba(255, 255, 255, 0.1)),
-        0 8px 18px -12px rgba(0, 0, 0, 0.28);
-    --dt-clean-pane-shadow: var(--dt-clean-pane-rest-shadow);
-    --dt-clean-pane-ring: transparent;
-}
-:root[data-dt-style="clean"] .dt-pane.dt-pane-focused {
-    --dt-clean-pane-bg: var(--t-surface, #1e1e1e);
-    --dt-clean-pane-shadow: var(--dt-clean-lift,
-        0 2px 4px rgba(0, 0, 0, 0.05),
-        0 12px 32px rgba(0, 0, 0, 0.1));
-    --dt-clean-pane-ring: var(--t-window-ring, var(--t-border, rgba(255, 255, 255, 0.1)));
-}
-/* Lone or maximized: no ring, no lift. "Lone" counts the window's
-   siblings in the pane area, ignoring the ghost a closing window leaves for
-   its exit animation. */
-:root[data-dt-style="clean"] .dt-pane.dt-pane-focused.dt-maximized,
-:root[data-dt-style="clean"] .dt-pane-area:not(:has(> .dt-pane:not(.dt-pane-focused):not(.dt-pane-closing-ghost))) > .dt-pane.dt-pane-focused {
-    --dt-clean-pane-shadow: var(--dt-clean-pane-rest-shadow);
-    --dt-clean-pane-ring: transparent;
-}
-/* The ring, above the titlebar and its controls (z 5), and never in the way
-   of a click. Its z-index orders it only among the window's own children (the
-   window is already a stacking context); the window's own stacking is not
-   touched. Declared on every Clean window so it can be tested and
-   transitioned; it is transparent unless the window is focused. */
-:root[data-dt-style="clean"] .dt-pane.dt-pane-floating::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border: 1px solid var(--dt-clean-pane-ring);
-    pointer-events: none;
-    z-index: 6;
 }
 /* Square, and split by a 1px hairline. The hairline is a box-shadow spread
    OUTSIDE the box, so where two windows meet one line paints over the seam
    rather than two lines side by side, and along the sheet's edge it lands on
-   the sheet's own border. Floating windows keep a drop shadow (it answers
-   "which window is in front"), softened to sit on a calm sheet:
-   every window is a `.dt-pane-floating`, tiled ones included, so the shadow
-   is kept short and tucked under the window (negative spread) to stay out of
-   the hairline seams of a tiled layout and show only where windows overlap.
-   The focused window swaps that for its lift (see above), and its inner ring
-   marks its edge on every side.
+   the sheet's own border. A short shadow tucked under the window (negative
+   spread) still answers "which window is in front" where windows overlap,
+   and stays out of the seams of a tiled layout (every window is a
+   `.dt-pane-floating`, tiled ones included).
+
+   The resting outline goes: a ring inside a hairline-split sheet draws a
+   second line beside every seam. Only Tint's focused accent outline stays,
+   under an Accent active window (the rule after this one), since there it
+   is the focus signal.
 
    Listed selectors and why: `.dt-pane-floating.dt-pane-focused` reaches
    Depth's focused-pane lift and halo; `body.dt-pointer-active` reaches Fill's
    transient pointer frame, which would otherwise outline every window while
    the mouse moves. The outline stays declared-but-transparent, as under Fill,
-   so nothing animates from an undefined colour. */
-:root[data-dt-style="clean"] .dt-pane,
-:root[data-dt-style="clean"] .dt-pane.dt-pane-floating,
-:root[data-dt-style="clean"] .dt-pane.dt-pane-floating.dt-pane-focused,
-:root[data-dt-style="clean"] body.dt-pointer-active .dt-pane.dt-pane-floating {
+   so nothing animates from an undefined colour. Tone, later in the file,
+   replaces the shadow with its own (it keeps the seam). */
+:root[data-dt-windows="sheet"] .dt-pane,
+:root[data-dt-windows="sheet"] .dt-pane.dt-pane-floating,
+:root[data-dt-windows="sheet"] .dt-pane.dt-pane-floating.dt-pane-focused,
+:root[data-dt-windows="sheet"] body.dt-pointer-active .dt-pane.dt-pane-floating {
     border-radius: 0;
-    background: var(--dt-clean-pane-bg);
     outline: 1px solid transparent;
     outline-offset: -1px;
-    box-shadow: var(--dt-clean-pane-shadow);
+    box-shadow:
+        0 0 0 1px var(--t-border, rgba(255, 255, 255, 0.1)),
+        0 8px 18px -12px rgba(0, 0, 0, 0.28);
+}
+:root[data-dt-windows="sheet"]:not([data-dt-selection]):not([data-dt-focus]) .dt-pane.dt-pane-floating.dt-pane-focused {
+    outline: 2px solid var(--t-accent, #4f8cff);
+    outline-offset: -2px;
 }
 /* Maximized: the whole sheet, with no breathing inset (the sheet already has
    its own inset from the ground). */
-:root[data-dt-style="clean"] .dt-pane.dt-pane-floating.dt-maximized {
+:root[data-dt-windows="sheet"] .dt-pane.dt-pane-floating.dt-maximized {
     left: 0;
     top: 0;
     width: 100%;
     height: 100%;
 }
-
-/* ── Window bodies ───────────────────────────────────────────────────
-   The toolkit's content slot normally paints `--t-bg` inside a 4px inset,
-   which under Clean would show the ground tone inside every window, framed by
-   a band of the window colour. The active window is shown by its background
-   (and its ring and lift, drawn on the window itself), so the slot steps aside: no inset, no fill of its own, and the body
-   takes the idle or focused window colour from `.dt-pane`. A host's own
-   content that paints a background (a terminal, an editor) still does, and
-   has to go transparent itself to dim with the window.
-
-   The inset is declared on `.dt-pane`, closer to the slot than the
-   `.dt-app-frame` scope a host uses to retune it, because under Clean the
-   frame band is never wanted. */
-:root[data-dt-style="clean"] .dt-pane {
-    --dt-pane-content-inset: 0px;
+/* The dock lives inside the sheet, under the windows: it shows the sheet's
+   idle fill and is split from the windows by the same hairline. Each chip is
+   a quiet parked titlebar. */
+:root[data-dt-windows="sheet"] .dt-pane-dock {
+    background: transparent;
+    border-top: 1px solid var(--t-border, rgba(255, 255, 255, 0.1));
+    padding: 8px;
 }
-:root[data-dt-style="clean"] .dt-pane-content {
+:root[data-dt-windows="sheet"] .dt-pane-dock-item {
+    height: 32px;
+    border-radius: 8px;
+    background: var(--t-surface, #1e1e1e);
+    color: var(--dt-dim-text);
+    outline-color: var(--t-border, rgba(255, 255, 255, 0.1));
+}
+:root[data-dt-windows="sheet"] .dt-pane-dock-item:hover {
+    outline-color: color-mix(in srgb, var(--t-border, rgba(255, 255, 255, 0.1)), var(--t-text, #e6e6e6) 20%);
+    color: var(--t-text, #e6e6e6);
+}
+:root[data-dt-windows="sheet"] .dt-pane-dock-item-icon {
+    color: inherit;
+}
+:root[data-dt-windows="sheet"] .dt-pane-dock-item-label {
+    font-size: 13px;
+}
+
+/* ── Chrome: Blended (data-dt-chrome="blended") ──────────────────────
+   One ground. The window, top bar, sidebars and bottom bar all sit on
+   `--t-bg`: no chrome surface, no canvas tone, no hairlines between bars.
+   Idle tabs are plain text, the top-bar and window buttons are borderless
+   ghosts, and the sidebar tree is a quiet outline. */
+:root[data-dt-chrome="blended"] .dt-app-frame {
+    --dt-pane-header-pad: 0 8px 0 16px;
+    background: var(--t-bg, #1e1e1e);
+}
+
+/* The chrome reads the non-split tokens. Remapping the `--t-chrome-*`
+   variables on the chrome containers (and nowhere else, so pane content that
+   reads them is unaffected) makes every chrome rule above paint as if the
+   theme had no chrome split. */
+:root[data-dt-chrome="blended"] .dt-topbar,
+:root[data-dt-chrome="blended"] .dt-bottombar,
+:root[data-dt-chrome="blended"] .dt-sidebar,
+:root[data-dt-chrome="blended"] .dt-tabbar {
+    --t-chrome-bg: var(--t-bg, #1e1e1e);
+    --t-chrome-text: var(--t-text, #e6e6e6);
+    --t-chrome-text-bright: var(--t-text, #e6e6e6);
+    --t-chrome-text-dim: var(--dt-dim-text);
+    --t-chrome-border: var(--t-border, rgba(255, 255, 255, 0.1));
+    --t-chrome-accent: var(--t-accent, #4f8cff);
+    /* The fill's foreground goes with the fill: Fill paints the active tab and
+       row in `--t-chrome-accent`, now the content accent, so their label must
+       be the content accent's declared foreground too. */
+    --t-chrome-accent-on: var(--t-accent-on, #000000);
+    --t-chrome-accent-soft: var(--dt-soft-bg);
+    --t-chrome-accent-text: var(--dt-soft-text);
+    --t-chrome-track: var(--dt-quiet-hover);
+}
+
+/* Ground: `.dt-app-frame` paints `--t-bg` once (the shorthand also drops
+   Depth's wash layers and its fixed attachment), and everything that used to
+   paint a chrome or canvas tone over it goes transparent. */
+:root[data-dt-chrome="blended"] .dt-topbar,
+:root[data-dt-chrome="blended"] .dt-bottombar,
+:root[data-dt-chrome="blended"] .dt-sidebar,
+:root[data-dt-chrome="blended"] .dt-app-frame-main {
     background: transparent;
 }
+:root[data-dt-chrome="blended"] .dt-app-frame-main {
+    border-radius: 0;
+}
+:root[data-dt-chrome="blended"] .dt-topbar {
+    border-bottom-color: transparent;
+}
+:root[data-dt-chrome="blended"] .dt-bottombar {
+    border-top-color: transparent;
+}
+:root[data-dt-chrome="blended"] .dt-sidebar {
+    border-top-color: transparent;
+}
+:root[data-dt-chrome="blended"] .dt-sidebar-left {
+    border-right-color: transparent;
+}
+:root[data-dt-chrome="blended"] .dt-sidebar-right {
+    border-left-color: transparent;
+}
 
-/* ── Titlebar ────────────────────────────────────────────────────────
-   44px, a hairline underneath, the same background as the window body. The
-   background is read through `--dt-clean-header-bg` so that hover can change
-   it with an ordinary `:hover` rule: the paint rule itself has to carry the
-   focused-header and Depth×Fill shapes to outrank them, and a `:hover` copy of
-   each would double the selector list for one 3% wash. */
-:root[data-dt-style="clean"] .dt-pane-header {
-    --dt-clean-header-bg: var(--dt-clean-pane-bg);
+/* Top bar: on the ground, every icon button (the sidebar toggle included) a
+   ghost — 34×34, radius 8, an 18px glyph in the dim tone, the quiet hover
+   chip with `--t-text` on hover. Border-box with a 9px block padding and no
+   bottom hairline, so the bar measures 52px around a 34px row. The left
+   padding is wider than the right; the macOS traffic-light reservation
+   (`body.dt-electron-mac…`) is more specific and still wins. The buttons, their
+   order and behaviour are exactly Themed's (LNA-23). */
+:root[data-dt-chrome="blended"] .dt-topbar {
+    box-sizing: border-box;
+    padding: 9px 16px 9px 20px;
+    border-bottom-width: 0;
+}
+:root[data-dt-chrome="blended"] .dt-topbar-trailing {
+    gap: 4px;
+}
+:root[data-dt-chrome="blended"] .dt-topbar-icon-button {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    color: var(--dt-dim-text);
+}
+:root[data-dt-chrome="blended"] .dt-topbar-icon-button > svg {
+    width: 18px;
+    height: 18px;
+}
+:root[data-dt-chrome="blended"] .dt-topbar-icon-button:hover {
+    background: var(--dt-quiet-hover);
+    color: var(--t-text, #e6e6e6);
+}
+/* A top-bar button whose panel is showing: a quiet `--t-border`-toned chip
+   and `--t-text`, never the accent. The `:hover` copies match the Depth sheen
+   selectors they replace in specificity and win by coming later;
+   `aria-expanded` covers a button whose menu or dropdown is up (e.g. "+"). */
+:root[data-dt-chrome="blended"] .dt-topbar-icon-button.dt-active,
+:root[data-dt-chrome="blended"] .dt-topbar-icon-button.dt-active:hover,
+:root[data-dt-chrome="blended"] .dt-topbar-icon-button[aria-expanded="true"],
+:root[data-dt-chrome="blended"] .dt-topbar-icon-button[aria-expanded="true"]:hover {
+    background: color-mix(in srgb, var(--t-border, rgba(255, 255, 255, 0.1)) 70%, transparent);
+    color: var(--t-text, #e6e6e6);
+    box-shadow: none;
+    filter: none;
+}
+
+/* Tabs (when the strip is shown): idle tabs are quiet text — no pill border,
+   no lift, dim label. The selected tab keeps whatever the Selection setting
+   paints. `.dt-tab:not(.dt-selected)` also reaches Depth's resting-tab lift.
+   The radius never exceeds 8px, and follows a squarer corner setting down. */
+:root[data-dt-chrome="blended"] .dt-tab {
+    border-radius: min(var(--dt-tab-radius, 8px), 8px);
+}
+:root[data-dt-chrome="blended"] .dt-tab:not(.dt-selected) {
+    background: transparent;
+    color: var(--dt-dim-text);
+    border-color: transparent;
+    box-shadow: none;
+    font-weight: 500;
+}
+:root[data-dt-chrome="blended"] .dt-tab:hover:not(.dt-selected) {
+    background: var(--dt-quiet-hover);
+    color: var(--t-text, #e6e6e6);
+}
+/* A hidden ("unlisted") tab's dashed hint moves to an outline, since an idle
+   tab has no visible border left to dash. */
+:root[data-dt-chrome="blended"] .dt-tab.dt-tab-unlisted {
+    outline: 1px dashed var(--t-border, rgba(255, 255, 255, 0.2));
+    outline-offset: 1px;
+}
+
+/* Window titlebar: 44px with ghost controls. Only geometry and the controls'
+   resting paint here; the titlebar's colours belong to the Active window
+   setting (Tone, below) or the Selection setting (an Accent window). */
+:root[data-dt-chrome="blended"] .dt-pane-header {
     height: 44px;
     box-sizing: border-box;
     gap: 10px;
 }
-:root[data-dt-style="clean"] .dt-pane-header:hover {
-    --dt-clean-header-bg: color-mix(in srgb, var(--dt-clean-pane-bg), var(--t-text, #e6e6e6) 3%);
-}
-:root[data-dt-style="clean"] .dt-pane-header,
-:root[data-dt-style="clean"] .dt-pane.dt-pane-focused .dt-pane-header,
-:root[data-dt-style="clean"][data-dt-selection] .dt-pane.dt-pane-focused .dt-pane-header {
-    background: var(--dt-clean-header-bg);
-    color: var(--dt-clean-text-dim);
-    border-bottom: 1px solid var(--t-border, rgba(255, 255, 255, 0.1));
-    box-shadow: none;
-    transition: background-color 120ms ease-in-out;
-}
-/* Idle window: title, icon, index and trailing context all in dim text, the
-   title at weight 500. */
-:root[data-dt-style="clean"] .dt-pane-header-icon,
-:root[data-dt-style="clean"] .dt-pane-title,
-:root[data-dt-style="clean"] .dt-pane-index,
-:root[data-dt-style="clean"] .dt-pane-trailing-label,
-:root[data-dt-style="clean"] .dt-pane.dt-pane-focused .dt-pane-index,
-:root[data-dt-style="clean"] .dt-pane.dt-pane-focused .dt-pane-trailing-label {
-    color: var(--dt-clean-text-dim);
-}
-:root[data-dt-style="clean"] .dt-pane-title {
-    font-weight: 500;
-}
-:root[data-dt-style="clean"] .dt-pane-trailing-label {
-    font-size: 13px;
-}
-/* Active window: title in text at weight 600, icon in the accent. Same shape
-   as Fill's foreground rule, so it wins over it by source order. */
-:root[data-dt-style="clean"] .dt-pane.dt-pane-focused .dt-pane-title {
-    color: var(--t-text, #e6e6e6);
-    font-weight: 600;
-}
-:root[data-dt-style="clean"] .dt-pane.dt-pane-focused .dt-pane-header-icon {
-    color: var(--t-accent, #4f8cff);
-}
-:root[data-dt-style="clean"] .dt-pane-header-icon svg {
+:root[data-dt-chrome="blended"] .dt-pane-header-icon svg {
     width: 15px;
     height: 15px;
 }
-/* The inline rename field keeps the title's sentence case and size. */
-:root[data-dt-style="clean"] .dt-pane-title-input {
-    font-size: var(--dt-font-pane-header-size, var(--dt-pane-title-size, 14px));
-    text-transform: none;
-    letter-spacing: 0;
+:root[data-dt-chrome="blended"] .dt-pane-trailing-label {
+    font-size: 13px;
+}
+:root[data-dt-chrome="blended"] .dt-pane-title-input {
     background: var(--t-surface, #1e1e1e);
     border-radius: 6px;
 }
-
-/* ── Window controls ─────────────────────────────────────────────────
-   Ghost buttons: 28×28, radius 7, dim icons, no gap between them. Hovered (or
-   pressed, or holding an open menu) a button gets a border-toned chip with
-   its icon in text. The focused-pane selectors reach Fill's accent-on
-   foreground and its hover scrim, which no longer have an accent band to sit
-   on. Visibility is NOT touched: the hover reveal above still owns opacity
-   and pointer-events on `.dt-pane-actions`. */
-:root[data-dt-style="clean"] .dt-pane-actions {
+/* Ghost window buttons: 28×28, radius 7, dim icons, no gap between them;
+   hovered (or pressed, or holding an open menu) a button gets a border-toned
+   chip with its icon in text. Fill's accent-on colours for the buttons on a
+   focused window's solid band are more specific and still win, so the
+   buttons stay legible on the band. Visibility is NOT touched: the hover
+   reveal above still owns opacity and pointer-events on `.dt-pane-actions`. */
+:root[data-dt-chrome="blended"] .dt-pane-actions {
     gap: 0;
 }
-:root[data-dt-style="clean"] .dt-pane-action,
-:root[data-dt-style="clean"] .dt-pane.dt-pane-focused .dt-pane-action {
+:root[data-dt-chrome="blended"] .dt-pane-action {
     width: 28px;
     height: 28px;
     border-radius: 7px;
     background: transparent;
-    color: var(--dt-clean-text-dim);
+    color: var(--dt-dim-text);
 }
-:root[data-dt-style="clean"] .dt-pane-action:hover,
-:root[data-dt-style="clean"] .dt-pane-action.dt-active,
-:root[data-dt-style="clean"] .dt-pane-action.dt-open,
-:root[data-dt-style="clean"] .dt-pane.dt-pane-focused .dt-pane-action:hover,
-:root[data-dt-style="clean"] .dt-pane.dt-pane-focused .dt-pane-action.dt-active,
-:root[data-dt-style="clean"] .dt-pane.dt-pane-focused .dt-pane-action.dt-open {
+:root[data-dt-chrome="blended"] .dt-pane-action:hover,
+:root[data-dt-chrome="blended"] .dt-pane-action.dt-active,
+:root[data-dt-chrome="blended"] .dt-pane-action.dt-open {
     background: var(--t-border, rgba(255, 255, 255, 0.12));
     color: var(--t-text, #e6e6e6);
 }
@@ -7769,199 +7884,36 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
    1px × 16px divider. `.dt-pane-action-separator` is the class
    `PaneActions.separator()` renders, which the layout renderer inserts
    there automatically. */
-:root[data-dt-style="clean"] .dt-pane-action-separator {
+:root[data-dt-chrome="blended"] .dt-pane-action-separator {
     width: 1px;
     height: 16px;
     margin: 0 4px;
     background: var(--t-border, rgba(255, 255, 255, 0.12));
 }
-/* The hidden strip takes no room. In flow, the strip keeps its box while it
-   is invisible (see "Hidden until the pointer comes near"), and Clean's 28px
-   buttons make that box wide enough to cut a half-width window's title to
-   a few letters. Under Clean the strip is lifted out of flow instead and
-   pinned to the titlebar's right edge, so the title and trailing label get
-   the whole row. Revealed, it sits over the end of the row on the
-   titlebar's own colour (`--dt-clean-header-bg`, which follows focus and
-   hover), with a short fade so a title running under it does not end on a
-   hard cut. The reveal itself is untouched: the same opacity and
-   pointer-events rules show it on hover, pointer movement, keyboard focus
-   and an open menu, and its stacking (z-index 5, above the corner grip) is
-   kept; `position: relative` on the header gives it no z-index, so the
-   header does not become a stacking context. Gated like the hide: on a
-   device without a hovering pointer the strip is always shown, so it stays
-   in flow there. */
-@media (hover: hover) and (pointer: fine) {
-    :root[data-dt-style="clean"] .dt-pane-header {
-        position: relative;
-    }
-    :root[data-dt-style="clean"] .dt-pane-header > .dt-pane-actions {
-        position: absolute;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        margin-left: 0;
-        padding: 0 8px 0 16px;
-        background: linear-gradient(to right, transparent, var(--dt-clean-header-bg) 16px);
-    }
-}
 
-/* ── Tabs (when the strip is shown) ──────────────────────────────────
-   Quiet text tabs: no pill border, no lift, dim label. The selected tab takes
-   the same accent-soft tint as the active sidebar row, never a solid fill.
-   `.dt-tab:not(.dt-selected)` reaches Depth's resting-tab lift, and the
-   `[data-dt-selection]` copy reaches Depth×Fill's sheen on the selected
-   tab. */
-:root[data-dt-style="clean"] .dt-tab,
-:root[data-dt-style="clean"] .dt-tab:not(.dt-selected) {
-    background: transparent;
-    color: var(--dt-clean-text-dim);
-    border-color: transparent;
-    border-radius: 8px;
-    box-shadow: none;
-    font-weight: 500;
-}
-:root[data-dt-style="clean"] .dt-tab:hover:not(.dt-selected) {
-    background: var(--dt-clean-hover);
-    color: var(--t-text, #e6e6e6);
-}
-:root[data-dt-style="clean"] .dt-tab.dt-selected,
-:root[data-dt-style="clean"][data-dt-selection] .dt-tab.dt-selected {
-    background: var(--dt-clean-accent-soft);
-    color: var(--dt-clean-accent-text);
-    border-color: transparent;
-    box-shadow: none;
-    font-weight: 600;
-}
-/* A hidden ("unlisted") tab's dashed hint moves to an outline, since the tab
-   has no visible border left to dash. */
-:root[data-dt-style="clean"] .dt-tab.dt-tab-unlisted {
-    outline: 1px dashed var(--t-border, rgba(255, 255, 255, 0.2));
-    outline-offset: 1px;
-}
-/* Unread badges in the content accent, with its declared foreground. On the
-   selected tab the badge already stands out against the soft tint, so Fill's
-   inversion is undone. */
-:root[data-dt-style="clean"] .dt-tab-badge,
-:root[data-dt-style="clean"] .dt-tab.dt-selected .dt-tab-badge {
-    background: var(--t-accent, #4f8cff);
-    color: var(--t-accent-on, #000000);
-}
-
-/* ── Dock ────────────────────────────────────────────────────────────
-   The dock lives inside the sheet, under the windows: it shows the sheet's
-   idle fill and is split from the windows by the same hairline. Each chip is
-   a quiet parked titlebar. */
-:root[data-dt-style="clean"] .dt-pane-dock {
-    background: transparent;
-    border-top: 1px solid var(--t-border, rgba(255, 255, 255, 0.1));
-    padding: 8px;
-}
-:root[data-dt-style="clean"] .dt-pane-dock-item {
-    height: 32px;
-    border-radius: 8px;
-    background: var(--t-surface, #1e1e1e);
-    color: var(--dt-clean-text-dim);
-    outline-color: var(--t-border, rgba(255, 255, 255, 0.1));
-}
-:root[data-dt-style="clean"] .dt-pane-dock-item:hover {
-    outline-color: color-mix(in srgb, var(--t-border, rgba(255, 255, 255, 0.1)), var(--t-text, #e6e6e6) 20%);
-    color: var(--t-text, #e6e6e6);
-}
-:root[data-dt-style="clean"] .dt-pane-dock-item-icon {
-    color: inherit;
-}
-:root[data-dt-style="clean"] .dt-pane-dock-item-label {
-    font-size: 13px;
-}
-
-/* ── Top bar (LNA-23) ────────────────────────────────────────────────
-   52px on the ground (the height comes from `--dt-topbar-h` on the frame
-   above; the ground from the Ground rules). Clean keeps exactly Classic's
-   buttons, order and behaviour ("+", Layout, the appearance cycle, the theme
-   manager, "Aa", App settings and the app's own buttons); these rules only
-   change how they look.
-
-   Every top-bar icon button, the sidebar toggle included, is a ghost: 34×34,
-   radius 8, an 18px glyph in the Clean dim, and the derived hover chip with
-   `--t-text` on hover. Border-box with a 9px block padding and no bottom
-   hairline, so the bar measures exactly 52px around a 34px row. The left
-   padding is wider than the right, as in the design; the macOS
-   traffic-light reservation (`body.dt-electron-mac…`) is more specific and
-   still wins. */
-:root[data-dt-style="clean"] .dt-topbar {
-    box-sizing: border-box;
-    padding: 9px 16px 9px 20px;
-    border-bottom-width: 0;
-}
-:root[data-dt-style="clean"] .dt-topbar-trailing {
-    gap: 4px;
-}
-:root[data-dt-style="clean"] .dt-topbar-icon-button {
-    width: 34px;
-    height: 34px;
-    border-radius: 8px;
-    color: var(--dt-clean-text-dim);
-}
-:root[data-dt-style="clean"] .dt-topbar-icon-button > svg {
-    width: 18px;
-    height: 18px;
-}
-:root[data-dt-style="clean"] .dt-topbar-icon-button:hover {
-    background: var(--dt-clean-hover);
-    color: var(--t-text, #e6e6e6);
-}
-
-/* Any top-bar button whose panel is showing.
-   Replaces the LNA-20 placeholder (an accent-soft tint): Clean marks an open
-   top-bar button with a quiet `--t-border`-toned chip and `--t-text`, never
-   the accent, so the chrome stays calm. No ring, no gradient, no glow. The
-   `:hover` copies match the Depth sheen selectors they replace in
-   specificity and win by coming later; `aria-expanded` covers a button whose
-   menu or dropdown is up (e.g. "+"). */
-:root[data-dt-style="clean"] .dt-topbar-icon-button.dt-active,
-:root[data-dt-style="clean"] .dt-topbar-icon-button.dt-active:hover,
-:root[data-dt-style="clean"] .dt-topbar-icon-button[aria-expanded="true"],
-:root[data-dt-style="clean"] .dt-topbar-icon-button[aria-expanded="true"]:hover {
-    background: color-mix(in srgb, var(--t-border, rgba(255, 255, 255, 0.1)) 70%, transparent);
-    color: var(--t-text, #e6e6e6);
-    box-shadow: none;
-    filter: none;
-}
-
-/* ── Sidebar tree (LNA-21) ───────────────────────────────────────────
-   The tab › windows tree as a quiet outline on the ground. Appearance only:
-   the markup, what is shown and how it behaves (a header click still only
-   collapses or expands) are exactly as under Classic.
-
-     - Tab headers (`.dt-sidebar-section-header`) are sentence case with no
-       tracking, 30px tall, at the same size as the rows: 14px unless the
-       user picked a sidebar text size (`--dt-font-sidebar-size`). The active tab's header is `--t-text` at
-       weight 650, every other header is the Clean dim at weight 500, and the
-       chevron is muted.
-     - Window rows (`.dt-sidebar-row`) are 30px tall, indented 16px under
-       their header, radius 8, with a 14px icon. Rows under the active tab are
-       `--t-text`, rows under any other tab the Clean dim.
-     - The active row is the ONLY filled thing in the sidebar: the solid
-       accent-soft tint with the contrast-safe accent text at weight 600, its
-       icon in the same colour. No ring, no Fill pill, no Depth sheen.
+/* Sidebar tree: the tab › windows tree as a quiet outline on the ground.
+   Appearance only: the markup, what is shown and how it behaves are exactly
+   as under Themed.
+     - Tab headers are 30px tall; the active tab's header is `--t-text` at
+       weight 650, every other header the dim tone at weight 500, and the
+       chevron is muted. (Their casing and size are the Labels setting's.)
+     - Window rows are 30px tall, indented 16px under their header, radius 8,
+       with a 14px icon. Rows under the active tab are `--t-text`, rows under
+       any other tab the dim tone. The active row keeps whatever the Selection
+       setting paints, in line with its siblings.
      - Sections are separated by space, not hairlines.
      - The footer slot is plain muted text above a hairline. What a host
-       mounts inside it is the host's: a host that paints its own card there
-       has to drop it under Clean itself.
-
-   Colours come from the `--dt-clean-*` names declared on `.dt-app-frame`
-   above, so the fallback chains to the contrast-safe tokens live in one
-   place. */
-:root[data-dt-style="clean"] .dt-sidebar-section {
+       mounts inside it is the host's. */
+:root[data-dt-chrome="blended"] .dt-sidebar-section {
     border-bottom-color: transparent;
     padding-bottom: 10px;
 }
-:root[data-dt-style="clean"] .dt-sidebar-content {
+:root[data-dt-chrome="blended"] .dt-sidebar-content {
     padding-top: 8px;
 }
-:root[data-dt-style="clean"] .dt-sidebar-section-header {
+:root[data-dt-chrome="blended"] .dt-sidebar-section-header {
     /* `width: auto` lets the flex column stretch the header between its
-       margins; Classic's `width: 100%` would push it past the right edge. */
+       margins; the base rule's `width: 100%` would push it past the right edge. */
     width: auto;
     min-height: 30px;
     box-sizing: border-box;
@@ -7969,36 +7921,34 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     padding: 0 10px 0 6px;
     gap: 6px;
     border-radius: 8px;
-    color: var(--dt-clean-text-dim);
-    font-size: var(--dt-font-sidebar-size, 14px);
+    color: var(--dt-dim-text);
     font-weight: 500;
-    text-transform: none;
-    letter-spacing: 0;
 }
-:root[data-dt-style="clean"] .dt-sidebar-section-header:hover:not([disabled]) {
+:root[data-dt-chrome="blended"] .dt-sidebar-section-header:hover:not([disabled]) {
     color: var(--t-text, #e6e6e6);
 }
-:root[data-dt-style="clean"] .dt-sidebar-section.active-tab > .dt-sidebar-section-header {
+:root[data-dt-chrome="blended"] .dt-sidebar-section.active-tab > .dt-sidebar-section-header {
     color: var(--t-text, #e6e6e6);
     font-weight: 650;
 }
-:root[data-dt-style="clean"] .dt-sidebar-section-chevron,
-:root[data-dt-style="clean"] .dt-sidebar-section.active-tab .dt-sidebar-section-chevron {
+:root[data-dt-chrome="blended"] .dt-sidebar-section-chevron,
+:root[data-dt-chrome="blended"] .dt-sidebar-section.active-tab .dt-sidebar-section-chevron {
     width: 14px;
     height: 14px;
-    color: var(--dt-clean-text-dim);
+    color: var(--dt-dim-text);
 }
-:root[data-dt-style="clean"] .dt-sidebar-section-chevron svg {
+:root[data-dt-chrome="blended"] .dt-sidebar-section-chevron svg {
     width: 12px;
     height: 12px;
 }
-
 /* Window rows. Height is fixed rather than padded so every density and every
    sidebar text size gives the same 30px line. The active row restates the
-   margin and padding because Classic insets the active pill (`margin-left:
-   12px`); under Clean the active row stays in line with its siblings. */
-:root[data-dt-style="clean"] .dt-sidebar-row,
-:root[data-dt-style="clean"] .dt-sidebar-row.dt-active {
+   margin and padding because the base rule insets the active pill
+   (`margin-left: 12px`); here the active row stays in line with its
+   siblings. The colours skip the active row, whose colours are the
+   Selection setting's (Fill's accent-on must survive this block). */
+:root[data-dt-chrome="blended"] .dt-sidebar-row,
+:root[data-dt-chrome="blended"] .dt-sidebar-row.dt-active {
     height: 30px;
     box-sizing: border-box;
     margin: 0 8px 1px 24px;
@@ -8007,81 +7957,322 @@ body.appearance-light .pane-picker-btn:hover:not(.disabled) {
     border-radius: 8px;
     font-size: var(--dt-font-sidebar-size, 14px);
 }
-:root[data-dt-style="clean"] .dt-sidebar-row {
-    color: var(--dt-clean-text-dim);
+:root[data-dt-chrome="blended"] .dt-sidebar-row:not(.dt-active) {
+    color: var(--dt-dim-text);
 }
-:root[data-dt-style="clean"] .dt-sidebar-section.active-tab .dt-sidebar-row {
+:root[data-dt-chrome="blended"] .dt-sidebar-section.active-tab .dt-sidebar-row:not(.dt-active) {
     color: var(--t-text, #e6e6e6);
 }
-:root[data-dt-style="clean"] .dt-sidebar-row:hover:not(.dt-active),
-:root[data-dt-style="clean"][data-dt-selection] .dt-sidebar-row:hover:not(.dt-active) {
-    background: var(--dt-clean-hover);
+:root[data-dt-chrome="blended"] .dt-sidebar-row:hover:not(.dt-active),
+:root[data-dt-chrome="blended"][data-dt-selection] .dt-sidebar-row:hover:not(.dt-active) {
+    background: var(--dt-quiet-hover);
     color: var(--t-text, #e6e6e6);
 }
-:root[data-dt-style="clean"] .dt-sidebar-row-icon {
+:root[data-dt-chrome="blended"] .dt-sidebar-row-icon {
     width: 14px;
     height: 14px;
-    color: var(--dt-clean-text-dim);
+    color: var(--dt-dim-text);
 }
-:root[data-dt-style="clean"] .dt-sidebar-row-icon svg {
+:root[data-dt-chrome="blended"] .dt-sidebar-row-icon svg {
     width: 14px;
     height: 14px;
 }
-
-/* The active row: the one filled thing. The `[data-dt-selection]` copy
-   reaches Fill's pill and Depth×Fill's sheen (`:root:not(...)[...]` shapes),
-   which this rule matches in specificity and follows in source order. */
-:root[data-dt-style="clean"] .dt-sidebar-row.dt-active,
-:root[data-dt-style="clean"][data-dt-selection] .dt-sidebar-row.dt-active,
-:root[data-dt-style="clean"] .dt-sidebar-section.active-tab .dt-sidebar-row.dt-active {
-    background: var(--dt-clean-accent-soft);
-    color: var(--dt-clean-accent-text);
-    font-weight: 600;
-    border-radius: 8px;
-    box-shadow: none;
-    filter: none;
-}
-:root[data-dt-style="clean"] .dt-sidebar-row.dt-active .dt-sidebar-row-icon,
-:root[data-dt-style="clean"] .dt-sidebar-row.dt-active .dt-sidebar-row-index {
+:root[data-dt-chrome="blended"] .dt-sidebar-row.dt-active .dt-sidebar-row-icon,
+:root[data-dt-chrome="blended"] .dt-sidebar-row.dt-active .dt-sidebar-row-index {
     color: inherit;
 }
-
 /* Footer: plain muted text above a hairline, not a card. */
-:root[data-dt-style="clean"] .dt-sidebar-footer {
+:root[data-dt-chrome="blended"] .dt-sidebar-footer {
     margin: 0 12px;
     padding: 12px 10px 14px;
     border-top: 1px solid var(--t-border, rgba(255, 255, 255, 0.1));
     background: transparent;
-    color: var(--dt-clean-text-dim);
+    color: var(--dt-dim-text);
     font-size: 12.5px;
 }
 
-/* ── Dialogs, menus and popovers ─────────────────────────────────────
-   Floating surfaces get the same calm card as the sheet: the theme's
-   `--t-surface`, a 1px `--t-border` hairline, the brief's card radius and
-   the focused window's soft neutral lift (`--dt-clean-lift`, written on
-   :root by `applyColorScheme`, so it reaches panels mounted on <body>
-   outside `.dt-app-frame`). Under Classic the modals carry a 2px accent
-   border and an accent glow (`--t-glow`); Clean uses the accent only for
-   the few marks the brief lists, so both go. Content, layout, padding and
-   stacking are untouched, and so are the rows inside (selected options and
-   hovered menu items keep their own colours). */
-:root[data-dt-style="clean"] .dt-modal,
-:root[data-dt-style="clean"] .pane-modal,
-:root[data-dt-style="clean"] .dt-name-prompt,
-:root[data-dt-style="clean"] .dt-hotkeys-panel {
+/* ── Active window: Tone (data-dt-focus="tone") ──────────────────────
+   The active window is shown by background first: `--t-window-active` for
+   the focused window, `--t-window-idle` for the rest. It is also lifted: a
+   1px `--t-window-ring` hairline drawn inside its edge and a soft neutral
+   drop shadow (`--dt-soft-lift`). A lone or maximized window has neither,
+   since there is nothing for it to stand out from. No accent band and no
+   glow: window headers do not wear the Selection setting here.
+
+   Each window's look is carried by three variables, set here by state and
+   read once by the paint rules below, so the paint rules never have to be
+   repeated per state (they carry long selector lists to outrank Fill and
+   Depth):
+     --dt-tone-pane-bg      body and titlebar fill: idle, or active when focused;
+     --dt-tone-pane-shadow  hairline + rest shadow, or the focused lift;
+     --dt-tone-pane-ring    the focused window's inner ring (transparent otherwise).
+
+   The ring is drawn INSIDE the window's edge by `::after`, not as an outer
+   box-shadow spread, because a sheet clips its windows (`overflow: hidden`):
+   an outer ring would vanish wherever a tiled window touches the sheet's
+   edge. And a pseudo-element rather than an inset shadow or a
+   negative-offset outline, because both of those paint under the titlebar,
+   which is positioned and has its own background; `::after` stacks above it.
+
+   The lift is deliberately NOT paired with a z-index change: window stacking
+   belongs to the toolkit (`bringPaneToFront` and the inline `--dt-fp-z`). So
+   the shadow shows only where it can: over a neighbour that sits lower in the
+   stack, over the canvas around a card, and over the sheet around a floating
+   window. */
+:root[data-dt-focus="tone"] .dt-pane {
+    --dt-tone-pane-bg: var(--t-window-idle, var(--t-surface, #1e1e1e));
+    --dt-tone-pane-rest-shadow:
+        0 0 0 1px var(--t-border, rgba(255, 255, 255, 0.1)),
+        0 8px 18px -12px rgba(0, 0, 0, 0.28);
+    --dt-tone-pane-shadow: var(--dt-tone-pane-rest-shadow);
+    --dt-tone-pane-ring: transparent;
+    /* The window's current fill, for host content that wants to follow it:
+       `background: var(--dt-window-bg, <its own colour>)` dims with the
+       window here and keeps its own colour under Accent, where this is unset. */
+    --dt-window-bg: var(--dt-tone-pane-bg);
+    /* The toolkit's content slot normally paints `--t-bg` inside a 4px inset,
+       which would show the ground tone inside every window, framed by a band
+       of the window colour. Here the slot steps aside: no inset, no fill. */
+    --dt-pane-content-inset: 0px;
+}
+:root[data-dt-focus="tone"] .dt-pane.dt-pane-focused {
+    --dt-tone-pane-bg: var(--t-window-active, var(--t-surface, #1e1e1e));
+    --dt-tone-pane-shadow: var(--dt-soft-lift,
+        0 2px 4px rgba(0, 0, 0, 0.05),
+        0 12px 32px rgba(0, 0, 0, 0.1));
+    --dt-tone-pane-ring: var(--t-window-ring, var(--t-border, rgba(255, 255, 255, 0.1)));
+}
+/* Lone or maximized: no ring, no lift. "Lone" counts the window's siblings in
+   the pane area, ignoring the ghost a closing window leaves for its exit
+   animation. */
+:root[data-dt-focus="tone"] .dt-pane.dt-pane-focused.dt-maximized,
+:root[data-dt-focus="tone"] .dt-pane-area:not(:has(> .dt-pane:not(.dt-pane-focused):not(.dt-pane-closing-ghost))) > .dt-pane.dt-pane-focused {
+    --dt-tone-pane-shadow: var(--dt-tone-pane-rest-shadow);
+    --dt-tone-pane-ring: transparent;
+}
+/* The ring, above the titlebar and its controls (z 5), and never in the way
+   of a click. Its z-index orders it only among the window's own children (the
+   window is already a stacking context). It takes the window's own corner, so
+   it fits a rounded card as well as a square window in a sheet. Declared on
+   every window so it can be tested and transitioned; it is transparent unless
+   the window is focused. */
+:root[data-dt-focus="tone"] .dt-pane.dt-pane-floating::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--dt-tone-pane-ring);
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: 6;
+}
+/* The paint: background and shadow from the variables, outline transparent.
+   Listed selectors: `.dt-pane-floating.dt-pane-focused` reaches Depth's and
+   Fill's focused-pane rules, `body.dt-pointer-active` Fill's transient pointer
+   frame, and the Sheet rules above by coming later at the same shapes. */
+:root[data-dt-focus="tone"] .dt-pane,
+:root[data-dt-focus="tone"] .dt-pane.dt-pane-floating,
+:root[data-dt-focus="tone"] .dt-pane.dt-pane-floating.dt-pane-focused,
+:root[data-dt-focus="tone"] body.dt-pointer-active .dt-pane.dt-pane-floating {
+    background: var(--dt-tone-pane-bg);
+    outline: 1px solid transparent;
+    outline-offset: -1px;
+    box-shadow: var(--dt-tone-pane-shadow);
+}
+:root[data-dt-focus="tone"] .dt-pane-content {
+    background: transparent;
+}
+
+/* Titlebar: the same fill as the window body, a hairline underneath. The
+   fill is read through `--dt-tone-header-bg` so hover can change it with an
+   ordinary `:hover` rule: the paint rule has to carry the focused-header and
+   Depth×Fill shapes to outrank them, and a `:hover` copy of each would double
+   the selector list for one 3% wash. */
+:root[data-dt-focus="tone"] .dt-pane-header {
+    --dt-tone-header-bg: var(--dt-tone-pane-bg);
+}
+:root[data-dt-focus="tone"] .dt-pane-header:hover {
+    --dt-tone-header-bg: color-mix(in srgb, var(--dt-tone-pane-bg), var(--t-text, #e6e6e6) 3%);
+}
+:root[data-dt-focus="tone"] .dt-pane-header,
+:root[data-dt-focus="tone"] .dt-pane.dt-pane-focused .dt-pane-header,
+:root[data-dt-focus="tone"][data-dt-selection] .dt-pane.dt-pane-focused .dt-pane-header {
+    background: var(--dt-tone-header-bg);
+    color: var(--dt-dim-text);
+    border-bottom: 1px solid var(--t-border, rgba(255, 255, 255, 0.1));
+    box-shadow: none;
+    transition: background-color 120ms ease-in-out;
+}
+/* Idle window: title, icon, index and trailing context all in dim text, the
+   title at weight 500. On the focused window the index, trailing label and
+   buttons stay dim too: there is no band for them to contrast with. */
+:root[data-dt-focus="tone"] .dt-pane-header-icon,
+:root[data-dt-focus="tone"] .dt-pane-title,
+:root[data-dt-focus="tone"] .dt-pane-index,
+:root[data-dt-focus="tone"] .dt-pane-trailing-label,
+:root[data-dt-focus="tone"] .dt-pane.dt-pane-focused .dt-pane-index,
+:root[data-dt-focus="tone"] .dt-pane.dt-pane-focused .dt-pane-trailing-label {
+    color: var(--dt-dim-text);
+}
+:root[data-dt-focus="tone"] .dt-pane-title {
+    font-weight: 500;
+}
+/* Active window: title in text at weight 600, icon in the accent. Same shape
+   as Fill's foreground rule, so it wins over it by source order; the
+   `[data-dt-selection]` copies reach Soft's focused title/icon rule, which
+   sits later in the file at this same shape. */
+:root[data-dt-focus="tone"] .dt-pane.dt-pane-focused .dt-pane-title,
+:root[data-dt-focus="tone"][data-dt-selection] .dt-pane.dt-pane-focused .dt-pane-title {
+    color: var(--t-text, #e6e6e6);
+    font-weight: 600;
+}
+:root[data-dt-focus="tone"] .dt-pane.dt-pane-focused .dt-pane-header-icon,
+:root[data-dt-focus="tone"][data-dt-selection] .dt-pane.dt-pane-focused .dt-pane-header-icon {
+    color: var(--t-accent, #4f8cff);
+}
+/* Window buttons on the focused window: reach Fill's accent-on foreground and
+   its hover scrim, which have no accent band to sit on here. */
+:root[data-dt-focus="tone"] .dt-pane.dt-pane-focused .dt-pane-action {
+    background: transparent;
+    color: var(--dt-dim-text);
+}
+:root[data-dt-focus="tone"] .dt-pane.dt-pane-focused .dt-pane-action:hover,
+:root[data-dt-focus="tone"] .dt-pane.dt-pane-focused .dt-pane-action.dt-active,
+:root[data-dt-focus="tone"] .dt-pane.dt-pane-focused .dt-pane-action.dt-open {
+    background: var(--t-border, rgba(255, 255, 255, 0.12));
+    color: var(--t-text, #e6e6e6);
+}
+/* The hidden strip takes no room. In flow, the strip keeps its box while it
+   is invisible (see "Hidden until the pointer comes near"), and that box can
+   cut a half-width window's title to a few letters. Here the strip is lifted
+   out of flow instead and pinned to the titlebar's right edge, so the title
+   and trailing label get the whole row. Revealed, it sits over the end of the
+   row on the titlebar's own colour (`--dt-tone-header-bg`, which follows
+   focus and hover), with a short fade so a title running under it does not
+   end on a hard cut. The reveal itself is untouched, and its stacking
+   (z-index 5, above the corner grip) is kept; `position: relative` on the
+   header gives it no z-index, so the header does not become a stacking
+   context. Gated like the hide: on a device without a hovering pointer the
+   strip is always shown, so it stays in flow there. */
+@media (hover: hover) and (pointer: fine) {
+    :root[data-dt-focus="tone"] .dt-pane-header {
+        position: relative;
+    }
+    :root[data-dt-focus="tone"] .dt-pane-header > .dt-pane-actions {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        margin-left: 0;
+        padding: 0 8px 0 16px;
+        background: linear-gradient(to right, transparent, var(--dt-tone-header-bg) 16px);
+    }
+}
+
+/* ── Labels: Sentence case (data-dt-labels="sentence") ───────────────
+   Window titles, the sidebar's tab headers and the app name at the top of the
+   sidebar in sentence case with normal letter-spacing. Window titles and tab
+   headers read at 14px unless the user picked a window-title or sidebar size
+   (`--dt-font-pane-header-size` / `--dt-font-sidebar-size` still win). Small
+   section labels inside menus stay uppercase. */
+:root[data-dt-labels="sentence"] .dt-app-frame {
+    --dt-pane-title-size: 14px;
+    --dt-pane-title-transform: none;
+    --dt-pane-title-tracking: 0;
+}
+:root[data-dt-labels="sentence"] .dt-pane-title-input {
+    font-size: var(--dt-font-pane-header-size, var(--dt-pane-title-size, 14px));
+    text-transform: none;
+    letter-spacing: 0;
+}
+:root[data-dt-labels="sentence"] .dt-sidebar-section-header {
+    font-size: var(--dt-font-sidebar-size, 14px);
+    text-transform: none;
+    letter-spacing: 0;
+}
+:root[data-dt-labels="sentence"] .dt-sidebar-header {
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+/* ── Selection: Soft (data-dt-selection="soft") ──────────────────────
+   The active tab and the active sidebar row (and, under an Accent active
+   window, the focused window's titlebar) take the opaque accent wash with the
+   accent text made legible on it. No ring, no solid field, no sheen. Tint
+   (the base rules above) is what this replaces; Fill's rules do not match. */
+:root[data-dt-selection="soft"] .dt-tab.dt-selected {
+    background: var(--dt-soft-bg);
+    color: var(--dt-soft-text);
+    border-color: transparent;
+    box-shadow: none;
+    font-weight: 600;
+}
+/* Hover on an inactive tab is a neutral wash rather than the accent, which
+   now means "selected" (the same reason Fill gives). */
+:root[data-dt-selection="soft"] .dt-tab:hover:not(.dt-selected) {
+    background: var(--dt-quiet-hover);
+}
+/* The selected unlisted tab has no border left to dash; the hint moves to an
+   outline. */
+:root[data-dt-selection="soft"] .dt-tab.dt-tab-unlisted {
+    outline: 1px dashed var(--t-border, rgba(255, 255, 255, 0.2));
+    outline-offset: 1px;
+}
+:root[data-dt-selection="soft"] .dt-sidebar-row.dt-active,
+:root[data-dt-selection="soft"] .dt-sidebar-section.active-tab .dt-sidebar-row.dt-active {
+    background: var(--dt-soft-bg);
+    color: var(--dt-soft-text);
+    font-weight: 600;
+    box-shadow: none;
+    filter: none;
+}
+:root[data-dt-selection="soft"] .dt-sidebar-row:hover:not(.dt-active) {
+    background: var(--dt-quiet-hover);
+}
+/* The focused window's titlebar under an Accent active window: the same
+   wash, its title and icon in the legible accent text. (Tone's header rules
+   are more specific and win, as they should.) The focus glow goes, and the
+   focused outline falls back to the resting one. */
+:root[data-dt-selection="soft"] .dt-pane.dt-pane-focused .dt-pane-header {
+    background: var(--dt-soft-bg);
+    color: var(--dt-soft-text);
+}
+:root[data-dt-selection="soft"] .dt-pane.dt-pane-focused .dt-pane-header-icon,
+:root[data-dt-selection="soft"] .dt-pane.dt-pane-focused .dt-pane-title {
+    color: var(--dt-soft-text);
+}
+/* The glow is cleared at the token, so every rule that layers it (the base
+   focused-pane halo, Depth's) keeps its own shadows minus the halo. */
+:root[data-dt-selection="soft"] .dt-pane {
+    --t-glow: transparent;
+}
+:root[data-dt-selection="soft"] .dt-pane.dt-pane-focused {
+    outline-color: var(--t-border, rgba(255, 255, 255, 0.1));
+}
+
+/* ── Surfaces: Soft (data-dt-surface="soft") ─────────────────────────
+   Flat (the Depth rules above are keyed on the attribute's absence), plus
+   calm floating cards: dialogs, menus and popovers on the theme's
+   `--t-surface` with a 1px `--t-border` hairline and the soft neutral lift
+   (`--dt-soft-lift`, written on :root by `applyColorScheme`, so it reaches
+   panels mounted on <body> outside `.dt-app-frame`). The base modals carry a
+   2px accent border and an accent glow (`--t-glow`); both go. Content,
+   layout, padding and stacking are untouched, and so are the rows inside. */
+:root[data-dt-surface="soft"] .dt-modal,
+:root[data-dt-surface="soft"] .pane-modal,
+:root[data-dt-surface="soft"] .dt-name-prompt,
+:root[data-dt-surface="soft"] .dt-hotkeys-panel {
     background: var(--t-surface, #1e1e1e);
     border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
     border-radius: 12px;
-    box-shadow: var(--dt-clean-lift, 0 2px 4px rgba(0, 0, 0, 0.05), 0 12px 32px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--dt-soft-lift, 0 2px 4px rgba(0, 0, 0, 0.05), 0 12px 32px rgba(0, 0, 0, 0.1));
 }
-:root[data-dt-style="clean"] .dt-hover-menu,
-:root[data-dt-style="clean"] .dt-pane-menu,
-:root[data-dt-style="clean"] .dt-popover-menu,
-:root[data-dt-style="clean"] .dt-scheme-menu,
-:root[data-dt-style="clean"] .theme-manager-menu {
+:root[data-dt-surface="soft"] .dt-hover-menu,
+:root[data-dt-surface="soft"] .dt-pane-menu,
+:root[data-dt-surface="soft"] .dt-popover-menu,
+:root[data-dt-surface="soft"] .dt-scheme-menu,
+:root[data-dt-surface="soft"] .theme-manager-menu {
     background: var(--t-surface, #1e1e1e);
     border: 1px solid var(--t-border, rgba(255, 255, 255, 0.12));
     border-radius: 10px;
-    box-shadow: var(--dt-clean-lift, 0 2px 4px rgba(0, 0, 0, 0.05), 0 12px 32px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--dt-soft-lift, 0 2px 4px rgba(0, 0, 0, 0.05), 0 12px 32px rgba(0, 0, 0, 0.1));
 }

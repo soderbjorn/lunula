@@ -10,14 +10,16 @@
  * theme they try.
  *
  * Consumed on the web through the `data-dt-surface` attribute written by
- * `applySurfaceStyle`; `lunula.css` keys the depth rules off its absence.
+ * `applySurfaceStyle`; `lunula.css` keys the depth rules off its absence
+ * (`:root:not([data-dt-surface])`), so Flat and Soft both drop every depth
+ * effect, and Soft adds its own calm-card rules.
  */
 package se.soderbjorn.lunula.core
 
 import kotlinx.serialization.Serializable
 
 /**
- * The two surface treatments the toolkit ships.
+ * The surface treatments the toolkit ships.
  *
  *  - [Depth] — the default. Panes float above the window on three soft
  *    shadows (contact, near, far) under a 1px top highlight; pane headers
@@ -29,9 +31,12 @@ import kotlinx.serialization.Serializable
  *    from the bottom right. No translucency or blur — scrolling stays cheap.
  *  - [Flat] — the toolkit's look before depth existed, pixel for pixel: flat
  *    fills, hairline borders, no shadows beyond the floating panes' own.
+ *  - [Soft] — [Flat], with calm cards for dialogs, menus and popovers: a
+ *    hairline edge and a soft neutral shadow, no accent border, no glow.
  *
- * @property cssValue the token persisted in [AppearanceShape]; `data-dt-surface`
- *   is written (as `flat`) only for [Flat].
+ * @property cssValue the token persisted in [AppearanceShape], and the value
+ *   written to `data-dt-surface` for [Flat] and [Soft]; [Depth] writes none.
+ *   `lunula.css` keys the Depth rules off the attribute's absence.
  * @see AppearanceShape
  */
 @Serializable
@@ -41,6 +46,14 @@ enum class SurfaceStyle(val cssValue: String) {
 
     /** No depth effects — the original flat look. */
     Flat("flat"),
+
+    /**
+     * Flat, plus calm floating surfaces: dialogs, menus and popovers become
+     * `--t-surface` cards with a 1px `--t-border` hairline and a soft neutral
+     * lift (`--dt-clean-lift`) instead of an accent border and glow. Split out
+     * of the original single Calm switch (epic LNA-16); see [Looks.Calm].
+     */
+    Soft("soft"),
     ;
 
     companion object {

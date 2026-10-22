@@ -1,26 +1,31 @@
 /*
- * CleanTopBarTest.kt (jsTest)
+ * CalmTopBarTest.kt (jsTest)
  *
- * Tests for the top bar under the two shell styles (epic LNA-16, LNA-23):
+ * Tests for the top bar under the style settings (epic LNA-16, LNA-23):
  *
- *  - Classic is exactly what it was: the leading and trailing buttons, by
- *    accessible name and in order, match the pre-LNA-23 top bar.
- *  - Clean shows the very same buttons, in the same order ("+", Layout, the
- *    appearance cycle, Theme manager, "Aa", App settings, flanked by the
- *    app's own buttons), and each one still does what it does under Classic.
- *  - Switching style at runtime rebuilds the top bar, both ways, and keeps
- *    the same buttons.
- *  - Under Clean, with the stylesheet loaded, the icon buttons are 34×34
- *    ghosts with an 8px radius, 18px glyphs in the Clean dim, the bar is a
- *    52px border-box, and an open button wears the `--t-border` chip.
- *  - Dark mode: under Clean, cycling the appearance to Dark really applies
+ *  - The defaults are exactly what they were: the leading and trailing
+ *    buttons, by accessible name and in order, match the top bar with the
+ *    single palette button ("Themes and appearance") that replaced the
+ *    separate Theme manager and "Aa" Appearance buttons.
+ *  - The Calm look shows the very same buttons, in the same order ("+",
+ *    Layout, the appearance cycle, Themes and appearance, App settings,
+ *    flanked by the app's own buttons), and each one still does what it does
+ *    under the defaults; the palette button opens the Appearance pane, whose
+ *    Appearance tab is the settings' only entry point.
+ *  - Switching style at runtime restamps `:root` without rebuilding the top
+ *    bar, both ways, and keeps the same buttons.
+ *  - Under Blended chrome (alone, or as part of the Calm look), with the
+ *    stylesheet loaded, the icon buttons are 34×34 ghosts with an 8px
+ *    radius, 18px glyphs in the legible dim, the bar is a 52px border-box,
+ *    and an open button wears the `--t-border` chip.
+ *  - Dark mode: under Calm, cycling the appearance to Dark really applies
  *    the dark slot's theme (`--t-bg` and `color-scheme`), both with the
  *    toolkit's own theme host and with an app-supplied
  *    [AppShellSpec.settingsHost].
  *
  * The mounted tests drive the real [mountAppShell] with an in-memory
  * [Persister] and a hand-pushed [TabSource] snapshot, as NavigationModeTest
- * does. The right-hand panels (theme manager, Appearance, App settings) keep
+ * does. The right-hand panels (the Appearance pane, App settings) keep
  * their open state module-wide and close with a CSS transition, so
  * [resetRightPanels] puts them all away between steps, driving the theme
  * manager's `transitionend` itself in case no transition runs.
@@ -43,6 +48,9 @@ import org.w3c.dom.events.MouseEvent
 import org.w3c.dom.events.MouseEventInit
 import se.soderbjorn.lunula.core.Appearance
 import se.soderbjorn.lunula.core.AppearanceShape
+import se.soderbjorn.lunula.core.ChromeStyle
+import se.soderbjorn.lunula.core.Looks
+import se.soderbjorn.lunula.core.ModeStyles
 import se.soderbjorn.lunula.core.PersistKeys
 import se.soderbjorn.lunula.core.Persister
 import se.soderbjorn.lunula.core.ShellStyle
@@ -157,6 +165,8 @@ private suspend fun resetRightPanels(handle: AppShellHandle) {
         }
         if (isThemeManagerSidebarOpen()) fail("could not close the theme manager between steps")
     }
+    // The pane reopens on the tab last shown: put it back on Themes.
+    resetAppearancePane()
     handle.refresh()
     // Put away anything a step left floating on <body>.
     for (sel in listOf(".dt-pane-menu", ".dt-layout-preset-grid")) {
@@ -166,18 +176,18 @@ private suspend fun resetRightPanels(handle: AppShellHandle) {
 }
 
 /**
- * The top bar's trailing cluster for the harness below, the same under both
- * styles: the app's "Before" button, the toolkit's standard cluster in its
- * Classic order, then the app's "After" button. The appearance cycle reads
- * "Appearance: Dark" because the harness seeds a Dark appearance.
+ * The top bar's trailing cluster for the harness below, the same under every
+ * style: the app's "Before" button, the toolkit's standard cluster in its
+ * order, then the app's "After" button. The appearance cycle reads
+ * "Appearance: Dark" because the harness seeds a Dark appearance. There is
+ * one palette button for themes and appearance; the "Aa" button is gone.
  */
 private val TRAILING = listOf(
     "Before",
     "New",
     "Layout",
     "Appearance: Dark",
-    "Theme manager",
-    "Appearance",
+    APPEARANCE_PANE_BUTTON_TITLE,
     "App settings",
     "After",
 )
@@ -191,7 +201,8 @@ private const val CALM_LIGHT = "Lunicle Calm Light"
  * App settings content, then runs [body] once the active tab's pane is on
  * screen.
  *
- * @param style the persisted shell style to boot with, or `null` for none.
+ * @param style the persisted legacy shell style to boot with, or `null` for none.
+ * @param blob  a persisted shape blob to boot with instead (wins over [style]).
  * @param seed the persisted theme selection (slots and appearance).
  * @param settingsHost an app-supplied theme host, or `null` for the
  *   toolkit's own.
@@ -199,6 +210,7 @@ private const val CALM_LIGHT = "Lunicle Calm Light"
  */
 private suspend fun withTopBarShell(
     style: ShellStyle? = null,
+    blob: String? = null,
     seed: ThemeSnapshotV2 = ThemeSnapshotV2(
         darkThemeName = "Dracula",
         lightThemeName = "Lunamux Light",
@@ -211,7 +223,8 @@ private suspend fun withTopBarShell(
         buildMap {
             put(PersistKeys.THEME_V2_SELECTION, seed.selectionJson())
             put(PersistKeys.THEME_V2_CUSTOM, seed.customThemesJson())
-            if (style != null) put(PersistKeys.APPEARANCE_SHAPE, AppearanceShape(shellStyle = style).toJson())
+            val stored = blob ?: style?.let { AppearanceShape(shellStyle = it).toJson() }
+            if (stored != null) put(PersistKeys.APPEARANCE_SHAPE, stored)
         },
     )
     var push: ((TabListSnapshot) -> Unit)? = null
@@ -252,7 +265,7 @@ private suspend fun withTopBarShell(
 }
 
 /**
- * Seeds the calm pair on a Light appearance under Clean, presses the top
+ * Seeds the calm pair on a Light appearance under Calm, presses the top
  * bar's appearance cycle until it reads Dark, and checks that `:root` now
  * carries the dark slot's theme: its `--t-bg` and `color-scheme: dark`.
  *
@@ -267,7 +280,7 @@ private suspend fun cycleToDarkAndCheck(root: HTMLElement) {
     assertNotNull(darkBg)
     assertNotEquals(lightBg, darkBg, "the calm pair must differ for this test to mean anything")
 
-    assertEquals("clean", (document.documentElement as HTMLElement).getAttribute("data-dt-style"))
+    assertEquals("sheet", (document.documentElement as HTMLElement).getAttribute("data-dt-windows"), "the Calm look is applied")
     waitUntil("light slot painted") { rootStyle("--t-bg") == lightBg }
     assertEquals("light", rootStyle("color-scheme"))
 
@@ -287,38 +300,42 @@ private suspend fun cycleToDarkAndCheck(root: HTMLElement) {
     assertEquals("dark", rootStyle("color-scheme"))
 }
 
-class CleanTopBarTest {
+class CalmTopBarTest {
 
     @AfterTest
     fun reset() {
-        (document.documentElement as HTMLElement).removeAttribute("data-dt-style")
+        resetAppearancePane()
+        clearStyleStamps()
     }
 
-    /** Classic: the same buttons, in the same order, as before LNA-23. */
+    /** The defaults: the same buttons, in the same order, with one palette button. */
     @Test
     fun classicTopBarIsUnchanged() = GlobalScope.promise {
         withTopBarShell { root, _, _ ->
             assertNull((document.documentElement as HTMLElement).getAttribute("data-dt-style"))
             assertEquals(listOf("Toggle left sidebar"), root.topBarNames(".dt-topbar-leading"))
             assertEquals(TRAILING, root.topBarNames(".dt-topbar-trailing"))
+            assertTrue("Appearance" !in root.topBarNames(".dt-topbar-trailing"), "the \"Aa\" button is gone")
+            assertTrue("Theme manager" !in root.topBarNames(".dt-topbar-trailing"))
         }
     }
 
-    /** Clean: exactly Classic's buttons, in Classic's order, and no settings menu. */
+    /** Calm: exactly the default buttons, in the default order, and no settings menu. */
     @Test
-    fun cleanTopBarHasClassicsButtonsInClassicsOrder() = GlobalScope.promise {
-        withTopBarShell(style = ShellStyle.Clean) { root, _, _ ->
-            assertEquals("clean", (document.documentElement as HTMLElement).getAttribute("data-dt-style"))
+    fun calmTopBarHasClassicsButtonsInClassicsOrder() = GlobalScope.promise {
+        withTopBarShell(style = ShellStyle.Calm) { root, _, _ ->
+            assertEquals("sheet", (document.documentElement as HTMLElement).getAttribute("data-dt-windows"), "the Calm look is applied")
+            assertNull((document.documentElement as HTMLElement).getAttribute("data-dt-style"), "the legacy stamp is never written")
             assertEquals(listOf("Toggle left sidebar"), root.topBarNames(".dt-topbar-leading"))
             assertEquals(TRAILING, root.topBarNames(".dt-topbar-trailing"))
             assertNull(root.querySelector(".dt-topbar-settings-button"), "no folded settings menu")
         }
     }
 
-    /** Under Clean each button does what it does under Classic. */
+    /** Under Calm each button does what it does under the defaults. */
     @Test
-    fun eachButtonWorksUnderClean() = GlobalScope.promise {
-        withTopBarShell(style = ShellStyle.Clean) { root, handle, persister ->
+    fun eachButtonWorksUnderCalm() = GlobalScope.promise {
+        withTopBarShell(style = ShellStyle.Calm) { root, handle, persister ->
             // Appearance cycle: Dark → Light → Auto, persisted, label follows.
             root.appearanceCycleButton().click0()
             waitUntil("appearance cycled to Light") { persistedAppearance(persister) == Appearance.Light }
@@ -326,23 +343,22 @@ class CleanTopBarTest {
             root.appearanceCycleButton().click0()
             waitUntil("appearance cycled to Auto") { persistedAppearance(persister) == Appearance.Auto }
 
-            // Theme manager: opens, and its button reads as pressed.
+            // Themes and appearance: opens on Themes, and its button reads as pressed.
             resetRightPanels(handle)
-            root.trailingButton("Theme manager").click0()
+            root.trailingButton(APPEARANCE_PANE_BUTTON_TITLE).click0()
             waitUntil("theme manager open") {
                 isThemeManagerSidebarOpen() && document.querySelector(".dt-theme-card") != null
             }
-            waitUntil("theme manager button pressed") {
-                root.trailingButton("Theme manager").classList.contains("dt-active")
+            waitUntil("palette button pressed") {
+                root.trailingButton(APPEARANCE_PANE_BUTTON_TITLE).classList.contains("dt-active")
             }
 
-            // "Aa": the Appearance sidebar.
-            resetRightPanels(handle)
-            root.trailingButton("Appearance").click0()
-            waitUntil("Appearance sidebar open") {
-                isSettingsSidebarOpen() &&
-                    root.querySelector(".dt-settings-sidebar-title")?.textContent == "Appearance"
+            // Its Appearance tab is where the settings live now.
+            (document.querySelector(".dt-appearance-tab[data-dt-appearance-tab=\"appearance\"]") as HTMLElement).click0()
+            waitUntil("Appearance settings shown") {
+                document.querySelector(".dt-settings-group[data-dt-group=\"mode-style\"]") != null
             }
+            assertTrue(!isSettingsSidebarOpen(), "the settings live in the pane, not a separate sidebar")
 
             // App settings: the app's own sidebar content.
             resetRightPanels(handle)
@@ -364,43 +380,69 @@ class CleanTopBarTest {
         }
     }
 
-    /** A style switch at runtime rebuilds the top bar, both ways, and persists. */
+    /**
+     * A style switch at runtime restamps `:root` in place, both ways, and
+     * persists it as the active mode's entry. The top bar is not rebuilt (the
+     * stylesheet draws the style from the stamps; only a navigation-surface
+     * change rebuilds the chrome) and keeps the same buttons.
+     */
     @Test
-    fun switchingStyleAtRuntimeRebuildsTheTopBar() = GlobalScope.promise {
+    fun switchingStyleAtRuntimeRestampsWithoutRebuildingTheTopBar() = GlobalScope.promise {
         withTopBarShell { root, handle, persister ->
             assertEquals(TRAILING, root.topBarNames(".dt-topbar-trailing"))
-            val classicLayout = root.trailingButton("Layout")
+            val layoutButton = root.trailingButton("Layout")
 
-            handle.setShellStyle(ShellStyle.Clean)
-            waitUntil("Clean stamped") {
-                (document.documentElement as HTMLElement).getAttribute("data-dt-style") == "clean"
+            handle.setShellStyle(ShellStyle.Calm)
+            waitUntil("Calm stamped") {
+                (document.documentElement as HTMLElement).getAttribute("data-dt-windows") == "sheet"
             }
-            waitUntil("top bar rebuilt") { root.trailingButton("Layout") !== classicLayout }
+            assertNull((document.documentElement as HTMLElement).getAttribute("data-dt-style"), "the legacy stamp is never written")
+            assertEquals("blended", (document.documentElement as HTMLElement).getAttribute("data-dt-chrome"))
             assertEquals(TRAILING, root.topBarNames(".dt-topbar-trailing"))
-            waitUntil("Clean persisted") {
-                AppearanceShape.fromJson(persister.store[PersistKeys.APPEARANCE_SHAPE]).shellStyle == ShellStyle.Clean
+            waitUntil("Calm persisted for the active (dark) mode") {
+                ModeStyles.fromJson(persister.store[PersistKeys.APPEARANCE_SHAPE])?.dark == Looks.Calm.shape
             }
+            assertTrue(root.trailingButton("Layout") === layoutButton, "a style change must not rebuild the top bar")
 
             handle.setShellStyle(ShellStyle.Classic)
             waitUntil("Classic stamped") {
-                (document.documentElement as HTMLElement).getAttribute("data-dt-style") == null
+                (document.documentElement as HTMLElement).getAttribute("data-dt-windows") == null
             }
+            assertEquals(null, (document.documentElement as HTMLElement).getAttribute("data-dt-chrome"))
             assertEquals(TRAILING, root.topBarNames(".dt-topbar-trailing"))
+            waitUntil("Classic persisted for the active (dark) mode") {
+                ModeStyles.fromJson(persister.store[PersistKeys.APPEARANCE_SHAPE])?.dark == Looks.Classic.shape
+            }
         }
     }
 
     /**
-     * With the stylesheet loaded, Clean draws the design's ghost buttons on a
-     * 52px bar: 34×34, radius 8, 18px glyphs in the Clean dim, and an open
-     * button wears a chip. Classic keeps its own 30px buttons.
+     * With the stylesheet loaded, Blended chrome (alone, and as part of the
+     * Calm look) draws the design's ghost buttons on a 52px bar: 34×34,
+     * radius 8, 18px glyphs in the legible dim, and an open button wears a
+     * chip. The defaults keep their own 30px buttons.
      */
     @Test
-    fun cleanTopBarMetrics() = GlobalScope.promise {
+    fun blendedTopBarMetrics() = GlobalScope.promise {
         injectLunulaStyles()
         withTopBarShell { root, _, _ ->
-            assertEquals("30px", window.getComputedStyle(root.trailingButton("Layout")).width, "Classic is unchanged")
+            assertEquals("30px", window.getComputedStyle(root.trailingButton("Layout")).width, "the defaults are unchanged")
         }
-        withTopBarShell(style = ShellStyle.Clean) { root, handle, _ ->
+        // The new settings are per mode, so they live in the blob's mode entries.
+        val blendedBlob = ModeStyles.shapeBlob(
+            AppearanceShape(),
+            ModeStyles(dark = AppearanceShape(chromeStyle = ChromeStyle.Blended), light = AppearanceShape(chromeStyle = ChromeStyle.Blended)),
+        )
+        withTopBarShell(blob = blendedBlob) { root, _, _ ->
+            assertNull((document.documentElement as HTMLElement).getAttribute("data-dt-windows"), "Blended alone is not Calm")
+            val css = window.getComputedStyle(root.trailingButton("Layout"))
+            assertEquals("34px", css.width, "Blended alone draws the ghost buttons")
+            assertEquals("8px", css.borderTopLeftRadius)
+            // 9px block padding around the 34px row; the min-height token is
+            // the Spacing setting's (Compact here), not Blended's.
+            assertEquals(52.0, (root.querySelector(".dt-topbar") as HTMLElement).getBoundingClientRect().height)
+        }
+        withTopBarShell(style = ShellStyle.Calm) { root, handle, _ ->
             for (name in TRAILING.filter { it != "Before" && it != "After" && !it.startsWith("Appearance: ") } +
                 root.appearanceCycleButton().accessibleName()
             ) {
@@ -412,9 +454,9 @@ class CleanTopBarTest {
             val layout = root.trailingButton("Layout")
             val glyph = assertNotNull(layout.querySelector("svg"), "Layout has an SVG glyph")
             assertEquals("18px", window.getComputedStyle(glyph).width)
-            // The Clean dim, resolved the way the rule resolves it.
+            // The legible dim, resolved the way the rule resolves it.
             val probe = (document.createElement("span") as HTMLElement).also {
-                it.style.setProperty("color", "var(--dt-clean-text-dim)")
+                it.style.setProperty("color", "var(--dt-dim-text)")
                 root.querySelector(".dt-topbar")!!.appendChild(it)
             }
             assertEquals(window.getComputedStyle(probe).color, window.getComputedStyle(layout).color)
@@ -425,29 +467,29 @@ class CleanTopBarTest {
             assertEquals("border-box", barCss.boxSizing)
             assertEquals("52px", barCss.minHeight)
 
-            // Open, the theme manager's button wears the border-toned chip.
-            root.trailingButton("Theme manager").click0()
+            // Open, the palette button wears the border-toned chip.
+            root.trailingButton(APPEARANCE_PANE_BUTTON_TITLE).click0()
             // Let the manager finish opening before it is put away again, so
             // no half-open panel outlives this test.
             waitUntil("theme manager open") {
                 isThemeManagerSidebarOpen() && document.querySelector(".dt-theme-card") != null
             }
             waitUntil("theme manager button pressed") {
-                root.trailingButton("Theme manager").classList.contains("dt-active")
+                root.trailingButton(APPEARANCE_PANE_BUTTON_TITLE).classList.contains("dt-active")
             }
-            val open = window.getComputedStyle(root.trailingButton("Theme manager"))
+            val open = window.getComputedStyle(root.trailingButton(APPEARANCE_PANE_BUTTON_TITLE))
             assertTrue(open.backgroundColor != "rgba(0, 0, 0, 0)", "the open button shows a chip")
             assertEquals("none", open.boxShadow)
             resetRightPanels(handle)
         }
     }
 
-    /** Clean, the toolkit's own host: cycling to Dark paints the dark slot. */
+    /** Calm, the toolkit's own host: cycling to Dark paints the dark slot. */
     @Test
-    fun cyclingToDarkUnderCleanAppliesTheDarkSlot() = GlobalScope.promise {
+    fun cyclingToDarkUnderCalmAppliesTheDarkSlot() = GlobalScope.promise {
         injectLunulaStyles()
         withTopBarShell(
-            style = ShellStyle.Clean,
+            style = ShellStyle.Calm,
             seed = ThemeSnapshotV2(darkThemeName = CALM_DARK, lightThemeName = CALM_LIGHT, appearance = Appearance.Light),
         ) { root, _, persister ->
             cycleToDarkAndCheck(root)
@@ -455,15 +497,15 @@ class CleanTopBarTest {
         }
     }
 
-    /** Clean, an app-supplied settings host: cycling to Dark paints the dark slot too. */
+    /** Calm, an app-supplied settings host: cycling to Dark paints the dark slot too. */
     @Test
-    fun cyclingToDarkUnderCleanWithAnAppHostAppliesTheDarkSlot() = GlobalScope.promise {
+    fun cyclingToDarkUnderCalmWithAnAppHostAppliesTheDarkSlot() = GlobalScope.promise {
         injectLunulaStyles()
         val appState = DefaultThemeManagerState(
             darkThemeName = CALM_DARK,
             lightThemeName = CALM_LIGHT,
             appearance = Appearance.Light,
-            shellStyle = ShellStyle.Clean,
+            shellStyle = ShellStyle.Calm,
         )
         withTopBarShell(
             seed = ThemeSnapshotV2(darkThemeName = CALM_DARK, lightThemeName = CALM_LIGHT, appearance = Appearance.Light),

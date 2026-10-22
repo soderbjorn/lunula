@@ -19,9 +19,9 @@
  *  - [mix], only for the selection fallback ([Theme.effectiveSelection]) of a
  *    custom theme saved before the `selection` token existed (every built-in
  *    states its selection colour), and for the idle-window fallback;
- *  - [compositeOver] and [nudgeForContrast], for the Clean shell's derived
- *    tokens ([ResolvedTheme.accentSoftSolid], [ResolvedTheme.cleanTextDim],
- *    [ResolvedTheme.cleanAccentText]), which move a failing colour only as
+ *  - [compositeOver] and [nudgeForContrast], for the Calm look's derived
+ *    tokens ([ResolvedTheme.accentSoftSolid], [ResolvedTheme.legibleTextDim],
+ *    [ResolvedTheme.accentSoftText]), which move a failing colour only as
  *    far toward a legible one as the contrast floor requires.
  *
  * None of these invent a hue. Each one answers a question the theme author has
@@ -214,7 +214,7 @@ fun mix(over: Long, under: Long, amount: Double): Long {
  * a browser paints it: [over]'s alpha channel becomes the [mix] amount.
  *
  * Used by [Theme.effectiveAccentSoftSolid] to turn the translucent accent wash
- * into the opaque colour it actually shows on a surface, so the Clean shell
+ * into the opaque colour it actually shows on a surface, so the Calm look
  * and the contrast checks measure what the user sees.
  *
  * @param over the translucent colour (e.g. the accent at 15 % alpha).
@@ -238,8 +238,8 @@ fun compositeOver(over: Long, under: Long): Long {
  * (`mix(toward, color, k * step)`), so the result stays on the straight line
  * between the two and keeps as much of [color]'s hue as legibility allows.
  *
- * Callers: [Theme.resolve]'s Clean-only tokens ([ResolvedTheme.cleanTextDim],
- * [ResolvedTheme.cleanAccentText]).
+ * Callers: [Theme.resolve]'s legible tokens ([ResolvedTheme.legibleTextDim],
+ * [ResolvedTheme.accentSoftText]).
  *
  * @param color the starting colour (e.g. the theme's dim text).
  * @param toward the colour to move toward (e.g. the theme's body text).

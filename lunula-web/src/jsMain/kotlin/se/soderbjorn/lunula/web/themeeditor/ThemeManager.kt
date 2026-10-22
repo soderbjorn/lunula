@@ -10,8 +10,8 @@
  * This file owns the panel chrome (header, filter controls, Escape handling)
  * and the shared module state, then renders all themes as a single reflowing
  * thumbnail grid — no "Dark"/"Light" section headings (issue #107). The list is
- * ordered starred first, then (when the host's style is Clean) the calm themes,
- * then the house themes, then everything else alphabetically (see
+ * ordered starred first, then the house themes, then everything else
+ * alphabetically (see
  * [se.soderbjorn.lunula.core.orderThemesForPicker]).
  *
  * The header carries two filters over that list: a free-text box matching name,
@@ -34,14 +34,13 @@
 package se.soderbjorn.lunula.web.themeeditor
 
 import se.soderbjorn.lunula.core.SelectionStyle
-import se.soderbjorn.lunula.core.ShellStyle
 import se.soderbjorn.lunula.core.Theme
 import se.soderbjorn.lunula.core.ThemeCategory
 import se.soderbjorn.lunula.core.allThemes
 import se.soderbjorn.lunula.core.argbToCss
 import se.soderbjorn.lunula.core.builtinTheme
 import se.soderbjorn.lunula.core.filterThemesForPicker
-import se.soderbjorn.lunula.web.appliedShellStyle
+import se.soderbjorn.lunula.web.appliedAppearance
 import se.soderbjorn.lunula.web.isDarkActive
 import se.soderbjorn.lunula.web.layout.PaneMenuItem
 import se.soderbjorn.lunula.web.layout.PaneMenuSpec
@@ -487,10 +486,8 @@ internal fun pokeManager() {
 /**
  * Renders the theme catalog into [container] as a single reflowing thumbnail
  * grid — one flat list with no "Dark"/"Light" section headings (issue #107).
- * The themes are ordered starred first, then — when the resolved shell style
- * is [ShellStyle.Clean] (read from `:root` by [appliedShellStyle], so an app or
- * brand default counts) — the calm themes drawn for that style, then the house
- * themes, then the rest by name, and narrowed by the header's category dropdown and filter box, all by
+ * The themes are ordered starred first, then the house themes, then the rest
+ * by name, and narrowed by the header's category dropdown and filter box, all by
  * [filterThemesForPicker]; each card is built by [renderThemeCard].
  * The grid packs as many thumbnails per row as the (resizable) sidebar width
  * allows. The appearance (Auto/Dark/Light) is chosen from the app's toolbar,
@@ -511,9 +508,6 @@ private fun renderThemeList(container: HTMLElement, onOpen: (String, Boolean) ->
         favorites = host.favoriteThemeNames,
         category = themeFilterCategory,
         query = themeFilterQuery,
-        // The resolved style, as stamped on :root — not host.shellStyle, which
-        // is null when Clean comes from an app or brand default.
-        calmFirst = appliedShellStyle(document.documentElement as HTMLElement) == ShellStyle.Clean,
     )
     if (matching.isEmpty()) {
         container.appendChild(buildNoThemesMatchRow())
@@ -686,7 +680,9 @@ private const val TAB_RADIUS_SCALE = 0.30
  * Two things beyond the palette decide how the real shell looks, and both are
  * honoured here rather than assumed:
  *
- *  - **Selection style** ([ThemeManagerHost.selectionStyle]). Under
+ *  - **Selection style**, as applied to `:root` ([appliedAppearance]). Under
+ *    [SelectionStyle.Soft] the same three surfaces take the opaque accent wash
+ *    with the accent's legible text and no ring. Under
  *    [SelectionStyle.Fill] the active tab, the active sidebar row and the
  *    focused pane's header are solid accent fields with `accentOn` type, and
  *    panes carry no outline; under [SelectionStyle.Tint] the same three
@@ -694,7 +690,7 @@ private const val TAB_RADIUS_SCALE = 0.30
  *    keeps its accent outline and glow. Chrome-zone selections fill with
  *    `chromeAccent` and content-zone ones with `accent` — on a theme that
  *    splits those two, that difference *is* the look.
- *  - **Corner radius** ([ThemeManagerHost.cornerRadiusPx]), scaled down for the
+ *  - **Corner radius**, as applied to `:root`, scaled down for the
  *    thumbnail — see [PANE_RADIUS_SCALE].
  *
  * Density ([ThemeManagerHost.uiDensity]) is deliberately *not* reflected: its
@@ -715,8 +711,12 @@ private fun buildThemeThumb(theme: Theme): HTMLElement {
     val r = theme.resolve()
     fun c(v: Long) = argbToCss(v)
 
-    val fill = (host.selectionStyle ?: SelectionStyle.Default) == SelectionStyle.Fill
-    val cornerPx = host.cornerRadiusPx ?: DEFAULT_CORNER_RADIUS_PX
+    // The style in effect, as stamped on :root — the active mode's values,
+    // including an app or brand default the host never stored.
+    val applied = appliedAppearance(document.documentElement as HTMLElement)
+    val fill = applied.selectionStyle == SelectionStyle.Fill
+    val soft = applied.selectionStyle == SelectionStyle.Soft
+    val cornerPx = applied.cornerRadiusPx ?: DEFAULT_CORNER_RADIUS_PX
     val paneRadius = (cornerPx * PANE_RADIUS_SCALE).coerceIn(0.0, 6.0)
     val tabRadius = (minOf(cornerPx, TAB_RADIUS_CAP_PX) * TAB_RADIUS_SCALE).coerceIn(0.0, 4.0)
 
@@ -728,9 +728,17 @@ private fun buildThemeThumb(theme: Theme): HTMLElement {
     // The active tab and the active sidebar row are one treatment in two
     // places (`.dt-tab.dt-selected` / `.dt-sidebar-row.dt-active`), so they
     // share these two values rather than computing the same thing twice.
-    val chromeSelBg = if (fill) "background:${c(r.chromeAccent)}"
-        else "background:${c(r.chromeAccentSoft)};box-shadow:inset 0 0 0 1px ${c(r.chromeAccent)}"
-    val chromeSelFg = if (fill) c(r.chromeAccentOn) else c(r.chromeTextBright)
+    // Soft is the opaque wash with the accent's legible text, and no ring.
+    val chromeSelBg = when {
+        fill -> "background:${c(r.chromeAccent)}"
+        soft -> "background:${c(r.accentSoftSolid)}"
+        else -> "background:${c(r.chromeAccentSoft)};box-shadow:inset 0 0 0 1px ${c(r.chromeAccent)}"
+    }
+    val chromeSelFg = when {
+        fill -> c(r.chromeAccentOn)
+        soft -> c(r.accentSoftText)
+        else -> c(r.chromeTextBright)
+    }
 
     // ── Content zone: canvas, panes, pane content ───────────────────────
     val canvas = c(r.canvas)
@@ -738,16 +746,24 @@ private fun buildThemeThumb(theme: Theme): HTMLElement {
     val text = c(r.text)
     val textDim = c(r.textDim)
     // Focused pane header: solid accent under Fill, accent wash under Tint.
-    val headerSel = if (fill) "background:${c(r.accent)}" else "background:${c(r.accentSoft)}"
-    val headerSelFg = if (fill) c(r.accentOn) else c(r.textBright)
+    val headerSel = when {
+        fill -> "background:${c(r.accent)}"
+        soft -> "background:${c(r.accentSoftSolid)}"
+        else -> "background:${c(r.accentSoft)}"
+    }
+    val headerSelFg = when {
+        fill -> c(r.accentOn)
+        soft -> c(r.accentSoftText)
+        else -> c(r.textBright)
+    }
     // …and the resting header lifts to the sunken tone under Fill, exactly as
     // `:root[data-dt-selection="fill"] .dt-pane-header` does.
     val headerRest = if (fill) c(r.surfaceAlt) else surface
     // Fill drops the pane outline and the focus glow entirely — with a solid
     // header band doing the work, the ring is a second voice saying the same
     // word. Under Tint both are what marks the focused pane.
-    val paneRing = if (fill) "" else "box-shadow:inset 0 0 0 1px ${c(r.border)};"
-    val focusRing = if (fill) "" else
+    val paneRing = if (fill || soft) "" else "box-shadow:inset 0 0 0 1px ${c(r.border)};"
+    val focusRing = if (fill || soft) "" else
         "box-shadow:inset 0 0 0 1px ${c(r.accent)}, 0 0 5px -1px ${c(r.glow)};"
 
     val thumb = document.createElement("div") as HTMLElement

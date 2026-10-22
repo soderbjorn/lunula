@@ -40,11 +40,25 @@ private val shapeJson = Json { ignoreUnknownKeys = true }
  * @property selectionStyle  how selection is painted; `null` → [SelectionStyle.Default].
  * @property surfaceStyle    whether surfaces carry depth (shadows, sheen, glow,
  *   ambient wash) or stay flat; `null` → [SurfaceStyle.Default] ([SurfaceStyle.Depth]).
- * @property shellStyle      which shell composition to draw; `null` →
- *   [ShellStyle.Default] ([ShellStyle.Classic]).
+ * @property shellStyle      LEGACY look shorthand: a stored or brand-supplied
+ *   `shellStyle` (Classic / Calm) stands for the whole matching [Looks]
+ *   preset beneath this shape's own fields — see [lookLayer]. New code writes
+ *   the individual fields instead; `null` → no shorthand.
  * @property navigationMode  whether tabs are reached through the sidebar, a tab
  *   strip, or both; `null` → [NavigationMode.Default] ([NavigationMode.Both]).
+ *   Shared by both appearance modes, so it is ignored inside a [ModeStyles]
+ *   entry.
+ * @property chromeStyle     the chrome's colours and controls; `null` →
+ *   [ChromeStyle.Default] ([ChromeStyle.Themed]).
+ * @property windowLayout    cards or one sheet; `null` → [WindowLayout.Default]
+ *   ([WindowLayout.Cards]).
+ * @property focusStyle      how the active window is marked; `null` →
+ *   [FocusStyle.Default] ([FocusStyle.Accent]).
+ * @property labelCase       chrome label casing; `null` → [LabelCase.Default]
+ *   ([LabelCase.Uppercase]).
  * @see PersistKeys.APPEARANCE_SHAPE
+ * @see ModeStyles
+ * @see resolveAppearance
  */
 data class AppearanceShape(
     val cornerRadiusPx: Int? = null,
@@ -53,6 +67,10 @@ data class AppearanceShape(
     val surfaceStyle: SurfaceStyle? = null,
     val shellStyle: ShellStyle? = null,
     val navigationMode: NavigationMode? = null,
+    val chromeStyle: ChromeStyle? = null,
+    val windowLayout: WindowLayout? = null,
+    val focusStyle: FocusStyle? = null,
+    val labelCase: LabelCase? = null,
 ) {
     /**
      * Encodes to the persisted JSON object, omitting unset fields entirely.
@@ -70,6 +88,10 @@ data class AppearanceShape(
         surfaceStyle?.let { put("surfaceStyle", JsonPrimitive(it.cssValue)) }
         shellStyle?.let { put("shellStyle", JsonPrimitive(it.cssValue)) }
         navigationMode?.let { put("navigationMode", JsonPrimitive(it.cssValue)) }
+        chromeStyle?.let { put("chromeStyle", JsonPrimitive(it.cssValue)) }
+        windowLayout?.let { put("windowLayout", JsonPrimitive(it.cssValue)) }
+        focusStyle?.let { put("focusStyle", JsonPrimitive(it.cssValue)) }
+        labelCase?.let { put("labelCase", JsonPrimitive(it.cssValue)) }
     }
 
     /** The persisted form as a JSON string, for flat key/value backends. */
@@ -78,7 +100,72 @@ data class AppearanceShape(
     /** True when the user has expressed no preference at all. */
     val isEmpty: Boolean
         get() = cornerRadiusPx == null && uiDensity == null && selectionStyle == null &&
-            surfaceStyle == null && shellStyle == null && navigationMode == null
+            surfaceStyle == null && shellStyle == null && navigationMode == null &&
+            chromeStyle == null && windowLayout == null && focusStyle == null && labelCase == null
+
+    /**
+     * The legacy look shorthand as a layer of its own: the [Looks] preset named
+     * by [shellStyle] (Classic or Calm), or an empty shape when there is none.
+     *
+     * Placed directly beneath this shape in [resolveAppearance]'s ladder, so a
+     * brand's `defaultStyle: clean`, a page's `?style=clean` or a user who
+     * picked Calm before the individual settings existed all still get the
+     * whole Calm bundle, while any individual field set beside the shorthand
+     * still wins over it.
+     *
+     * @return the preset's shape, or `AppearanceShape()` when [shellStyle] is null.
+     * @see Looks.forShellStyle
+     */
+    fun lookLayer(): AppearanceShape = shellStyle?.let { Looks.forShellStyle(it).shape } ?: AppearanceShape()
+
+    /**
+     * This shape with the legacy [shellStyle] shorthand folded into its
+     * fields: each field this shape leaves unset takes the named look's value,
+     * and the shorthand itself is cleared.
+     *
+     * How a user's pre-split pick ("Calm", once saved as "clean") becomes ordinary per-mode values
+     * the first time they edit a style setting, so changing one setting keeps
+     * the rest of the look they had.
+     *
+     * @return the expanded shape, without [shellStyle].
+     * @see lookLayer
+     */
+    fun withLookExpanded(): AppearanceShape {
+        val look = lookLayer()
+        return AppearanceShape(
+            cornerRadiusPx = cornerRadiusPx ?: look.cornerRadiusPx,
+            uiDensity = uiDensity ?: look.uiDensity,
+            selectionStyle = selectionStyle ?: look.selectionStyle,
+            surfaceStyle = surfaceStyle ?: look.surfaceStyle,
+            navigationMode = navigationMode,
+            chromeStyle = chromeStyle ?: look.chromeStyle,
+            windowLayout = windowLayout ?: look.windowLayout,
+            focusStyle = focusStyle ?: look.focusStyle,
+            labelCase = labelCase ?: look.labelCase,
+        )
+    }
+
+    /**
+     * This shape with every per-mode style field (and the legacy [shellStyle]
+     * shorthand) cleared, keeping only what is shared by both appearance modes:
+     * [navigationMode].
+     *
+     * Used when writing the persisted blob, whose top level holds the shared
+     * fields while [ModeStyles] holds the per-mode ones.
+     *
+     * @return the shared part of this shape.
+     */
+    fun sharedPart(): AppearanceShape = AppearanceShape(navigationMode = navigationMode)
+
+    /**
+     * This shape with [navigationMode] and the legacy [shellStyle] cleared,
+     * keeping only the fields remembered per appearance mode.
+     *
+     * Used to seed a [ModeStyles] entry from a legacy single-mode shape.
+     *
+     * @return the per-mode part of this shape.
+     */
+    fun styleOnly(): AppearanceShape = copy(navigationMode = null, shellStyle = null)
 
     companion object {
         /**
@@ -97,6 +184,20 @@ data class AppearanceShape(
             val text = raw?.takeIf { it.isNotBlank() } ?: return AppearanceShape()
             val obj = runCatching { shapeJson.parseToJsonElement(text) as? JsonObject }
                 .getOrNull() ?: return AppearanceShape()
+            return fromJsonObject(obj)
+        }
+
+        /**
+         * Decodes an already-parsed shape object, with the same per-field
+         * leniency as [fromJson].
+         *
+         * Called by [fromJson] and by [ModeStyles.fromJson] for each mode's
+         * entry.
+         *
+         * @param obj the JSON object holding the shape's fields.
+         * @return the decoded preferences.
+         */
+        fun fromJsonObject(obj: JsonObject): AppearanceShape {
             val radius = (obj["cornerRadiusPx"] as? JsonPrimitive)?.intOrNull
                 ?.takeIf { it in 0..64 }
             val density = UiDensity.fromRaw((obj["uiDensity"] as? JsonPrimitive)?.contentOrNull)
@@ -112,6 +213,7 @@ data class AppearanceShape(
             val navigation = NavigationMode.fromRaw(
                 (obj["navigationMode"] as? JsonPrimitive)?.contentOrNull
             )
+            fun str(key: String): String? = (obj[key] as? JsonPrimitive)?.contentOrNull
             return AppearanceShape(
                 cornerRadiusPx = radius,
                 uiDensity = density,
@@ -119,6 +221,10 @@ data class AppearanceShape(
                 surfaceStyle = surface,
                 shellStyle = shell,
                 navigationMode = navigation,
+                chromeStyle = ChromeStyle.fromRaw(str("chromeStyle")),
+                windowLayout = WindowLayout.fromRaw(str("windowLayout")),
+                focusStyle = FocusStyle.fromRaw(str("focusStyle")),
+                labelCase = LabelCase.fromRaw(str("labelCase")),
             )
         }
     }

@@ -99,6 +99,11 @@ class DefaultThemeManagerState(
     var shellStyle: ShellStyle? = null,
     /** Tab-navigation override (null → [NavigationMode.Default], i.e. Both). */
     var navigationMode: NavigationMode? = null,
+    /**
+     * The per-mode style settings (null → never edited; the single-mode fields
+     * above then stand for both modes). See [ThemeManagerHost.modeStyles].
+     */
+    var modeStyles: se.soderbjorn.lunula.core.ModeStyles? = null,
     /** Per-app custom-titlebar opt-in (Electron `hiddenInset` etc.). */
     var useCustomTitleBar: Boolean = false,
 )
@@ -144,6 +149,7 @@ open class DefaultThemeManagerHost(
     override val surfaceStyle: SurfaceStyle? get() = state.surfaceStyle
     override val shellStyle: ShellStyle? get() = state.shellStyle
     override val navigationMode: NavigationMode? get() = state.navigationMode
+    override val modeStyles: se.soderbjorn.lunula.core.ModeStyles? get() = state.modeStyles
     override val useCustomTitleBar: Boolean get() = state.useCustomTitleBar
 
     override fun setDarkThemeName(name: String) { state.darkThemeName = name; onChange() }
@@ -187,6 +193,7 @@ open class DefaultThemeManagerHost(
     override fun setSurfaceStyle(value: SurfaceStyle?) { state.surfaceStyle = value; onChange() }
     override fun setShellStyle(value: ShellStyle?) { state.shellStyle = value; onChange() }
     override fun setNavigationMode(value: NavigationMode?) { state.navigationMode = value; onChange() }
+    override fun setModeStyles(value: se.soderbjorn.lunula.core.ModeStyles?) { state.modeStyles = value; onChange() }
     override fun setUseCustomTitleBar(value: Boolean) { state.useCustomTitleBar = value; onChange() }
 }
 

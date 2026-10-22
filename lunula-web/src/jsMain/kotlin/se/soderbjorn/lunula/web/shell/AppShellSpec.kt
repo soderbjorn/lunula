@@ -1178,10 +1178,22 @@ data class AppShellSpec(
      */
     val defaultDisplayFontSizePx: () -> Int? = { null },
     /**
+     * Optional factory for an app's own appearance controls, shown as an extra
+     * section in the Appearance tab's "Shared by both modes" group, above
+     * Fonts. Invoked on every render of the tab; the app owns the section's
+     * contents and persistence.
+     *
+     * For appearance options only this app has (a terminal's cursor style,
+     * an editor's line height), so they sit with the rest of the appearance
+     * settings rather than in the app's own settings. `null` (the default)
+     * adds nothing.
+     */
+    val appAppearanceContent: (() -> HTMLElement)? = null,
+    /**
      * Optional factory returning the body element of an app-supplied
      * "App settings" sidebar. When non-null, [mountAppShell] adds a
      * gear-style icon to the trailing topbar cluster, immediately to
-     * the right of the Appearance gear; clicking it opens a right-side
+     * the right of the Appearance pane's palette button; clicking it opens a right-side
      * sidebar whose body is whatever this factory returns. The factory
      * is invoked each time the sidebar opens, so apps can rebuild the
      * body against live state.
@@ -1413,24 +1425,36 @@ interface AppShellHandle {
     fun setNavigationMode(mode: NavigationMode?) {}
 
     /**
-     * Changes the user's shell style (Classic / Clean) and redraws the chrome
-     * to match, without a remount: `data-dt-style` is restamped on `:root`
-     * and the chrome is rebuilt. Both styles show the same top-bar buttons
-     * in the same order; only how they are drawn differs.
+     * Applies the look a legacy Classic / Calm value names
+     * ([se.soderbjorn.lunula.core.Looks]) to the ACTIVE appearance mode's
+     * style settings, exactly like picking it on the Appearance tab's Look
+     * row, and repaints in place. The other mode keeps its own settings.
      *
-     * Persists exactly like [setNavigationMode]: through
-     * [AppShellSpec.settingsHost] when the app supplies one, otherwise
-     * through the toolkit's own theme host under
+     * Persists like [setNavigationMode]: through [AppShellSpec.settingsHost]'s
+     * `setModeStyles` when the app supplies one, otherwise through the
+     * toolkit's own theme host under
      * [se.soderbjorn.lunula.core.PersistKeys.APPEARANCE_SHAPE].
      *
-     * Called by a settings control or by an app reacting to its own settings
-     * (e.g. a `style=` query parameter). The default implementation is a
-     * no-op so hand-written fakes of this interface keep compiling.
+     * The default implementation is a no-op so hand-written fakes of this
+     * interface keep compiling.
      *
-     * @param style the new style, or `null` to clear the user's choice and
-     *   fall back to the app default.
+     * @param style the look to apply, or `null` to clear the active mode's
+     *   settings back to the app default.
      */
     fun setShellStyle(style: ShellStyle?) {}
+
+    /**
+     * Opens the Appearance pane on [tab] — Themes or Appearance — or switches
+     * an open pane to it, closing any other right-side panel first.
+     *
+     * For an app's own UI that links to the toolkit's appearance settings
+     * (e.g. "Themes" and "Appearance" buttons in its settings), instead of
+     * clicking the top-bar button. The default implementation is a no-op so
+     * hand-written fakes of this interface keep compiling.
+     *
+     * @param tab the tab to show.
+     */
+    fun openAppearance(tab: se.soderbjorn.lunula.web.themeeditor.AppearanceTab) {}
 
     /**
      * Triggers a full shell rerender — top bar, sidebars, bottom bar

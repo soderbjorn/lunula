@@ -1,10 +1,15 @@
 /* ThemeWindowIdleTest.kt
- * Covers the optional `windowIdle` token added to [Theme] for the Clean shell
+ * Covers the optional `windowIdle` token added to [Theme] for the Calm look
  * (LNA-18): its tone-aware derivation from `surface` when unset, the declared
  * value winning when set, its editor wiring through [Theme.token] /
  * [Theme.withToken], and its absence from the serialized form of a theme that
  * leaves it out (themes.json is shared between Lunula apps). Also covers the
- * derived focused-window ring that goes with it ([Theme.effectiveWindowRing]).
+ * derived focused-window ring that goes with it ([Theme.effectiveWindowRing]),
+ * and the focused window's fill under the Tone active-window setting
+ * ([Theme.effectiveWindowActive] / [ResolvedTheme.windowActive]): lifted from
+ * `surface` toward `text` until it stands [Theme.WINDOW_TONE_MIN_CONTRAST]
+ * apart from the idle fill, but only for a theme that leaves `windowIdle`
+ * undeclared; a theme that declares it keeps `surface` exactly.
  */
 package se.soderbjorn.lunula.core
 
@@ -101,5 +106,74 @@ class ThemeWindowIdleTest {
         val snap = ThemeSnapshotV2(customThemes = listOf(custom))
         val back = ThemeSnapshotV2.fromStrings(null, snap.customThemesJson())
         assertEquals(listOf(custom), back.customThemes)
+    }
+
+    // ── windowActive ──
+
+    @Test
+    fun everyUndeclaredDarkBuiltinsActiveWindowStandsApartFromIdle() {
+        val failures = mutableListOf<String>()
+        var checked = 0
+        for (t in builtinThemes.filter { it.windowIdle == null && it.isDarkToned }) {
+            val r = t.resolve()
+            val c = contrastRatio(r.windowActive, r.windowIdle)
+            if (c < Theme.WINDOW_TONE_MIN_CONTRAST) {
+                failures += "${t.name}: windowActive ${argbToHex(r.windowActive)} vs idle ${argbToHex(r.windowIdle)} is $c"
+            }
+            checked++
+        }
+        assertTrue(checked > 0, "fixture: some dark built-ins must leave windowIdle undeclared")
+        assertTrue(failures.isEmpty(), failures.joinToString("\n"))
+    }
+
+    @Test
+    fun aDeclaredWindowIdleKeepsTheActiveWindowAtSurface() {
+        val declared = builtinThemes.filter { it.windowIdle != null }
+        assertTrue(declared.isNotEmpty(), "fixture: the Calm themes declare windowIdle")
+        for (t in declared) {
+            assertEquals(t.surface, t.effectiveWindowActive, t.name)
+            assertEquals(hexToArgb(t.surface), t.resolve().windowActive, t.name)
+        }
+        // Even when the declared pair is identical: hand-tuned means untouched.
+        val same = base.copy(windowIdle = base.surface)
+        assertEquals(base.surface, same.effectiveWindowActive)
+    }
+
+    @Test
+    fun lightBuiltinsKeepTheActiveWindowAtSurface() {
+        val light = builtinThemes.filter { !it.isDarkToned }
+        assertTrue(light.isNotEmpty())
+        for (t in light) {
+            assertEquals(hexToArgb(t.surface), t.resolve().windowActive, t.name)
+        }
+    }
+
+    @Test
+    fun theLiftGoesTowardTextAndOnlyAsFarAsNeeded() {
+        // Lunamux Classic Dark: surface and derived idle nearly identical.
+        val t = builtinTheme("Lunamux Classic Dark") ?: base.copy(bg = "#08110c", surface = "#0c1611")
+        val r = t.resolve()
+        val surface = hexToArgb(t.surface)
+        assertTrue(r.windowActive != surface, "a too-close pair must be lifted")
+        assertTrue(
+            contrastRatio(r.windowActive, hexToArgb(t.text)) < contrastRatio(surface, hexToArgb(t.text)),
+            "the lift must lean toward text",
+        )
+        // The step before the result still fell short.
+        val step = Theme.WINDOW_TONE_STEP
+        val k = (1..kotlin.math.round(1 / step).toInt())
+            .first { mix(hexToArgb(t.text), surface, it * step) == r.windowActive }
+        val previous = mix(hexToArgb(t.text), surface, (k - 1) * step)
+        assertTrue(contrastRatio(previous, r.windowIdle) < Theme.WINDOW_TONE_MIN_CONTRAST, "the step before must still fail")
+    }
+
+    @Test
+    fun aDarkPairAlreadyApartKeepsSurface() {
+        val dark = base.copy(bg = "#000000", surface = "#3a3a3a")
+        assertTrue(dark.isDarkToned)
+        val r = dark.resolve()
+        if (contrastRatio(hexToArgb(dark.surface), r.windowIdle) >= Theme.WINDOW_TONE_MIN_CONTRAST) {
+            assertEquals(dark.surface, dark.effectiveWindowActive)
+        }
     }
 }

@@ -1,23 +1,28 @@
 /*
  * AppearanceStyleNavRowsTest.kt (jsTest)
  *
- * Tests for the Style (Classic / Clean) and Navigation (Sidebar / Tab strip /
- * Both) rows at the top of the Appearance settings (LNA-24), driven through a
- * real [mountAppShell] with an in-memory [Persister]:
+ * Tests for the Appearance settings panel's two groups, driven through a real
+ * [mountAppShell] with an in-memory [Persister] and opened the way the shell
+ * now opens them: the Appearance pane's Appearance tab
+ * ([AppShellHandle.openAppearance]).
  *
- *  - both rows ring the RESOLVED value, including an app default the user
- *    never picked;
- *  - a click applies live (`data-dt-style` / `data-dt-nav` on `:root`) and is
- *    persisted under [PersistKeys.APPEARANCE_SHAPE];
- *  - Selection and Surfaces are real disabled buttons only while Clean is in
- *    effect, and their stored values are never touched;
- *  - the Theme Manager's calm-first ordering follows the resolved style, so a
- *    Clean app default counts.
+ *  - "Style for dark mode" / "Style for light mode" (`data-dt-group="mode-style"`):
+ *    the Presets block (a Classic and a Calm card, and a status line naming
+ *    the matching preset or "custom") and the
+ *    per-setting rows (chrome, windows, focus, labels, selection, surfaces,
+ *    corner roundness, spacing), remembered per appearance mode;
+ *  - "Shared by both modes" (`data-dt-group="shared"`): Navigation and Fonts.
+ *
+ * Checked: the rows ring the RESOLVED values (including an app default the
+ * user never picked), a pick applies live on `:root` and is persisted in the
+ * shape blob under [PersistKeys.APPEARANCE_SHAPE] as per-mode entries, the
+ * Presets status reads custom after one setting changes, editing one mode leaves
+ * the other's entry alone, and the theme picker's order does not depend on the
+ * style.
  *
  * `lunula.css` is not loaded in karma, so every assertion is structural.
  *
  * @see se.soderbjorn.lunula.web.settings.SettingsSidebarSpec
- * @see se.soderbjorn.lunula.web.appliedShellStyle
  */
 package se.soderbjorn.lunula.web.shell
 
@@ -29,22 +34,22 @@ import org.w3c.dom.HTMLButtonElement
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.events.MouseEvent
 import org.w3c.dom.events.MouseEventInit
+import se.soderbjorn.lunula.core.Appearance
 import se.soderbjorn.lunula.core.AppearanceShape
+import se.soderbjorn.lunula.core.ChromeStyle
+import se.soderbjorn.lunula.core.LabelCase
+import se.soderbjorn.lunula.core.Looks
+import se.soderbjorn.lunula.core.ModeStyles
 import se.soderbjorn.lunula.core.NavigationMode
 import se.soderbjorn.lunula.core.PersistKeys
 import se.soderbjorn.lunula.core.Persister
-import se.soderbjorn.lunula.core.SelectionStyle
 import se.soderbjorn.lunula.core.ShellStyle
-import se.soderbjorn.lunula.core.SurfaceStyle
+import se.soderbjorn.lunula.core.ThemeSnapshotV2
 import se.soderbjorn.lunula.core.builtinTheme
 import se.soderbjorn.lunula.core.isCalmTheme
-import se.soderbjorn.lunula.web.appliedShellStyle
-import se.soderbjorn.lunula.web.applyShellStyle
-import se.soderbjorn.lunula.web.settings.CLEAN_LOCKED_NOTE
 import se.soderbjorn.lunula.web.settings.closeSettingsSidebar
-import se.soderbjorn.lunula.web.settings.toggleSettingsSidebar
+import se.soderbjorn.lunula.web.themeeditor.AppearanceTab
 import se.soderbjorn.lunula.web.themeeditor.closeThemeManager
-import se.soderbjorn.lunula.web.themeeditor.closeThemeManagerSidebar
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -60,8 +65,30 @@ private class RowsMemoryPersister(seed: Map<String, String> = emptyMap()) : Pers
     override suspend fun read(key: String): String? = store[key]
     override suspend fun write(key: String, value: String) { store[key] = value }
 
-    /** The persisted shape, decoded (empty when nothing is stored). */
+    /** The persisted shape's top-level (shared and legacy) fields. */
     fun shape(): AppearanceShape = AppearanceShape.fromJson(store[PersistKeys.APPEARANCE_SHAPE])
+
+    /** The persisted per-mode entries, or `null` when none were written. */
+    fun modes(): ModeStyles? = ModeStyles.fromJson(store[PersistKeys.APPEARANCE_SHAPE])
+}
+
+/**
+ * A persister seeded with a theme selection in [appearance] (so the active mode
+ * is known, whatever the test browser's colour scheme) and, optionally, a
+ * shape blob.
+ *
+ * @param appearance the appearance to start in.
+ * @param shapeBlob  the stored [PersistKeys.APPEARANCE_SHAPE], or `null`.
+ * @return the persister.
+ */
+private fun seeded(appearance: Appearance = Appearance.Dark, shapeBlob: String? = null): RowsMemoryPersister {
+    val snap = ThemeSnapshotV2(appearance = appearance)
+    val seed = mutableMapOf(
+        PersistKeys.THEME_V2_SELECTION to snap.selectionJson(),
+        PersistKeys.THEME_V2_CUSTOM to snap.customThemesJson(),
+    )
+    if (shapeBlob != null) seed[PersistKeys.APPEARANCE_SHAPE] = shapeBlob
+    return RowsMemoryPersister(seed)
 }
 
 /** Polls [condition] every tick until it holds or ~3s elapse. */
@@ -76,9 +103,19 @@ private suspend fun until(what: String, condition: () -> Boolean) {
 /** The document root, where the shell stamps its `data-dt-*` attributes. */
 private fun rootEl(): HTMLElement = document.documentElement as HTMLElement
 
+/** The settings group stamped `data-dt-group="[id]"`, if mounted. */
+private fun group(id: String): HTMLElement? =
+    document.querySelector(".dt-settings-sidebar-sections .dt-settings-group[data-dt-group=\"$id\"]") as? HTMLElement
+
 /** The settings section stamped `data-dt-setting="[id]"`, if mounted. */
 private fun settingSection(id: String): HTMLElement? =
     document.querySelector(".dt-settings-sidebar-sections [data-dt-setting=\"$id\"]") as? HTMLElement
+
+/** The `data-dt-setting` ids inside [groupEl], in render order. */
+private fun settingIds(groupEl: HTMLElement): List<String> {
+    val list = groupEl.querySelectorAll("[data-dt-setting]")
+    return (0 until list.length).map { (list.item(it) as HTMLElement).getAttribute("data-dt-setting")!! }
+}
 
 /** The choice buttons of setting [id], in render order. */
 private fun choiceButtons(id: String): List<HTMLButtonElement> {
@@ -96,46 +133,61 @@ private fun choice(id: String, label: String): HTMLButtonElement =
     choiceButtons(id).firstOrNull { it.textContent == label }
         ?: fail("no '$label' choice in the $id row")
 
-/** True when every choice in [id] is a disabled button marked aria-disabled. */
-private fun isLocked(id: String): Boolean {
-    val buttons = choiceButtons(id)
-    return buttons.isNotEmpty() && buttons.all { it.disabled && it.getAttribute("aria-disabled") == "true" }
+/** The Presets block's cards, in render order. */
+private fun presetCards(): List<HTMLButtonElement> {
+    val section = settingSection("look") ?: return emptyList()
+    val list = section.querySelectorAll("button.dt-settings-preset-btn")
+    return (0 until list.length).map { list.item(it) as HTMLButtonElement }
 }
 
-/** True when no choice in [id] is disabled and none carries aria-disabled. */
-private fun isUnlocked(id: String): Boolean {
-    val buttons = choiceButtons(id)
-    return buttons.isNotEmpty() && buttons.none { it.disabled || it.hasAttribute("aria-disabled") }
-}
+/** The Presets block's card for look id [id] (`classic` or `calm`); fails when absent. */
+private fun lookButton(id: String): HTMLButtonElement =
+    presetCards().firstOrNull { it.getAttribute("data-dt-look") == id }
+        ?: fail("no '$id' card in the Presets block")
 
-/** The muted "set by Clean" note under setting [id], or `null`. */
-private fun lockedNote(id: String): String? =
-    (settingSection(id)?.querySelector(".dt-settings-locked-note") as? HTMLElement)?.textContent
+/** The look ids of the selected preset cards (at most one is expected). */
+private fun selectedPresets(): List<String> =
+    presetCards().filter { it.classList.contains("dt-selected") }.map { it.getAttribute("data-dt-look")!! }
+
+/** The look ids of the preset cards carrying the "In use" badge. */
+private fun badgedPresets(): List<String> =
+    presetCards().filter { it.querySelector(".dt-settings-preset-badge") != null }.map { it.getAttribute("data-dt-look")!! }
+
+/** The Presets block's status line, or `null` when not mounted. */
+private fun presetStatus(): HTMLElement? =
+    settingSection("look")?.querySelector(".dt-settings-preset-status") as? HTMLElement
+
+/** The look id the status line names (`classic`, `calm` or `custom`), or `null`. */
+private fun presetStatusLook(): String? = presetStatus()?.getAttribute("data-dt-look")
+
+/** The style group's heading text, or `null` when not mounted. */
+private fun styleHeading(): String? =
+    (group("mode-style")?.querySelector(".dt-settings-group-title") as? HTMLElement)?.textContent
 
 private fun HTMLElement.dispatchClick() {
     dispatchEvent(MouseEvent("click", MouseEventInit(bubbles = true, cancelable = true)))
 }
 
 /**
- * Mounts a fresh shell, opens the Appearance settings once the chrome is up,
- * and runs [body]. The root is removed and the sidebar closed afterwards.
+ * Mounts a fresh shell, opens the Appearance pane on its Appearance tab once
+ * the chrome is up, and runs [body]. The root is removed and the pane closed
+ * (and set back to its Themes tab) afterwards.
  *
- * @param persister  the shell's persister (seed it to restore a shape).
- * @param appDefault the app's [AppShellSpec.defaultAppearanceShape].
- * @param openSettings whether to open the Appearance settings before [body].
- * @param body       the test, given the root and the handle.
+ * @param persister    the shell's persister (seed it to restore a shape).
+ * @param appDefault   the app's [AppShellSpec.defaultAppearanceShape].
+ * @param openSettings whether to open the Appearance tab before [body].
+ * @param body         the test, given the root and the handle.
  */
 private suspend fun withSettingsOpen(
-    persister: Persister = RowsMemoryPersister(),
+    persister: Persister = seeded(),
     appDefault: AppearanceShape = AppearanceShape(),
     openSettings: Boolean = true,
     body: suspend (root: HTMLElement, handle: AppShellHandle) -> Unit,
 ) {
     // The right-slot panels are module-wide state: start from all closed, so
-    // an earlier test (in any file) that left one open cannot turn the
-    // toggle below into a close, or take the slot first.
+    // an earlier test (in any file) that left one open cannot take the slot.
     closeSettingsSidebar()
-    closeThemeManagerSidebar()
+    resetAppearancePane()
     val root = document.createElement("div") as HTMLElement
     document.body!!.appendChild(root)
     try {
@@ -149,141 +201,246 @@ private suspend fun withSettingsOpen(
                 defaultAppearanceShape = { appDefault },
             ),
         )
-        until("topbar rendered") { root.querySelector("button[title=\"Theme manager\"]") != null }
+        until("topbar rendered") { root.querySelector(APPEARANCE_PANE_BUTTON) != null }
         if (openSettings) {
-            toggleSettingsSidebar { handle.refresh() }
-            until("settings rows rendered") { settingSection("style") != null && settingSection("surfaces") != null }
+            handle.openAppearance(AppearanceTab.Appearance)
+            until("settings rows rendered") { settingSection("look") != null && settingSection("navigation") != null }
         }
         body(root, handle)
         handle.dispose()
     } finally {
         closeSettingsSidebar()
-        closeThemeManagerSidebar()
+        resetAppearancePane()
         closeThemeManager()
         root.remove()
     }
 }
 
+/** The Appearance settings' two groups, driven through a mounted shell. */
 class AppearanceStyleNavRowsTest {
 
     /** Leaves `:root` as later tests (in any file) expect to find it. */
     @AfterTest
     fun reset() {
         closeSettingsSidebar()
-        rootEl().removeAttribute("data-dt-style")
+        resetAppearancePane()
+        clearStyleStamps()
         rootEl().removeAttribute("data-dt-nav")
-        rootEl().removeAttribute("data-dt-selection")
-        rootEl().removeAttribute("data-dt-surface")
         leftSidebarController.setInitial(open = true, widthPx = leftSidebarController.widthPx)
     }
 
-    /** Nothing stored, no app default: Classic and Both, nothing locked. */
+    /** Two groups, in order, with the style rows in the first and Navigation in the second. */
     @Test
-    fun rowsLeadThePanelAndRingTheToolkitDefaults() = GlobalScope.promise {
+    fun thePanelHasAStyleGroupThenASharedGroup() = GlobalScope.promise {
         withSettingsOpen { _, _ ->
-            val sections = document.querySelectorAll(".dt-settings-sidebar-sections > .dt-settings-section")
-            assertEquals("style", (sections.item(0) as HTMLElement).getAttribute("data-dt-setting"))
-            assertEquals("navigation", (sections.item(1) as HTMLElement).getAttribute("data-dt-setting"))
-            assertEquals(listOf("Classic", "Clean"), choiceButtons("style").map { it.textContent })
-            assertEquals(listOf("Sidebar", "Tab strip", "Both"), choiceButtons("navigation").map { it.textContent })
-            assertEquals("Classic", selectedLabel("style"))
-            assertEquals("Both", selectedLabel("navigation"))
-            assertTrue(isUnlocked("selection"))
-            assertTrue(isUnlocked("surfaces"))
-            assertNull(lockedNote("selection"))
+            val groups = document.querySelectorAll(".dt-settings-sidebar-sections > .dt-settings-group")
+            assertEquals(2, groups.length)
+            assertEquals("mode-style", (groups.item(0) as HTMLElement).getAttribute("data-dt-group"))
+            assertEquals("shared", (groups.item(1) as HTMLElement).getAttribute("data-dt-group"))
+            assertEquals("Style for dark mode", styleHeading())
+
+            assertEquals(
+                listOf("look", "chrome", "windows", "focus", "labels", "selection", "surfaces", "spacing"),
+                settingIds(group("mode-style")!!),
+            )
+            assertTrue(group("mode-style")!!.textContent!!.contains("Corner roundness"))
+            val shared = settingIds(group("shared")!!)
+            assertEquals("navigation", shared.first(), "Navigation leads the shared group")
+            assertFalse("look" in shared)
+            assertTrue(group("shared")!!.querySelector(".dt-fonts-section") != null, "Fonts are shared")
+            // The pre-split rows and lock are gone.
+            assertNull(settingSection("style"))
+            assertNull(document.querySelector(".dt-settings-locked-note"))
         }
     }
 
-    /** An app default the user never picked is what the rows ring — and what locks. */
+    /** Nothing stored, no app default: Classic, every default ringed, nothing locked. */
+    @Test
+    fun rowsRingTheToolkitDefaults() = GlobalScope.promise {
+        withSettingsOpen { _, _ ->
+            assertEquals(listOf("classic", "calm"), presetCards().map { it.getAttribute("data-dt-look") })
+            assertEquals(listOf("Classic", "Calm"), presetCards().map {
+                (it.querySelector(".dt-settings-preset-name") as? HTMLElement)?.textContent
+            })
+            assertTrue(presetCards().all { it.querySelector(".dt-settings-preset-desc") != null }, "every card describes its preset")
+            assertTrue(choiceButtons("look").isEmpty(), "the presets are cards, not choice pills")
+            assertNull(settingSection("look")!!.querySelector("[data-dt-look=\"custom\"].dt-settings-preset-btn"), "no Custom card")
+            assertEquals(listOf("classic"), selectedPresets())
+            assertEquals(listOf("classic"), badgedPresets())
+            assertEquals("In use", (lookButton("classic").querySelector(".dt-settings-preset-badge") as HTMLElement).textContent)
+            assertEquals("classic", presetStatusLook())
+            assertEquals("Your settings match the Classic preset.", presetStatus()!!.textContent)
+            assertEquals("Themed", selectedLabel("chrome"))
+            assertEquals("Cards", selectedLabel("windows"))
+            assertEquals("Accent", selectedLabel("focus"))
+            assertEquals("Uppercase", selectedLabel("labels"))
+            assertEquals("Filled", selectedLabel("selection"))
+            assertEquals("Depth", selectedLabel("surfaces"))
+            assertEquals("Compact", selectedLabel("spacing"))
+            assertEquals(listOf("Tinted", "Filled", "Soft"), choiceButtons("selection").map { it.textContent })
+            assertEquals(listOf("Depth", "Flat", "Soft"), choiceButtons("surfaces").map { it.textContent })
+            assertEquals(listOf("Sidebar", "Tab strip", "Both"), choiceButtons("navigation").map { it.textContent })
+            assertEquals("Both", selectedLabel("navigation"))
+            for (id in listOf("chrome", "windows", "focus", "labels", "selection", "surfaces", "spacing")) {
+                assertTrue(choiceButtons(id).none { it.disabled }, "$id must not be locked")
+            }
+            assertNull(rootEl().getAttribute("data-dt-style"), "the legacy stamp is never written")
+        }
+    }
+
+    /** The Presets block is labelled "Presets" and keeps its `data-dt-setting` and class. */
+    @Test
+    fun thePresetsBlockIsLabelledPresets() = GlobalScope.promise {
+        withSettingsOpen { _, _ ->
+            val section = settingSection("look")!!
+            assertTrue(section.classList.contains("dt-settings-presets"))
+            assertEquals("Presets", (section.querySelector(".dt-settings-label") as? HTMLElement)?.textContent)
+        }
+    }
+
+    /** An app default the user never picked is what the rows ring. */
     @Test
     fun rowsRingTheAppDefaultShape() = GlobalScope.promise {
         withSettingsOpen(
-            appDefault = AppearanceShape(shellStyle = ShellStyle.Clean, navigationMode = NavigationMode.Sidebar),
+            appDefault = AppearanceShape(shellStyle = ShellStyle.Calm, navigationMode = NavigationMode.Sidebar),
         ) { _, _ ->
-            assertEquals("Clean", selectedLabel("style"))
+            assertEquals(listOf("calm"), selectedPresets())
+            assertEquals(listOf("calm"), badgedPresets())
+            assertEquals("calm", presetStatusLook())
+            assertEquals("Your settings match the Calm preset.", presetStatus()!!.textContent)
+            assertEquals("Blended", selectedLabel("chrome"))
+            assertEquals("Sheet", selectedLabel("windows"))
+            assertEquals("Tone", selectedLabel("focus"))
+            assertEquals("Sentence case", selectedLabel("labels"))
+            assertEquals("Soft", selectedLabel("selection"))
+            assertEquals("Soft", selectedLabel("surfaces"))
+            assertEquals("Comfortable", selectedLabel("spacing"))
+            assertEquals("14px", (settingSectionByLabel("Corner roundness")
+                ?.querySelector(".dt-selected") as? HTMLElement)?.textContent)
             assertEquals("Sidebar", selectedLabel("navigation"))
-            assertTrue(isLocked("selection"), "Selection must be disabled under a Clean app default")
-            assertTrue(isLocked("surfaces"), "Surfaces must be disabled under a Clean app default")
-            assertEquals(CLEAN_LOCKED_NOTE, lockedNote("selection"))
-            assertEquals(CLEAN_LOCKED_NOTE, lockedNote("surfaces"))
+            // Selection and Surfaces are ordinary rows now, not locked by Calm.
+            assertTrue(choiceButtons("selection").none { it.disabled })
+            assertTrue(choiceButtons("surfaces").none { it.disabled })
+            assertNull(rootEl().getAttribute("data-dt-style"), "the legacy stamp is never written")
         }
     }
 
-    /** A stored user pick wins over the app default in the rings. */
+    /** A stored legacy pick (from before the split) wins over the app default. */
     @Test
-    fun aStoredPickWinsOverTheAppDefault() = GlobalScope.promise {
-        val persister = RowsMemoryPersister(
-            mapOf(
-                PersistKeys.APPEARANCE_SHAPE to AppearanceShape(
-                    shellStyle = ShellStyle.Classic,
-                    navigationMode = NavigationMode.TabStrip,
-                ).toJson(),
-            ),
+    fun aStoredLegacyPickWinsOverTheAppDefault() = GlobalScope.promise {
+        val persister = seeded(
+            shapeBlob = AppearanceShape(
+                shellStyle = ShellStyle.Classic,
+                navigationMode = NavigationMode.TabStrip,
+            ).toJson(),
         )
         withSettingsOpen(
             persister = persister,
-            appDefault = AppearanceShape(shellStyle = ShellStyle.Clean, navigationMode = NavigationMode.Sidebar),
+            appDefault = AppearanceShape(shellStyle = ShellStyle.Calm, navigationMode = NavigationMode.Sidebar),
         ) { _, _ ->
-            assertEquals("Classic", selectedLabel("style"))
+            assertEquals(listOf("classic"), selectedPresets())
+            assertEquals("Cards", selectedLabel("windows"))
             assertEquals("Tab strip", selectedLabel("navigation"))
-            assertTrue(isUnlocked("selection"))
         }
     }
 
     /**
-     * Clean → applied, persisted, Selection and Surfaces locked with their
-     * stored values intact; Classic → all of it reverses, values still intact.
+     * Clicking the Calm preset applies every part of it live, persists it as
+     * the active mode's entry and the status names Calm; changing one setting
+     * afterwards makes the status read custom, with no card selected or
+     * badged, and drops only that part.
      */
     @Test
-    fun pickingStyleAppliesPersistsAndLocksWithoutTouchingStoredValues() = GlobalScope.promise {
-        val persister = RowsMemoryPersister(
-            mapOf(
-                PersistKeys.APPEARANCE_SHAPE to AppearanceShape(
-                    selectionStyle = SelectionStyle.Fill,
-                    surfaceStyle = SurfaceStyle.Flat,
-                ).toJson(),
-            ),
-        )
+    fun pickingAPresetThenOneSettingTurnsTheStatusToCustom() = GlobalScope.promise {
+        val persister = seeded()
         withSettingsOpen(persister = persister) { _, _ ->
-            assertNull(rootEl().getAttribute("data-dt-style"))
-            assertEquals("Filled", selectedLabel("selection"))
-            assertEquals("Flat", selectedLabel("surfaces"))
+            assertNull(rootEl().getAttribute("data-dt-windows"))
 
-            choice("style", "Clean").dispatchClick()
-            assertEquals("clean", rootEl().getAttribute("data-dt-style"), "Clean applies live")
-            until("Clean persisted") { persister.shape().shellStyle == ShellStyle.Clean }
-            assertEquals("Clean", selectedLabel("style"))
-            assertTrue(isLocked("selection"))
-            assertTrue(isLocked("surfaces"))
-            assertEquals(CLEAN_LOCKED_NOTE, lockedNote("surfaces"))
-            // The stored picks are kept, and still ringed (dimmed) in the UI.
-            assertEquals(SelectionStyle.Fill, persister.shape().selectionStyle)
-            assertEquals(SurfaceStyle.Flat, persister.shape().surfaceStyle)
-            assertEquals("Filled", selectedLabel("selection"))
-            assertEquals("Flat", selectedLabel("surfaces"))
+            lookButton("calm").dispatchClick()
+            until("Calm applied") { rootEl().getAttribute("data-dt-windows") == "sheet" }
+            assertEquals("blended", rootEl().getAttribute("data-dt-chrome"))
+            assertEquals("tone", rootEl().getAttribute("data-dt-focus"))
+            assertEquals("sentence", rootEl().getAttribute("data-dt-labels"))
+            assertEquals("soft", rootEl().getAttribute("data-dt-selection"))
+            assertEquals("soft", rootEl().getAttribute("data-dt-surface"))
+            assertNull(rootEl().getAttribute("data-dt-style"), "the legacy stamp is never written")
+            until("Calm persisted") { persister.modes()?.dark == Looks.Calm.shape }
+            until("status names Calm") { presetStatusLook() == "calm" }
+            assertEquals("Your settings match the Calm preset.", presetStatus()!!.textContent)
+            assertEquals(listOf("calm"), selectedPresets())
+            assertEquals(listOf("calm"), badgedPresets())
 
-            // A disabled choice ignores clicks: the stored value cannot move.
-            choice("selection", "Tinted").click()
-            assertEquals("Filled", selectedLabel("selection"))
-            assertEquals(SelectionStyle.Fill, persister.shape().selectionStyle)
+            choice("chrome", "Themed").dispatchClick()
+            until("chrome applied") { rootEl().getAttribute("data-dt-chrome") == null }
+            until("status reads custom") { presetStatusLook() == "custom" }
+            assertEquals("Your own mix: the settings below match no preset.", presetStatus()!!.textContent)
+            assertEquals(emptyList(), selectedPresets(), "no card is selected")
+            assertEquals(emptyList(), badgedPresets(), "no card is badged")
+            assertEquals("sheet", rootEl().getAttribute("data-dt-windows"), "the other settings stay")
+            assertEquals("tone", rootEl().getAttribute("data-dt-focus"))
+            until("the edit persisted") { persister.modes()?.dark == Looks.Calm.shape.copy(chromeStyle = ChromeStyle.Themed) }
 
-            choice("style", "Classic").dispatchClick()
-            assertNull(rootEl().getAttribute("data-dt-style"), "Classic removes the stamp")
-            until("Classic persisted") { persister.shape().shellStyle == ShellStyle.Classic }
-            assertTrue(isUnlocked("selection"))
-            assertTrue(isUnlocked("surfaces"))
-            assertNull(lockedNote("selection"))
-            assertEquals(SelectionStyle.Fill, persister.shape().selectionStyle)
-            assertEquals(SurfaceStyle.Flat, persister.shape().surfaceStyle)
+            lookButton("classic").dispatchClick()
+            until("Classic applied") { rootEl().getAttribute("data-dt-windows") == null }
+            for (attr in listOf("data-dt-chrome", "data-dt-focus", "data-dt-labels", "data-dt-surface", "data-dt-style")) {
+                assertNull(rootEl().getAttribute(attr), "$attr after Classic")
+            }
+            assertEquals("fill", rootEl().getAttribute("data-dt-selection"))
+            until("status names Classic") { presetStatusLook() == "classic" }
+            assertEquals(listOf("classic"), selectedPresets())
         }
     }
 
-    /** Navigation picks redraw live (`data-dt-nav`) and persist; the ring follows. */
+    /** The status line only describes: clicking it produces no combination. */
+    @Test
+    fun theStatusLineCannotBeClicked() = GlobalScope.promise {
+        val persister = seeded()
+        withSettingsOpen(persister = persister) { _, _ ->
+            presetStatus()!!.dispatchClick()
+            delay(50)
+            assertEquals("classic", presetStatusLook())
+            assertNull(persister.modes(), "nothing was written")
+        }
+    }
+
+    /**
+     * Each mode keeps its own entry: an edit in dark mode leaves light mode's
+     * alone, switching the appearance re-titles the group and re-rings it, and
+     * an edit in light mode leaves dark mode's alone.
+     */
+    @Test
+    fun editingOneModeLeavesTheOtherModesEntryAlone() = GlobalScope.promise {
+        val persister = seeded(appearance = Appearance.Dark)
+        withSettingsOpen(persister = persister) { _, handle ->
+            assertEquals("Style for dark mode", styleHeading())
+            lookButton("calm").dispatchClick()
+            until("dark persisted") { persister.modes()?.dark == Looks.Calm.shape }
+            assertEquals(AppearanceShape(), persister.modes()!!.light, "light mode was not edited")
+
+            handle.setThemeSnapshot(ThemeSnapshotV2(appearance = Appearance.Light))
+            until("root follows light") { rootEl().getAttribute("data-dt-windows") == null }
+            if (styleHeading() != "Style for light mode") {
+                // The open panel re-renders on the next rebuild; reopen to be sure.
+                handle.openAppearance(AppearanceTab.Appearance)
+            }
+            until("group re-titled") { styleHeading() == "Style for light mode" }
+            assertEquals("classic", presetStatusLook())
+
+            choice("labels", "Sentence case").dispatchClick()
+            until("light persisted") { persister.modes()?.light?.labelCase == LabelCase.Sentence }
+            assertEquals(Looks.Calm.shape, persister.modes()!!.dark, "dark mode was not edited")
+            assertEquals("sentence", rootEl().getAttribute("data-dt-labels"))
+            until("light status reads custom") { presetStatusLook() == "custom" }
+        }
+    }
+
+    /** Navigation picks redraw live (`data-dt-nav`) and persist at the top level; the ring follows. */
     @Test
     fun pickingNavigationAppliesAndPersists() = GlobalScope.promise {
-        val persister = RowsMemoryPersister()
+        val persister = seeded()
         withSettingsOpen(persister = persister) { _, _ ->
             assertEquals("both", rootEl().getAttribute("data-dt-nav"))
+            assertTrue(group("shared")!!.contains(settingSection("navigation")))
 
             choice("navigation", "Tab strip").dispatchClick()
             until("tab strip applied") { rootEl().getAttribute("data-dt-nav") == "tabstrip" }
@@ -295,43 +452,32 @@ class AppearanceStyleNavRowsTest {
             until("sidebar applied") { rootEl().getAttribute("data-dt-nav") == "sidebar" }
             until("sidebar persisted") { persister.shape().navigationMode == NavigationMode.Sidebar }
             until("ring follows again") { selectedLabel("navigation") == "Sidebar" }
+            // Navigation is shared, so it never lands in a mode's entry.
+            assertTrue(persister.modes() == null || persister.modes()!!.dark.navigationMode == null)
         }
-    }
-
-    /** [appliedShellStyle] reads back exactly what [applyShellStyle] stamps. */
-    @Test
-    fun appliedShellStyleReadsTheStamp() {
-        val el = document.createElement("div") as HTMLElement
-        assertEquals(ShellStyle.Classic, appliedShellStyle(el))
-        applyShellStyle(el, ShellStyle.Clean)
-        assertEquals(ShellStyle.Clean, appliedShellStyle(el))
-        applyShellStyle(el, ShellStyle.Classic)
-        assertEquals(ShellStyle.Classic, appliedShellStyle(el))
     }
 
     /**
-     * The Theme Manager lifts the calm themes under a Clean APP DEFAULT — the
-     * case `host.shellStyle` (null there) used to miss.
+     * The theme picker's order no longer depends on the style: a Calm app
+     * default does not lift the calm themes, and the first card is the same
+     * as under Classic.
      */
     @Test
-    fun themePickerIsCalmFirstUnderACleanAppDefault() = GlobalScope.promise {
+    fun themePickerOrderDoesNotDependOnTheStyle() = GlobalScope.promise {
+        var underCalm: String? = null
         withSettingsOpen(
-            appDefault = AppearanceShape(shellStyle = ShellStyle.Clean),
+            appDefault = AppearanceShape(shellStyle = ShellStyle.Calm),
             openSettings = false,
         ) { root, _ ->
-            (root.querySelector("button[title=\"Theme manager\"]") as HTMLElement).dispatchClick()
+            (root.querySelector(APPEARANCE_PANE_BUTTON) as HTMLElement).dispatchClick()
             until("theme manager open") { document.querySelector(".dt-theme-card") != null }
-            assertTrue(isCalmTheme(firstCardTheme()), "first card under Clean should be calm")
+            underCalm = firstCardTheme().name
+            assertFalse(isCalmTheme(firstCardTheme()), "first card under Calm should not be calm")
         }
-    }
-
-    /** …and does not under Classic. */
-    @Test
-    fun themePickerIsNotCalmFirstUnderClassic() = GlobalScope.promise {
         withSettingsOpen(openSettings = false) { root, _ ->
-            (root.querySelector("button[title=\"Theme manager\"]") as HTMLElement).dispatchClick()
+            (root.querySelector(APPEARANCE_PANE_BUTTON) as HTMLElement).dispatchClick()
             until("theme manager open") { document.querySelector(".dt-theme-card") != null }
-            assertFalse(isCalmTheme(firstCardTheme()), "first card under Classic should not be calm")
+            assertEquals(underCalm, firstCardTheme().name)
         }
     }
 
@@ -342,4 +488,11 @@ class AppearanceStyleNavRowsTest {
         assertNotNull(name, "no theme card name")
         builtinTheme(name) ?: fail("first card '$name' is not a built-in theme")
     }
+}
+
+/** The settings section whose label reads [label] (for rows with no `data-dt-setting`). */
+private fun settingSectionByLabel(label: String): HTMLElement? {
+    val list = document.querySelectorAll(".dt-settings-sidebar-sections .dt-settings-section")
+    return (0 until list.length).map { list.item(it) as HTMLElement }
+        .firstOrNull { (it.querySelector(".dt-settings-label") as? HTMLElement)?.textContent == label }
 }

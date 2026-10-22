@@ -11,10 +11,11 @@
  * implementation — clear the attribute when nothing is chosen — silently paints
  * Tint no matter what the constant says.
  *
- * The three cases below are the whole contract: unset follows the default, and
+ * The cases below are the whole contract: unset follows the default, and
  * each explicit pick is honoured whether or not it agrees with it. The Tint case
  * doubles as the guard on the asymmetry, since it is the one value that is
- * expressed by the attribute's *absence*.
+ * expressed by the attribute's *absence*. Soft, split out of the Calm look
+ * style, is stamped like Fill.
  *
  * @see se.soderbjorn.lunula.web.applySelectionStyle
  * @see se.soderbjorn.lunula.core.SelectionStyle.Default
@@ -76,5 +77,23 @@ class SelectionStyleDefaultTest {
         applySelectionStyle(el, SelectionStyle.Fill)
         applySelectionStyle(el, SelectionStyle.Tint)
         assertEquals(null, el.selectionAttr(), "Tint is expressed by the attribute's absence")
+    }
+
+    /** Soft is stamped under its own value, and a later Tint clears it. */
+    @Test
+    fun explicitSoftIsStamped() {
+        val el = target()
+        applySelectionStyle(el, SelectionStyle.Soft)
+        assertEquals("soft", el.selectionAttr())
+        applySelectionStyle(el, SelectionStyle.Tint)
+        assertEquals(null, el.selectionAttr())
+    }
+
+    /** The persisted spellings round-trip through the parser for every value. */
+    @Test
+    fun everyValueParsesFromItsCssValue() {
+        for (style in SelectionStyle.entries) {
+            assertEquals(style, SelectionStyle.fromRaw(style.cssValue))
+        }
     }
 }

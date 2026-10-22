@@ -1,9 +1,10 @@
 /* CalmThemesTest.kt
- * Covers the ten calm built-ins drawn for the Clean shell (LNA-19) and the
+ * Covers the ten calm built-ins drawn for the Calm look (LNA-19) and the
  * machinery around them: the brief's stated values landing verbatim, the
  * optional opaque `accentSoft` token ([Theme.accentSoft]) and its editor and
- * serialization wiring, the curated [ThemeCategory.Clean] filter, and the
- * `calmFirst` picker ordering the web layer asks for under the Clean style.
+ * serialization wiring, the curated [ThemeCategory.Calm] filter, and the
+ * picker order, which no longer depends on the style settings (the old
+ * `calmFirst` hoist under the Calm style is gone).
  *
  * Contrast for these themes is pinned in [ThemeContrastTest] (no allowlist
  * entries, every check) and [ThemeSelectionTest] (which runs over every
@@ -73,13 +74,13 @@ class CalmThemesTest {
     }
 
     @Test
-    fun everyCalmThemeDeclaresTheCleanTokensExplicitly() {
+    fun everyCalmThemeDeclaresTheCalmTokensExplicitly() {
         for (t in calmThemes) {
             assertNotNull(t.accentSoft, "${t.name} accentSoft")
             assertNotNull(t.accentText, "${t.name} accentText")
             assertNotNull(t.windowIdle, "${t.name} windowIdle")
             assertNotNull(t.selection, "${t.name} selection")
-            assertNull(t.chromeBg, "${t.name} must not open a chrome zone — Clean ignores it")
+            assertNull(t.chromeBg, "${t.name} must not open a chrome zone — Calm ignores it")
         }
     }
 
@@ -96,10 +97,10 @@ class CalmThemesTest {
         }
     }
 
-    // ── Contrast: the Clean pairings, with no allowlist ──
+    // ── Contrast: the Calm pairings, with no allowlist ──
 
     @Test
-    fun calmThemesPassTheCleanPairingsWithoutAnyNudge() {
+    fun calmThemesPassTheCalmPairingsWithoutAnyNudge() {
         val failures = mutableListOf<String>()
         for (t in calmThemes) {
             val r = t.resolve()
@@ -107,9 +108,9 @@ class CalmThemesTest {
                 if (contrastRatio(r.textDim, backdrop) < AA) failures += "${t.name}: textDim on $name"
             }
             if (contrastRatio(r.accentText, r.accentSoft) < AA) failures += "${t.name}: accentText on accentSoft"
-            // So the Clean-derived tokens are the stated ones, untouched.
-            if (r.cleanTextDim != r.textDim) failures += "${t.name}: cleanTextDim was nudged"
-            if (r.cleanAccentText != r.accentText) failures += "${t.name}: cleanAccentText was nudged"
+            // So the Calm-derived tokens are the stated ones, untouched.
+            if (r.legibleTextDim != r.textDim) failures += "${t.name}: legibleTextDim was nudged"
+            if (r.accentSoftText != r.accentText) failures += "${t.name}: accentSoftText was nudged"
         }
         assertTrue(failures.isEmpty(), failures.joinToString("\n"))
     }
@@ -179,20 +180,29 @@ class CalmThemesTest {
         assertEquals(custom, Json.decodeFromString(Theme.serializer(), customJson))
     }
 
-    // ── The Clean category ──
+    // ── The Calm category ──
 
     @Test
-    fun theCleanCategoryIsExactlyTheCalmThemes() {
-        val found = builtinThemes.filter { matchesThemeCategory(it, ThemeCategory.Clean, emptySet()) }.map { it.name }
+    fun theCalmCategoryIsExactlyTheCalmThemes() {
+        val found = builtinThemes.filter { matchesThemeCategory(it, ThemeCategory.Calm, emptySet()) }.map { it.name }
         assertEquals(CALM_THEME_NAMES.sorted(), found.sorted())
     }
 
     @Test
+    fun theCalmCategoryIsLabelledCalm() {
+        assertEquals("Calm", ThemeCategory.Calm.label)
+    }
+
+    @Test
     fun calmThemesStillLandInTheirPaletteCategory() {
-        // Clean is curated, not part of the partition: each calm theme is also
-        // plain Dark or plain Light.
+        // Calm is curated, not part of the partition: each calm theme is also
+        // plain Dark, plain Light or (with white windows) White one-tone.
         for (t in calmThemes) {
-            val expected = if (t.isDarkToned) ThemeCategory.Dark else ThemeCategory.Light
+            val expected = when {
+                t.isDarkToned -> ThemeCategory.Dark
+                t.hasWhiteWindows -> ThemeCategory.WhiteOneTone
+                else -> ThemeCategory.Light
+            }
             assertEquals(expected, paletteCategoryOf(t), t.name)
         }
     }
@@ -200,48 +210,47 @@ class CalmThemesTest {
     @Test
     fun aCloneOfACalmThemeIsStillCalm() {
         val clone = builtinTheme("Moss Calm Dark")!!.copy(name = "My Moss")
-        assertTrue(matchesThemeCategory(clone, ThemeCategory.Clean, emptySet()))
+        assertTrue(matchesThemeCategory(clone, ThemeCategory.Calm, emptySet()))
         val other = builtinTheme("Dracula")!!.copy(name = "My Dracula")
-        assertFalse(matchesThemeCategory(other, ThemeCategory.Clean, emptySet()))
+        assertFalse(matchesThemeCategory(other, ThemeCategory.Calm, emptySet()))
     }
 
-    // ── calmFirst ordering ──
+    // ── Picker order (independent of the style settings) ──
 
     @Test
-    fun calmFirstPutsTheCalmThemesAheadOfTheHouseBlock() {
-        val ordered = orderThemesForPicker(builtinThemes, emptySet(), calmFirst = true).map { it.name }
-        assertEquals(CALM_THEME_NAMES, ordered.take(CALM_THEME_NAMES.size))
-        assertEquals(HOUSE_THEME_NAMES, ordered.drop(CALM_THEME_NAMES.size).take(HOUSE_THEME_NAMES.size))
+    fun theOrderIsStarsThenHouseThenAlphabetical() {
+        val ordered = orderThemesForPicker(builtinThemes, emptySet()).map { it.name }
+        assertEquals(HOUSE_THEME_NAMES, ordered.take(HOUSE_THEME_NAMES.size))
+        val rest = ordered.drop(HOUSE_THEME_NAMES.size)
+        assertEquals(rest.sortedBy { it.lowercase() }, rest)
         assertEquals(builtinThemes.size, ordered.size)
     }
 
     @Test
-    fun withoutCalmFirstTheOrderIsTheClassicOne() {
-        val classic = orderThemesForPicker(builtinThemes, emptySet())
-        assertEquals(classic, orderThemesForPicker(builtinThemes, emptySet(), calmFirst = false))
-        assertEquals(HOUSE_THEME_NAMES, classic.take(HOUSE_THEME_NAMES.size).map { it.name })
+    fun calmThemesAreNotHoistedAheadOfTheHouseBlock() {
+        // The calm themes used to lead the list under the old single Clean style. The
+        // order now has no style input at all, so they sort alphabetically
+        // among the rest, after the house block.
+        val ordered = orderThemesForPicker(builtinThemes, emptySet()).map { it.name }
+        val firstCalm = ordered.indexOfFirst { it in CALM_THEME_NAMES }
+        assertTrue(firstCalm >= HOUSE_THEME_NAMES.size, "a calm theme sits at $firstCalm, inside the house block")
+        assertTrue(ordered.take(CALM_THEME_NAMES.size) != CALM_THEME_NAMES, "the calm block must not lead")
     }
 
     @Test
-    fun starsStillLeadUnderCalmFirst() {
-        val ordered = orderThemesForPicker(builtinThemes, setOf("Dracula"), calmFirst = true).map { it.name }
-        assertEquals("Dracula", ordered.first())
-        assertEquals(CALM_THEME_NAMES, ordered.drop(1).take(CALM_THEME_NAMES.size))
+    fun theOrderIsStableAcrossCalls() {
+        // No hidden state (such as the style the shell is in) may feed the order.
+        val a = orderThemesForPicker(builtinThemes, setOf("Dracula"))
+        val b = orderThemesForPicker(builtinThemes.reversed(), setOf("Dracula"))
+        assertEquals(a, b)
+        assertEquals("Dracula", a.first().name)
     }
 
     @Test
-    fun aCalmCloneFollowsTheCalmBuiltins() {
-        val clone = builtinTheme("Ember Calm Light")!!.copy(name = "Aaa Calm Clone")
-        val ordered = orderThemesForPicker(allThemes(listOf(clone)), emptySet(), calmFirst = true).map { it.name }
-        assertEquals(CALM_THEME_NAMES + "Aaa Calm Clone", ordered.take(CALM_THEME_NAMES.size + 1))
-    }
-
-    @Test
-    fun filterThemesForPickerPassesCalmFirstThrough() {
-        val filtered = filterThemesForPicker(builtinThemes, emptySet(), ThemeCategory.Light, calmFirst = true)
-        assertEquals(
-            CALM_THEME_NAMES.filter { it.endsWith("Light") },
-            filtered.take(5).map { it.name },
-        )
+    fun filterThemesForPickerKeepsThePickerOrder() {
+        val filtered = filterThemesForPicker(builtinThemes, emptySet(), ThemeCategory.Calm)
+        val expected = orderThemesForPicker(builtinThemes, emptySet()).filter { isCalmTheme(it) }
+        assertEquals(expected, filtered)
+        assertEquals(CALM_THEME_NAMES.sorted(), filtered.map { it.name }.sorted())
     }
 }

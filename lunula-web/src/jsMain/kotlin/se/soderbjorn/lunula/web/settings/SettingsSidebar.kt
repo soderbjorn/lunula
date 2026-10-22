@@ -1,35 +1,32 @@
 /**
- * Settings sidebar — slide-in right-side panel exposing every per-app
- * appearance / window control the toolkit owns.
+ * Appearance settings — the panel exposing every per-app appearance / window
+ * control the toolkit owns. Shown as the Appearance tab of the toolkit's
+ * Appearance pane (beside the Themes tab; see `ThemeManagerSidebar.kt`), and
+ * still mountable on its own as a right sidebar through [buildSettingsSidebar].
  *
- * Sections rendered (in order):
- *  0. Style (Classic / Clean) and Navigation (Sidebar / Tab strip / Both) —
- *     the two coarsest choices, showing the resolved value (user pick, then
- *     app/brand default, then toolkit default). While Clean is in effect the
- *     Selection and Surfaces rows below are disabled, since Clean sets them.
- *  1. Custom title bar On/Off (Electron only).
- *  2. Corner roundness + Selection + Surfaces + Spacing — the shell's
- *     shape, its selection language, Depth vs Flat surfaces, and its density.
- *  3. Fonts — one line per surface (Sidebar, Tab bar, Window title, Text,
- *     Headings, Code): the font actually painted there, opening a searchable
- *     list of every usable font, and a − / + size stepper.
+ * Two groups, so it is clear which settings follow dark/light mode:
  *
- * Shape before type, deliberately: roundness and spacing change what the
- * shell IS shaped like, where every font line changes what it is lettered in.
+ *  1. **Style for this mode** — remembered separately for dark and light mode
+ *     and switched with the theme ([se.soderbjorn.lunula.core.ModeStyles]):
+ *     Presets (Classic / Calm), then Chrome, Windows, Active window, Labels,
+ *     Selection, Surfaces, Corner roundness and Spacing. The heading names the
+ *     mode being edited, which is always the active one.
+ *  2. **Shared by both modes** — Navigation, the Custom title bar toggle
+ *     (Electron only), any section the app adds
+ *     ([SettingsSidebarSpec.appAppearanceContent]), and Fonts: one line per
+ *     surface (Sidebar, Tab bar, Window title, Text, Headings, Code), naming
+ *     the font actually painted there with a − / + size stepper.
  *
- * Note what is NOT here: colour. Corner roundness and spacing are user
- * preferences that must survive a theme change — a user who likes square
- * corners should not have to give up a palette to keep them — so they live
- * beside the fonts and are persisted per-app, not stored on a [Theme].
+ * Every row rings the RESOLVED value (the user's pick for the mode, then the
+ * app/brand default, then the toolkit default), so a branded instance shows
+ * what it actually paints.
  *
- * Mutual exclusion with the [ThemeManagerSidebar]: both occupy the
- * single right-sidebar slot owned by [mountAppShell]. The slot's
- * `rerender` path checks whichever of the two is open; toggling one open
- * while the other is open is implemented at the topbar-button level (see
- * the calls to [closeSettingsSidebar] / [closeThemeManagerSidebar] in
- * `AppShellMount.buildTopBar`).
+ * Note what is NOT here: colour. These are user preferences that must survive
+ * a theme change — a user who likes square corners should not have to give up
+ * a palette to keep them — so they are persisted per-app, not stored on a
+ * [Theme].
  *
- * Public API mirrors `ThemeManagerSidebar` so apps wire it the same way:
+ * Public API mirrors `ThemeManagerSidebar` so apps can still wire it on its own:
  *   - [toggleSettingsSidebar] flips state and asks the host to rebuild.
  *   - [isSettingsSidebarOpen] is consulted by the host's rebuild path.
  *   - [buildSettingsSidebar] returns the freshly-mounted `<aside>` once
@@ -59,17 +56,23 @@ import se.soderbjorn.lunula.web.applyPaneHeaderFontFamily
 import se.soderbjorn.lunula.web.applyPaneHeaderFontSizePx
 import se.soderbjorn.lunula.web.applyDisplayFontFamily
 import se.soderbjorn.lunula.web.applyDisplayFontSizePx
-import se.soderbjorn.lunula.web.applyCornerRadiusPx
-import se.soderbjorn.lunula.web.applyUiDensity
-import se.soderbjorn.lunula.web.applySelectionStyle
-import se.soderbjorn.lunula.web.applySurfaceStyle
-import se.soderbjorn.lunula.web.applyShellStyle
+import se.soderbjorn.lunula.web.applyAppearance
+import se.soderbjorn.lunula.web.isDarkActive
 import se.soderbjorn.lunula.core.AppearanceShape
+import se.soderbjorn.lunula.core.ChromeStyle
+import se.soderbjorn.lunula.core.DEFAULT_CORNER_RADIUS_PX
+import se.soderbjorn.lunula.core.FocusStyle
+import se.soderbjorn.lunula.core.LabelCase
+import se.soderbjorn.lunula.core.Looks
+import se.soderbjorn.lunula.core.ModeStyles
 import se.soderbjorn.lunula.core.NavigationMode
-import se.soderbjorn.lunula.core.ShellStyle
+import se.soderbjorn.lunula.core.ResolvedAppearance
 import se.soderbjorn.lunula.core.SelectionStyle
 import se.soderbjorn.lunula.core.SurfaceStyle
 import se.soderbjorn.lunula.core.UiDensity
+import se.soderbjorn.lunula.core.WindowLayout
+import se.soderbjorn.lunula.web.themeeditor.editableModeStyles
+import se.soderbjorn.lunula.web.themeeditor.resolveStyle
 import se.soderbjorn.lunula.web.shell.SidebarSpec
 import se.soderbjorn.lunula.web.shell.renderRightSidebar
 import se.soderbjorn.lunula.web.themeeditor.FontKind
@@ -159,11 +162,11 @@ data class SettingsSidebarSpec(
      * Corner-radius pill values, in render order.
      *
      * A short, opinionated ladder rather than a range: 0 is square, 18 is the
-     * toolkit default, and the steps between are the ones that read as
-     * distinct at a glance. Offering every integer would present forty
-     * choices to answer a question with about five real answers.
+     * toolkit default, 14 is the Calm look's, and the steps between are the
+     * ones that read as distinct at a glance. Offering every integer would
+     * present forty choices to answer a question with about five real answers.
      */
-    val cornerRadiusPresets: List<Int> = listOf(0, 4, 8, 12, 18, 24),
+    val cornerRadiusPresets: List<Int> = listOf(0, 4, 8, 12, 14, 18, 24),
     /**
      * The shape settings the app applies when the user has picked none — a
      * deployment brand's defaults, resolved the same way [chromeDefaultKey] is.
@@ -175,16 +178,33 @@ data class SettingsSidebarSpec(
      */
     val appDefaultShape: () -> AppearanceShape = { AppearanceShape() },
     /**
-     * The shell style actually in effect, which the Style row rings and which
-     * decides whether Selection and Surfaces are locked.
-     *
-     * `AppShellMount` passes its own resolved value (`ShellState.resolvedShellStyle`).
-     * The default walks the same ladder from this spec alone: the host's pick,
-     * then [appDefaultShape], then [ShellStyle.Default].
+     * Whether the dark slot is the active one, which decides whose style
+     * settings the "Style for this mode" group shows and edits.
+     * `AppShellMount` passes `ShellState.activeModeIsDark`; the default reads
+     * the host's appearance (Auto answered by the system scheme).
      */
-    val resolvedShellStyle: () -> ShellStyle = {
-        host.shellStyle ?: appDefaultShape().shellStyle ?: ShellStyle.Default
+    val isDarkMode: () -> Boolean = { isDarkActive(host.appearance) },
+    /**
+     * Called with both modes' style settings after any pick in the "Style for
+     * this mode" group. Must store them and repaint, so the next read of the
+     * host resolves the new values. `AppShellMount` routes it through
+     * `ShellState.setModeStyles` (host setter, re-apply, persist). The default
+     * stores it on [host] and stamps the root directly, for a panel mounted
+     * outside the shell.
+     */
+    val onStylesChanged: (ModeStyles) -> Unit = { styles ->
+        host.setModeStyles(styles)
+        applyAppearance(document.documentElement as HTMLElement, host.resolveStyle(isDarkMode(), appDefaultShape()))
     },
+    /**
+     * An app's own appearance controls, shown as an extra section in the
+     * "Shared by both modes" group (above Fonts), or `null` for none. Built
+     * afresh on each render of the panel; the app owns its contents and their
+     * persistence. Use it for appearance options only one app has (a
+     * terminal's cursor, an editor's line height), so they sit with the rest
+     * of the appearance settings instead of in the app's own settings.
+     */
+    val appAppearanceContent: (() -> HTMLElement)? = null,
     /**
      * The navigation mode asked for (before the app's hard opt-outs), which the
      * Navigation row rings. `AppShellMount` passes `ShellState.resolvedNavigationMode`;
@@ -194,17 +214,6 @@ data class SettingsSidebarSpec(
         host.navigationMode ?: appDefaultShape().navigationMode ?: NavigationMode.Default
     },
     /**
-     * Called when the user picks a Style. Must store the choice and re-apply it
-     * so `data-dt-style` and [resolvedShellStyle] follow at once.
-     * `AppShellMount` routes it through `ShellState.setShellStyle` (host setter,
-     * re-apply, persist). The default stores it on [host] and stamps the root
-     * directly, for a sidebar mounted outside the shell.
-     */
-    val onPickShellStyle: (ShellStyle) -> Unit = { style ->
-        host.setShellStyle(style)
-        applyShellStyle(document.documentElement as HTMLElement, style)
-    },
-    /**
      * Called when the user picks a Navigation mode. `AppShellMount` routes it
      * through `ShellState.setNavigationMode`, which re-applies and redraws the
      * chrome. The default only stores it on [host].
@@ -212,16 +221,6 @@ data class SettingsSidebarSpec(
     val onPickNavigationMode: (NavigationMode) -> Unit = { mode -> host.setNavigationMode(mode) },
 )
 
-/** The note shown under Selection and Surfaces while Clean sets them. */
-internal const val CLEAN_LOCKED_NOTE: String = "Set by the Clean style"
-
-/**
- * The radius the corner row highlights when the host has stored none.
- *
- * Must match `--dt-corner-radius`'s fallback in `lunula.css`, or the ringed
- * pill claims a value the shell is not actually painting.
- */
-private const val DEFAULT_CORNER_RADIUS_PX: Int = 18
 
 /** True while the Settings sidebar is considered open. */
 private var sidebarOpen: Boolean = false
@@ -382,13 +381,22 @@ fun buildSettingsSidebar(spec: SettingsSidebarSpec): HTMLElement {
 }
 
 /**
- * Mounts the Settings panel content into [target].
+ * Mounts the Appearance panel content into [target]: a header and the two
+ * groups described in the file header.
  *
- * Each section is built once per render; pill rows and font lines
- * re-render in place after a click so the selected state updates without rebuilding the
- * whole panel.
+ * Each style pick writes both modes' settings through
+ * [SettingsSidebarSpec.onStylesChanged] and then re-renders the body in place
+ * (keeping its scroll position), so a Look pick updates every row at once and
+ * the Look row follows a single-setting change to "Custom".
+ *
+ * Called by [buildSettingsSidebar] and by the Appearance pane's Appearance tab.
+ *
+ * @param target the element to fill; emptied first.
+ * @param spec   the panel configuration.
  */
-private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
+internal fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
+    // Keep the scroll position across an in-place re-render after a pick.
+    val previousScroll = (target.querySelector(".dt-settings-sidebar-sections") as? HTMLElement)?.scrollTop
     target.innerHTML = ""
 
     val panel = document.createElement("div") as HTMLElement
@@ -419,56 +427,106 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
     body.className = "dt-settings-sidebar-sections"
     panel.appendChild(body)
 
-    // The Theme Manager already has a dedicated topbar entry (the
-    // palette icon), so duplicating the same launcher here as a
-    // "Theme" jump-link section produced two paths into the same
-    // surface. Rely on the topbar icon — leave the settings sidebar
-    // for genuinely distinct surfaces (font, notifications, titlebar).
-
-    // ── Style and Navigation ────────────────────────────────────────
-    // The two coarsest choices, so they lead the panel. Both ring the
-    // resolved value, so a brand default shows as selected even when the
-    // user has stored nothing. Selection and Surfaces (below) are locked
-    // while Clean is in effect; [lockForClean] re-reads after every pick.
-    val selectionSection = buildSelectionStyleSection(
-        currentValue = {
-            spec.host.selectionStyle
-                ?: spec.appDefaultShape().selectionStyle
-                ?: SelectionStyle.Default
-        },
-        onPick = { st ->
-            spec.host.setSelectionStyle(st)
-            applySelectionStyle(document.documentElement as HTMLElement, st)
-        },
-    )
-    val surfaceSection = buildSurfaceStyleSection(
-        currentValue = {
-            spec.host.surfaceStyle
-                ?: spec.appDefaultShape().surfaceStyle
-                ?: SurfaceStyle.Default
-        },
-        onPick = { st ->
-            spec.host.setSurfaceStyle(st)
-            applySurfaceStyle(st)
-        },
-    )
-    val lockForClean = {
-        val locked = spec.resolvedShellStyle() == ShellStyle.Clean
-        setChoiceSectionLocked(selectionSection, if (locked) CLEAN_LOCKED_NOTE else null)
-        setChoiceSectionLocked(surfaceSection, if (locked) CLEAN_LOCKED_NOTE else null)
+    // ── Group 1: style for the active mode ──────────────────────────
+    val isDark = spec.isDarkMode()
+    val resolved = spec.host.resolveStyle(isDark, spec.appDefaultShape())
+    val rerender = { renderSettingsBody(target, spec) }
+    // A pick edits the active mode's entry, starting from the user's own
+    // values for it (not the resolved ones), so a field the user never set
+    // keeps following the app/brand default.
+    fun pickStyle(edit: (AppearanceShape) -> AppearanceShape) {
+        val styles = spec.host.editableModeStyles()
+        spec.onStylesChanged(styles.withMode(isDark, edit(styles.forMode(isDark))))
+        rerender()
     }
-    body.appendChild(buildChoiceSection(
-        settingId = "style",
-        title = "Style",
-        hint = "Classic is the original shell; Clean is a calmer, quieter one.",
-        options = listOf("Classic" to ShellStyle.Classic, "Clean" to ShellStyle.Clean),
-        currentValue = spec.resolvedShellStyle,
-        onPick = { st ->
-            spec.onPickShellStyle(st)
-            lockForClean()
-        },
+    val styleGroup = makeGroup(
+        title = if (isDark) "Style for dark mode" else "Style for light mode",
+        hint = "Remembered separately for dark and light mode, like the theme. " +
+            "Switch the appearance to set up the other mode.",
+    )
+    styleGroup.setAttribute("data-dt-group", "mode-style")
+    body.appendChild(styleGroup)
+    styleGroup.appendChild(buildPresetsSection(resolved) { look -> pickStyle { look.shape } })
+    styleGroup.appendChild(buildChoiceSection(
+        settingId = "chrome",
+        title = "Chrome",
+        hint = "Themed paints the bars in the theme's chrome colours; Blended puts them on the window background with quiet, borderless buttons.",
+        options = listOf("Themed" to ChromeStyle.Themed, "Blended" to ChromeStyle.Blended),
+        currentValue = { resolved.chromeStyle },
+        onPick = { v -> pickStyle { it.copy(chromeStyle = v) } },
     ))
-    body.appendChild(buildChoiceSection(
+    styleGroup.appendChild(buildChoiceSection(
+        settingId = "windows",
+        title = "Windows",
+        hint = "Cards float apart on the canvas; Sheet puts every window on one rounded sheet, split by hairlines.",
+        options = listOf("Cards" to WindowLayout.Cards, "Sheet" to WindowLayout.Sheet),
+        currentValue = { resolved.windowLayout },
+        onPick = { v -> pickStyle { it.copy(windowLayout = v) } },
+    ))
+    styleGroup.appendChild(buildChoiceSection(
+        settingId = "focus",
+        title = "Active window",
+        hint = "Accent marks the active window's title bar; Tone dims the other windows and lifts the active one.",
+        options = listOf("Accent" to FocusStyle.Accent, "Tone" to FocusStyle.Tone),
+        currentValue = { resolved.focusStyle },
+        onPick = { v -> pickStyle { it.copy(focusStyle = v) } },
+    ))
+    styleGroup.appendChild(buildChoiceSection(
+        settingId = "labels",
+        title = "Labels",
+        hint = "How window titles and sidebar headings are lettered.",
+        options = listOf("Uppercase" to LabelCase.Uppercase, "Sentence case" to LabelCase.Sentence),
+        currentValue = { resolved.labelCase },
+        onPick = { v -> pickStyle { it.copy(labelCase = v) } },
+    ))
+    styleGroup.appendChild(buildChoiceSection(
+        settingId = "selection",
+        title = "Selection",
+        hint = "How the active tab and sidebar row are marked — and, with an Accent active window, its title bar.",
+        options = listOf(
+            "Tinted" to SelectionStyle.Tint,
+            "Filled" to SelectionStyle.Fill,
+            "Soft" to SelectionStyle.Soft,
+        ),
+        currentValue = { resolved.selectionStyle },
+        onPick = { v -> pickStyle { it.copy(selectionStyle = v) } },
+    ))
+    styleGroup.appendChild(buildChoiceSection(
+        settingId = "surfaces",
+        title = "Surfaces",
+        hint = "Depth lifts windows on soft shadows and gives accents a glow; Flat keeps everything on one plane; Soft is flat with calm, lightly shadowed dialogs and menus.",
+        options = listOf(
+            "Depth" to SurfaceStyle.Depth,
+            "Flat" to SurfaceStyle.Flat,
+            "Soft" to SurfaceStyle.Soft,
+        ),
+        currentValue = { resolved.surfaceStyle },
+        onPick = { v -> pickStyle { it.copy(surfaceStyle = v) } },
+    ))
+    styleGroup.appendChild(buildPxChoiceSection(
+        title = "Corner roundness",
+        sizes = spec.cornerRadiusPresets,
+        defaultSize = DEFAULT_CORNER_RADIUS_PX,
+        currentSize = { resolved.cornerRadiusPx },
+        onPick = { px -> pickStyle { it.copy(cornerRadiusPx = px) } },
+    ))
+    styleGroup.appendChild(buildChoiceSection(
+        settingId = "spacing",
+        title = "Spacing",
+        hint = "How much air the chrome puts around windows, tabs and rows.",
+        options = UiDensity.entries.map { it.name to it },
+        currentValue = { resolved.uiDensity },
+        onPick = { v -> pickStyle { it.copy(uiDensity = v) } },
+    ))
+
+    // ── Group 2: shared by both modes ───────────────────────────────
+    val sharedGroup = makeGroup(
+        title = "Shared by both modes",
+        hint = "Kept the same in dark and light mode.",
+    )
+    sharedGroup.setAttribute("data-dt-group", "shared")
+    body.appendChild(sharedGroup)
+    sharedGroup.appendChild(buildChoiceSection(
         settingId = "navigation",
         title = "Navigation",
         hint = "How you move between tabs: the sidebar, a tab strip along the top, or both.",
@@ -480,14 +538,10 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
         currentValue = spec.resolvedNavigationMode,
         onPick = { mode -> spec.onPickNavigationMode(mode) },
     ))
-    lockForClean()
-
-    // ── Custom title bar (Electron only) ────────────────────────────
-    // Pinned to the top of the panel: it's the most disruptive
-    // appearance toggle (window chrome reflows on flip) and users
-    // hunting for it shouldn't need to scroll past every font row.
+    // Custom title bar (Electron only): the window chrome reflows on flip, and
+    // it concerns the OS window, which has no dark or light mode of its own.
     if (spec.isElectron) {
-        body.appendChild(buildToggleSection(
+        sharedGroup.appendChild(buildToggleSection(
             title = "Custom title bar",
             currentValue = { spec.host.useCustomTitleBar },
             onPick = { v ->
@@ -495,39 +549,107 @@ private fun renderSettingsBody(target: HTMLElement, spec: SettingsSidebarSpec) {
             },
         ))
     }
-
-    // ── Shape and spacing ───────────────────────────────────────────
-    // Above the font rows because they are the two coarsest controls in the
-    // panel: they change what the shell *is* shaped like, where every row
-    // below changes what it is lettered in. Both are user settings rather
-    // than theme properties — see ThemeManagerHost.cornerRadiusPx.
-    body.appendChild(buildPxChoiceSection(
-        title = "Corner roundness",
-        sizes = spec.cornerRadiusPresets,
-        defaultSize = spec.appDefaultShape().cornerRadiusPx ?: DEFAULT_CORNER_RADIUS_PX,
-        currentSize = { spec.host.cornerRadiusPx },
-        onPick = { px ->
-            spec.host.setCornerRadiusPx(px)
-            applyCornerRadiusPx(px)
-        },
-    ))
-    // Built above, beside the Style row that locks them; placed here.
-    body.appendChild(selectionSection)
-    body.appendChild(surfaceSection)
-    body.appendChild(buildDensitySection(
-        currentValue = {
-            spec.host.uiDensity ?: spec.appDefaultShape().uiDensity ?: UiDensity.Compact
-        },
-        onPick = { d ->
-            spec.host.setUiDensity(d)
-            applyUiDensity(d)
-        },
-    ))
-
+    spec.appAppearanceContent?.let { build ->
+        val appSection = build()
+        appSection.classList.add("dt-settings-app-section")
+        sharedGroup.appendChild(appSection)
+    }
     // ── Fonts: one line per surface — its font and its size ─────────
-    body.appendChild(buildFontsSection(spec))
+    sharedGroup.appendChild(buildFontsSection(spec))
 
     target.appendChild(panel)
+    if (previousScroll != null) body.scrollTop = previousScroll
+}
+
+/**
+ * Builds one of the panel's two groups: a titled block with a hint, which the
+ * caller fills with sections.
+ *
+ * @param title the group heading ("Style for dark mode", "Shared by both modes").
+ * @param hint  the muted line under it, saying how the group behaves.
+ * @return the group element (`.dt-settings-group`).
+ */
+private fun makeGroup(title: String, hint: String): HTMLElement {
+    val group = document.createElement("div") as HTMLElement
+    group.className = "dt-settings-group"
+    val heading = document.createElement("div") as HTMLElement
+    heading.className = "dt-settings-group-title"
+    heading.textContent = title
+    group.appendChild(heading)
+    val hintEl = document.createElement("div") as HTMLElement
+    hintEl.className = "dt-settings-group-hint"
+    hintEl.textContent = hint
+    group.appendChild(hintEl)
+    return group
+}
+
+/**
+ * Builds the Presets block at the head of the "Style for … mode" group: a
+ * short explanation, one card per built-in look ([Looks.all]) and a status
+ * line.
+ *
+ * A look is not a setting of its own but a preset of the settings below it,
+ * and the block is drawn to say so: it sits in a framed box above the
+ * settings, its hint says that picking a preset sets them all, each card is an
+ * action naming what it applies (name and one-line description), and the
+ * status line reports which preset — if any — the current settings match
+ * ("Your own mix" otherwise). Nothing stores which preset was picked, so
+ * changing any setting afterwards turns the status to "Your own mix" by
+ * itself.
+ *
+ * The card of the matching preset carries `.dt-selected` and an "In use"
+ * badge; the status line carries `data-dt-look` with the matching look's id,
+ * or `custom`.
+ *
+ * @param resolved the values in effect for the active mode.
+ * @param onPick   called with the clicked preset.
+ * @return the section element (`data-dt-setting="look"`).
+ */
+private fun buildPresetsSection(resolved: ResolvedAppearance, onPick: (se.soderbjorn.lunula.core.Look) -> Unit): HTMLElement {
+    val matched = Looks.all.firstOrNull { it.matches(resolved) }
+    val section = makeSection(
+        "Presets",
+        "A preset sets all the style settings below in one go. You can still change any of them afterwards.",
+    )
+    section.element.classList.add("dt-settings-presets")
+    section.element.setAttribute("data-dt-setting", "look")
+    section.row.classList.add("dt-settings-preset-row")
+    for (look in Looks.all) {
+        val btn = document.createElement("button") as HTMLElement
+        btn.setAttribute("type", "button")
+        btn.setAttribute("data-dt-look", look.id)
+        btn.className = "dt-settings-preset-btn" + if (look == matched) " dt-selected" else ""
+        btn.title = "Apply the ${look.name} preset"
+        val head = document.createElement("span") as HTMLElement
+        head.className = "dt-settings-preset-head"
+        val name = document.createElement("span") as HTMLElement
+        name.className = "dt-settings-preset-name"
+        name.textContent = look.name
+        head.appendChild(name)
+        if (look == matched) {
+            val badge = document.createElement("span") as HTMLElement
+            badge.className = "dt-settings-preset-badge"
+            badge.textContent = "In use"
+            head.appendChild(badge)
+        }
+        btn.appendChild(head)
+        val desc = document.createElement("span") as HTMLElement
+        desc.className = "dt-settings-preset-desc"
+        desc.textContent = look.description
+        btn.appendChild(desc)
+        btn.addEventListener("click", { onPick(look) })
+        section.row.appendChild(btn)
+    }
+    val status = document.createElement("div") as HTMLElement
+    status.className = "dt-settings-preset-status"
+    status.setAttribute("data-dt-look", matched?.id ?: "custom")
+    status.textContent = if (matched != null) {
+        "Your settings match the ${matched.name} preset."
+    } else {
+        "Your own mix: the settings below match no preset."
+    }
+    section.element.appendChild(status)
+    return section.element
 }
 
 /** Internal helper bundling a labelled section with its pill row container. */
@@ -933,130 +1055,6 @@ private fun buildPxChoiceSection(
     return section.element
 }
 
-/**
- * Builds the chrome-density pill row.
- *
- * Its own builder rather than a reuse of [buildToggleSection] because the
- * choices are named states, not On/Off, and rather than of [buildPxChoiceSection]
- * because the underlying values are not numbers the user should be reasoning
- * about — "Comfortable" is one decision, not the six paddings it sets.
- *
- * @param currentValue reader for the host's stored density (never null; the
- *   caller substitutes [UiDensity.Compact]).
- * @param onPick       called with the clicked density.
- */
-private fun buildDensitySection(
-    currentValue: () -> UiDensity,
-    onPick: (UiDensity) -> Unit,
-): HTMLElement {
-    val section = makeSection("Spacing", "How much air the chrome puts around windows, tabs and rows.")
-    val row = section.row
-    val current = currentValue()
-    for (density in UiDensity.entries) {
-        val btn = document.createElement("button") as HTMLElement
-        btn.setAttribute("type", "button")
-        btn.className = "dt-settings-choice-btn" + if (density == current) " dt-selected" else ""
-        btn.textContent = density.name
-        btn.addEventListener("click", {
-            // Optimistic selection update — see [buildFontFaceSection].
-            val rowChildren = row.children
-            for (i in 0 until rowChildren.length) {
-                (rowChildren.item(i) as? HTMLElement)?.classList?.remove("dt-selected")
-            }
-            btn.classList.add("dt-selected")
-            onPick(density)
-        })
-        row.appendChild(btn)
-    }
-    return section.element
-}
-
-/**
- * Builds the selection-style pill row.
- *
- * Labelled by what the user sees rather than by the enum: "Tinted" and
- * "Filled" describe the result, where "Tint"/"Fill" describe the mechanism.
- *
- * @param currentValue reader for the host's stored style (never null; the
- *   caller walks the user → app → [SelectionStyle.Default] ladder).
- * @param onPick       called with the clicked style.
- */
-private fun buildSelectionStyleSection(
-    currentValue: () -> SelectionStyle,
-    onPick: (SelectionStyle) -> Unit,
-): HTMLElement {
-    val section = makeSection(
-        "Selection",
-        "How the focused window, active tab and active sidebar row are marked.",
-    )
-    section.element.setAttribute("data-dt-setting", "selection")
-    val row = section.row
-    val current = currentValue()
-    for ((label, value) in listOf(
-        "Tinted" to SelectionStyle.Tint,
-        "Filled" to SelectionStyle.Fill,
-    )) {
-        val btn = document.createElement("button") as HTMLElement
-        btn.setAttribute("type", "button")
-        btn.className = "dt-settings-choice-btn" + if (value == current) " dt-selected" else ""
-        btn.textContent = label
-        btn.addEventListener("click", {
-            // Optimistic selection update — see [buildFontFaceSection].
-            val rowChildren = row.children
-            for (i in 0 until rowChildren.length) {
-                (rowChildren.item(i) as? HTMLElement)?.classList?.remove("dt-selected")
-            }
-            btn.classList.add("dt-selected")
-            onPick(value)
-        })
-        row.appendChild(btn)
-    }
-    return section.element
-}
-
-/**
- * Builds the surface-style pill row ("Surfaces: Depth · Flat").
- *
- * Same shape as [buildSelectionStyleSection]: two named states, picked
- * optimistically, with the caller doing the persist + apply.
- *
- * @param currentValue reader for the host's stored style (never null; the
- *   caller walks the user → app → [SurfaceStyle.Default] ladder).
- * @param onPick       called with the clicked style.
- */
-private fun buildSurfaceStyleSection(
-    currentValue: () -> SurfaceStyle,
-    onPick: (SurfaceStyle) -> Unit,
-): HTMLElement {
-    val section = makeSection(
-        "Surfaces",
-        "Depth lifts windows on soft shadows and gives accents a glow; Flat keeps everything on one plane.",
-    )
-    section.element.setAttribute("data-dt-setting", "surfaces")
-    val row = section.row
-    val current = currentValue()
-    for ((label, value) in listOf(
-        "Depth" to SurfaceStyle.Depth,
-        "Flat" to SurfaceStyle.Flat,
-    )) {
-        val btn = document.createElement("button") as HTMLElement
-        btn.setAttribute("type", "button")
-        btn.className = "dt-settings-choice-btn" + if (value == current) " dt-selected" else ""
-        btn.textContent = label
-        btn.addEventListener("click", {
-            // Optimistic selection update — see [buildFontFaceSection].
-            val rowChildren = row.children
-            for (i in 0 until rowChildren.length) {
-                (rowChildren.item(i) as? HTMLElement)?.classList?.remove("dt-selected")
-            }
-            btn.classList.add("dt-selected")
-            onPick(value)
-        })
-        row.appendChild(btn)
-    }
-    return section.element
-}
-
 private fun buildToggleSection(
     title: String,
     currentValue: () -> Boolean,
@@ -1087,9 +1085,7 @@ private fun buildToggleSection(
 /**
  * Builds a labelled segmented-choice row: one `.dt-settings-choice-btn` per
  * option, the current one marked `.dt-selected`, picked optimistically with
- * the caller doing the store + apply. Same look and behaviour as
- * [buildSelectionStyleSection] and [buildSurfaceStyleSection], for any value
- * type. Used by [renderSettingsBody] for the Style and Navigation rows.
+ * the caller doing the store + apply. Used by [renderSettingsBody] for every named-choice row.
  *
  * @param settingId    stamped as `data-dt-setting` on the section, so the row
  *   can be found without matching on its (translatable) label.
@@ -1130,41 +1126,4 @@ private fun <T> buildChoiceSection(
         row.appendChild(btn)
     }
     return section.element
-}
-
-/**
- * Locks or unlocks a segmented-choice section built by this file.
- *
- * Locked: every choice button becomes a real `disabled` button with
- * `aria-disabled="true"`, and a muted `.dt-settings-locked-note` line naming
- * what sets the value is shown; the section carries `dt-locked`. Unlocked
- * reverses all of it. The `.dt-selected` mark is left alone, so the stored
- * value stays visible and applies again once unlocked — nothing is written to
- * the host either way.
- *
- * Called by [renderSettingsBody] for Selection and Surfaces whenever the
- * resolved shell style is (re)read: on render and after each Style pick.
- *
- * @param section the section element (as returned by its builder).
- * @param note    the reason to show, or `null` to unlock.
- */
-private fun setChoiceSectionLocked(section: HTMLElement, note: String?) {
-    val locked = note != null
-    val buttons = section.querySelectorAll(".dt-settings-choice-btn")
-    for (i in 0 until buttons.length) {
-        val btn = buttons.item(i) as? HTMLButtonElement ?: continue
-        btn.disabled = locked
-        if (locked) btn.setAttribute("aria-disabled", "true") else btn.removeAttribute("aria-disabled")
-    }
-    if (locked) section.classList.add("dt-locked") else section.classList.remove("dt-locked")
-    val existing = section.querySelector(".dt-settings-locked-note") as? HTMLElement
-    if (!locked) {
-        existing?.remove()
-        return
-    }
-    val noteEl = existing ?: (document.createElement("div") as HTMLElement).also {
-        it.className = "dt-settings-hint dt-settings-locked-note"
-        section.appendChild(it)
-    }
-    noteEl.textContent = note
 }

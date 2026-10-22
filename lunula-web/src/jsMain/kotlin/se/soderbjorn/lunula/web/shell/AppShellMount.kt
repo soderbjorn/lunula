@@ -19,6 +19,12 @@ import org.w3c.dom.events.Event
 import se.soderbjorn.lunula.core.Appearance
 import se.soderbjorn.lunula.core.AppearanceFonts
 import se.soderbjorn.lunula.core.AppearanceShape
+import se.soderbjorn.lunula.core.Looks
+import se.soderbjorn.lunula.core.ModeStyles
+import se.soderbjorn.lunula.core.ResolvedAppearance
+import se.soderbjorn.lunula.core.resolveAppearance
+import se.soderbjorn.lunula.web.themeeditor.editableModeStyles
+import se.soderbjorn.lunula.web.themeeditor.resolveStyle
 import se.soderbjorn.lunula.core.NavigationMode
 import se.soderbjorn.lunula.core.PersistKeys
 import se.soderbjorn.lunula.core.ShellStyle
@@ -54,11 +60,7 @@ import se.soderbjorn.lunula.web.applyPaneHeaderFontFamily
 import se.soderbjorn.lunula.web.applyPaneHeaderFontSizePx
 import se.soderbjorn.lunula.web.applyDisplayFontFamily
 import se.soderbjorn.lunula.web.applyDisplayFontSizePx
-import se.soderbjorn.lunula.web.applyCornerRadiusPx
-import se.soderbjorn.lunula.web.applyUiDensity
-import se.soderbjorn.lunula.web.applySelectionStyle
-import se.soderbjorn.lunula.web.applySurfaceStyle
-import se.soderbjorn.lunula.web.applyShellStyle
+import se.soderbjorn.lunula.web.applyAppearance
 import se.soderbjorn.lunula.web.setDtCustomTitleBarBodyClass
 import se.soderbjorn.lunula.web.settings.AppSettingsSidebarSpec
 import se.soderbjorn.lunula.web.settings.HotkeysSidebarSpec
@@ -86,7 +88,10 @@ import se.soderbjorn.lunula.web.themeeditor.toAppearanceFonts
 import se.soderbjorn.lunula.web.themeeditor.toSnapshotV2
 import se.soderbjorn.lunula.web.themeeditor.buildThemeManagerSidebar
 import se.soderbjorn.lunula.web.themeeditor.closeThemeManager
+import se.soderbjorn.lunula.web.themeeditor.AppearanceTab
 import se.soderbjorn.lunula.web.themeeditor.isThemeManagerSidebarOpen
+import se.soderbjorn.lunula.web.themeeditor.openAppearancePane
+import se.soderbjorn.lunula.web.settings.renderSettingsBody
 import se.soderbjorn.lunula.web.themeeditor.refreshThemeManager
 import se.soderbjorn.lunula.web.themeeditor.toggleThemeManagerSidebar
 
@@ -548,6 +553,10 @@ fun mountAppShell(
         themeState.surfaceStyle = shape.surfaceStyle
         themeState.shellStyle = shape.shellStyle
         themeState.navigationMode = shape.navigationMode
+        // The per-mode style settings ride in the same blob, as `dark` /
+        // `light` entries beside the shared fields; absent (a blob from before
+        // they were per mode), the single-mode fields above stand for both.
+        themeState.modeStyles = ModeStyles.fromJson(spec.persister.read(PersistKeys.APPEARANCE_SHAPE))
 
         // Seed the custom-titlebar flag from the Electron bridge when present
         // so the renderer's state matches the BrowserWindow's actual
@@ -670,6 +679,10 @@ fun mountAppShell(
 
         override fun setShellStyle(style: ShellStyle?) {
             state.setShellStyle(style)
+        }
+
+        override fun openAppearance(tab: AppearanceTab) {
+            state.openAppearance(tab)
         }
 
         override fun refresh() {
@@ -1434,20 +1447,27 @@ private class ShellState(
     }
 
     /**
-     * The shell style in effect, resolved by [applyHostFontVars] from the
-     * host's pick, then the app's [AppShellSpec.defaultAppearanceShape], then
-     * [ShellStyle.Default].
+     * The style settings in effect for the active appearance mode, resolved by
+     * [applyHostFontVars] through [resolveStyle]: the user's values for that
+     * mode, their legacy look, the app's [AppShellSpec.defaultAppearanceShape],
+     * the app's legacy look, then the toolkit defaults.
      *
-     * Held here so the Clean-shell rendering (epic LNA-16) has one resolved
-     * value to key off. [applyHostFontVars] stamps it on the document root via
-     * [applyShellStyle] (`data-dt-style="clean"`, or no attribute for Classic,
-     * so Classic rendering is unaffected).
+     * [applyHostFontVars] stamps it on the document root with
+     * [applyAppearance]. Read by the Appearance settings to ring the values
+     * actually painted.
      *
-     * @see ShellStyle
-     * @see resolvedNavigationMode
+     * @see activeModeIsDark
      */
-    var resolvedShellStyle: ShellStyle = ShellStyle.Default
+    var resolvedAppearance: ResolvedAppearance = resolveAppearance()
         private set
+
+    /**
+     * Whether the dark slot is the active one, which decides which mode's style
+     * settings apply: the snapshot's appearance, with Auto answered by the
+     * system's colour scheme.
+     */
+    val activeModeIsDark: Boolean
+        get() = isDarkActive(snapshot.appearance)
 
     /**
      * The navigation mode in effect, resolved by [applyHostFontVars] from the
@@ -1460,7 +1480,7 @@ private class ShellState(
      *
      * @see NavigationMode
      * @see navigationLayout
-     * @see resolvedShellStyle
+     * @see resolvedAppearance
      */
     val resolvedNavigationMode: NavigationMode
         get() = navigationLayout.mode
@@ -1516,35 +1536,42 @@ private class ShellState(
     }
 
     /**
-     * Changes the user's shell style (Classic / Clean) at runtime and
-     * re-applies it, so `data-dt-style` and [resolvedShellStyle] follow at
-     * once. The entry point the Appearance settings' Style row calls (see
-     * `SettingsSidebarSpec.onPickShellStyle`); also exposed as
-     * [AppShellHandle.setShellStyle].
+     * Stores the user's per-mode style settings and repaints. The entry point
+     * of the Appearance settings (see `SettingsSidebarSpec.onStylesChanged`).
      *
      * Same write-through as [setNavigationMode]: with the toolkit's own host
      * the setter fires [onThemeManagerChanged], which re-applies via
-     * [applyHostFontVars] and persists the choice under
-     * [PersistKeys.APPEARANCE_SHAPE]; an app-supplied host persists through
-     * its own setter and is only re-applied here.
+     * [applyHostFontVars] and persists under [PersistKeys.APPEARANCE_SHAPE];
+     * an app-supplied host persists through its own setter and is only
+     * re-applied here.
      *
-     * The chrome is rebuilt by [applyHostFontVars] itself when the resolved
-     * style changes (see [applyNavigation]), so this path, a host push and a
-     * settings pick all redraw it alike.
-     *
-     * @param style the new style, or `null` to clear the user's pick and fall
-     *   back to the app default.
-     * @see resolvedShellStyle
-     * @see setNavigationMode
+     * @param styles both modes' settings, or `null` to forget them.
+     * @see resolvedAppearance
      */
-    fun setShellStyle(style: ShellStyle?) {
+    fun setModeStyles(styles: ModeStyles?) {
         val host = spec.settingsHost
         if (host == null) {
-            themeHost.setShellStyle(style)
+            themeHost.setModeStyles(styles)
         } else {
-            host.setShellStyle(style)
+            host.setModeStyles(styles)
             applyHostFontVars()
         }
+    }
+
+    /**
+     * LEGACY entry point of [AppShellHandle.setShellStyle]: applies the look a
+     * Classic / Calm value names to the ACTIVE appearance mode, the same as
+     * picking it on the Appearance settings' Look row. The other mode keeps
+     * its settings.
+     *
+     * @param style the look to apply, or `null` to clear the active mode's
+     *   settings back to the app default.
+     * @see Looks.forShellStyle
+     */
+    fun setShellStyle(style: ShellStyle?) {
+        val host = spec.settingsHost ?: themeHost
+        val shape = style?.let { Looks.forShellStyle(it).shape } ?: AppearanceShape()
+        setModeStyles(host.editableModeStyles().withMode(activeModeIsDark, shape))
     }
 
     /**
@@ -1620,22 +1647,14 @@ private class ShellState(
         // independently, so a brand that names only one still gets the others'
         // defaults.
         val shapeFallback = spec.defaultAppearanceShape()
-        applyCornerRadiusPx(host.cornerRadiusPx ?: shapeFallback.cornerRadiusPx)
-        applyUiDensity(host.uiDensity ?: shapeFallback.uiDensity)
-        (document.documentElement as? HTMLElement)?.let {
-            applySelectionStyle(it, host.selectionStyle ?: shapeFallback.selectionStyle)
-        }
-        applySurfaceStyle(host.surfaceStyle ?: shapeFallback.surfaceStyle)
-        // Shell style takes the same ladder and is stamped as `data-dt-style`
-        // (only for Clean, so Classic renders exactly as before).
-        val previousShellStyle = resolvedShellStyle
-        resolvedShellStyle = host.shellStyle ?: shapeFallback.shellStyle ?: ShellStyle.Default
-        (document.documentElement as? HTMLElement)?.let { applyShellStyle(it, resolvedShellStyle) }
-        // Navigation takes the same ladder too, then the app's hard opt-outs
-        // win over it (see resolveNavigationLayout). A style change rides the
-        // same "rebuild only if it changed" rerender, so the chrome built from
-        // Kotlin follows a runtime style switch without waiting for an
-        // unrelated rerender.
+        // The style settings are remembered per appearance mode, so the active
+        // mode decides which of the user's two sets applies; every theme or
+        // appearance change runs this pass, which is what switches them along
+        // with the theme.
+        resolvedAppearance = host.resolveStyle(activeModeIsDark, shapeFallback)
+        (document.documentElement as? HTMLElement)?.let { applyAppearance(it, resolvedAppearance) }
+        // Navigation is shared by both modes and takes the same ladder, then
+        // the app's hard opt-outs win over it (see resolveNavigationLayout).
         applyNavigation(
             resolveNavigationLayout(
                 userMode = host.navigationMode,
@@ -1643,7 +1662,6 @@ private class ShellState(
                 appAllowsSidebar = spec.showSidebar,
                 appAllowsTabStrip = spec.showTabStrip,
             ),
-            shellStyleChanged = previousShellStyle != resolvedShellStyle,
         )
     }
 
@@ -1662,24 +1680,21 @@ private class ShellState(
      * new layout) and when only the requested mode changed but not what is
      * drawn (e.g. switching to Tab strip in an app that hard-disables it).
      *
-     * The same single rebuild also serves a change of shell style, which
-     * [applyHostFontVars] reports through [shellStyleChanged]: a style switch
-     * at runtime rebuilds the chrome, and folding both reasons into one check
-     * means a change of both at once still costs one rerender.
+     * The style settings need no rebuild: they are drawn by the stylesheet
+     * from the attributes [applyAppearance] stamps, so a style pick repaints
+     * in place and an open Appearance panel keeps its scroll position.
      *
      * Called only by [applyHostFontVars].
      *
      * @param layout the newly resolved navigation.
-     * @param shellStyleChanged `true` when [resolvedShellStyle] has just
-     *   changed, which forces the rebuild even if the drawn surfaces did not.
      */
-    private fun applyNavigation(layout: NavigationLayout, shellStyleChanged: Boolean = false) {
+    private fun applyNavigation(layout: NavigationLayout) {
         val previous = navigationLayout
         navigationLayout = layout
         (document.documentElement as? HTMLElement)?.let { applyNavigationAttribute(it, layout) }
         val surfacesChanged = previous.showsSidebar != layout.showsSidebar ||
             previous.showsTabStrip != layout.showsTabStrip
-        if ((surfacesChanged || shellStyleChanged) && topBarSlot != null) rerender()
+        if (surfacesChanged && topBarSlot != null) rerender()
     }
 
     /** Last value pushed to the Electron main process; lets us skip
@@ -2161,6 +2176,85 @@ private class ShellState(
     }
 
     /**
+     * The Appearance settings' configuration, built afresh for each render of
+     * the Appearance tab (or the standalone settings sidebar).
+     *
+     * Every default the rows show comes from the same ladder
+     * [applyHostFontVars] paints with, so the ringed pill is the one actually
+     * painted; style picks and navigation picks write through the shell so they
+     * re-apply live.
+     *
+     * @return the spec for [renderSettingsBody] / [buildSettingsSidebar].
+     */
+    private fun appearanceSettingsSpec(): SettingsSidebarSpec = SettingsSidebarSpec(
+        host = spec.settingsHost ?: themeHost,
+        isElectron = spec.isElectron,
+        onOpenThemeManager = { openAppearance(AppearanceTab.Themes) },
+        // The effective app-default keys per surface, resolved with the
+        // same fallback ladder applyHostFontVars uses — so the picker
+        // highlights the pill that is actually painted when the user has
+        // overridden nothing (e.g. a deployment brand font).
+        chromeDefaultKey = { spec.defaultChromeFontFamily() },
+        proseDefaultKey = { spec.defaultProseFontFamily() ?: spec.defaultChromeFontFamily() },
+        displayDefaultKey = {
+            spec.defaultDisplayFontFamily()
+                ?: spec.defaultProseFontFamily()
+                ?: spec.defaultChromeFontFamily()
+        },
+        // No fallthrough, matching the apply ladder: mono is the one
+        // surface a proportional brand font must not reach.
+        monoDefaultKey = { spec.defaultMonoFontFamily() },
+        // …and the same for the style rows, so a branded instance rings the
+        // pill it is actually painting rather than the toolkit default.
+        appDefaultShape = { spec.defaultAppearanceShape() },
+        isDarkMode = { activeModeIsDark },
+        onStylesChanged = { setModeStyles(it) },
+        resolvedNavigationMode = { this@ShellState.resolvedNavigationMode },
+        onPickNavigationMode = { setNavigationMode(it) },
+        appAppearanceContent = spec.appAppearanceContent,
+        // Size rows ring the brand's default too, for the same
+        // reason the family rows do.
+        sidebarSizeDefault = spec.defaultChromeFontSizePx() ?: 13,
+        mainSizeDefault = spec.defaultProseFontSizePx() ?: 14,
+        paneHeaderSizeDefault = spec.defaultChromeFontSizePx() ?: 11,
+        // Same ladder as applyHostFontVars: mono has its own default,
+        // display falls through to prose.
+        monoSizeDefault = spec.defaultMonoFontSizePx() ?: 14,
+        displaySizeDefault = spec.defaultDisplayFontSizePx() ?: spec.defaultProseFontSizePx() ?: 14,
+        fontSizeHidden = spec.fontSizeHidden,
+    )
+
+    /**
+     * Opens the Appearance pane on [tab] (or switches an open one to it),
+     * closing any other right-side panel first with the same animated hand-off
+     * the top-bar buttons use. Backs [AppShellHandle.openAppearance].
+     *
+     * @param tab the tab to show.
+     */
+    fun openAppearance(tab: AppearanceTab) {
+        when {
+            isThemeManagerSidebarOpen() -> openAppearancePane(tab, ::rerender)
+            isSettingsSidebarOpen() -> toggleSettingsSidebar {
+                rerender()
+                openAppearancePane(tab, ::rerender)
+            }
+            isAppSettingsSidebarOpen() -> toggleAppSettingsSidebar {
+                rerender()
+                openAppearancePane(tab, ::rerender)
+            }
+            isHotkeysSidebarOpen() -> toggleHotkeysSidebar {
+                rerender()
+                openAppearancePane(tab, ::rerender)
+            }
+            isNotificationsSidebarOpen() -> toggleNotificationsSidebar {
+                rerender()
+                openAppearancePane(tab, ::rerender)
+            }
+            else -> openAppearancePane(tab, ::rerender)
+        }
+    }
+
+    /**
      * Opens the Hotkeys sidebar, animating any other right-side panel closed
      * first (same mutually-exclusive hand-off the topbar buttons use). No-op
      * when the host supplied no [AppShellSpec.hotkeysContent] or the panel is
@@ -2309,62 +2403,23 @@ private class ShellState(
         // slide-in animation in its `build*Sidebar` factory.
         rightSlot.innerHTML = ""
         if (isThemeManagerSidebarOpen()) {
-            // Same `settingsHost ?: themeHost` ladder as the settings
-            // sidebar below — apps that supply their own host (e.g.
-            // termtastic's [TermtasticThemeManagerHost] backed by appVm)
-            // need it here too, otherwise the editor's `activeLight =
-            // !isDarkActive(host.appearance)` reads the toolkit's
-            // internal themeState, which is never updated by the
-            // chrome's appearance-cycle button. Result: clicking a card
+            // The Appearance pane: Themes and Appearance tabs in one sidebar.
+            // Same `settingsHost ?: themeHost` ladder for both tabs — apps
+            // that supply their own host (e.g. termtastic's
+            // [TermtasticThemeManagerHost] backed by appVm) need it here too,
+            // otherwise the editor's `activeLight = !isDarkActive(host.appearance)`
+            // reads the toolkit's internal themeState, which is never updated
+            // by the chrome's appearance-cycle button. Result: clicking a card
             // assigns to the wrong slot, group ordering and selection
             // highlight stay locked to the host's startup appearance.
-            rightSlot.appendChild(buildThemeManagerSidebar(spec.settingsHost ?: themeHost))
-        } else if (isSettingsSidebarOpen()) {
-            rightSlot.appendChild(buildSettingsSidebar(
-                SettingsSidebarSpec(
-                    host = spec.settingsHost ?: themeHost,
-                    isElectron = spec.isElectron,
-                    onOpenThemeManager = {
-                        closeSettingsSidebar()
-                        toggleThemeManagerSidebar(::rerender)
-                    },
-                    // The effective app-default keys per surface, resolved with the
-                    // same fallback ladder applyHostFontVars uses — so the picker
-                    // highlights the pill that is actually painted when the user has
-                    // overridden nothing (e.g. a deployment brand font).
-                    chromeDefaultKey = { spec.defaultChromeFontFamily() },
-                    proseDefaultKey = { spec.defaultProseFontFamily() ?: spec.defaultChromeFontFamily() },
-                    displayDefaultKey = {
-                        spec.defaultDisplayFontFamily()
-                            ?: spec.defaultProseFontFamily()
-                            ?: spec.defaultChromeFontFamily()
-                    },
-                    // No fallthrough, matching the apply ladder: mono is the one
-                    // surface a proportional brand font must not reach.
-                    monoDefaultKey = { spec.defaultMonoFontFamily() },
-                    // …and the same for the shape rows, so a branded instance
-                    // rings the pill it is actually painting rather than the
-                    // toolkit default it is not.
-                    appDefaultShape = { spec.defaultAppearanceShape() },
-                    // Style and Navigation ring what is actually in effect
-                    // (user pick, then app/brand default, then toolkit), and
-                    // write through the shell so a pick re-applies live.
-                    resolvedShellStyle = { this@ShellState.resolvedShellStyle },
-                    resolvedNavigationMode = { this@ShellState.resolvedNavigationMode },
-                    onPickShellStyle = { setShellStyle(it) },
-                    onPickNavigationMode = { setNavigationMode(it) },
-                    // Size rows ring the brand's default too, for the same
-                    // reason the family rows do.
-                    sidebarSizeDefault = spec.defaultChromeFontSizePx() ?: 13,
-                    mainSizeDefault = spec.defaultProseFontSizePx() ?: 14,
-                    paneHeaderSizeDefault = spec.defaultChromeFontSizePx() ?: 11,
-                    // Same ladder as applyHostFontVars: mono has its own default,
-                    // display falls through to prose.
-                    monoSizeDefault = spec.defaultMonoFontSizePx() ?: 14,
-                    displaySizeDefault = spec.defaultDisplayFontSizePx() ?: spec.defaultProseFontSizePx() ?: 14,
-                    fontSizeHidden = spec.fontSizeHidden,
-                )
+            rightSlot.appendChild(buildThemeManagerSidebar(
+                host = spec.settingsHost ?: themeHost,
+                appearanceBody = { target -> renderSettingsBody(target, appearanceSettingsSpec()) },
             ))
+        } else if (isSettingsSidebarOpen()) {
+            // Only reachable when an app opens the standalone settings sidebar
+            // itself; the shell's own entry point is the Appearance pane above.
+            rightSlot.appendChild(buildSettingsSidebar(appearanceSettingsSpec()))
         } else if (isAppSettingsSidebarOpen() && spec.appSettingsContent != null) {
             // App-supplied sidebar — the toolkit owns the chrome
             // (header, close, slide-in), the app supplies the body.
@@ -3359,6 +3414,9 @@ private class ShellState(
         trailing.appendChild(
             buildThemeManagerButton(
                 isOpen = isThemeManagerSidebarOpen(),
+                // The one entry point to the Appearance pane (Themes and
+                // Appearance tabs); it reopens on the tab last shown.
+                tooltip = "Themes and appearance",
                 onToggle = {
                     // Mutually exclusive with the other two right-side
                     // panels. If either Settings or App Settings is
@@ -3389,47 +3447,14 @@ private class ShellState(
                 },
             )
         )
-        // Settings gear — always present. Defaults to the toolkit's
-        // managed theme host so any app using `mountAppShell` gets the
-        // settings sidebar for free; apps with their own host pass it
-        // through `AppShellSpec.settingsHost` to override.
-        trailing.appendChild(
-            buildSettingsGearButton(
-                isOpen = isSettingsSidebarOpen(),
-                onToggle = {
-                    // Same animated hand-off as the theme button: if
-                    // either sibling sidebar is open, ride its close
-                    // transition before opening settings.
-                    when {
-                        isThemeManagerSidebarOpen() -> toggleThemeManagerSidebar {
-                            rerender()
-                            toggleSettingsSidebar(::rerender)
-                        }
-                        isAppSettingsSidebarOpen() -> toggleAppSettingsSidebar {
-                            rerender()
-                            toggleSettingsSidebar(::rerender)
-                        }
-                        isHotkeysSidebarOpen() -> toggleHotkeysSidebar {
-                            rerender()
-                            toggleSettingsSidebar(::rerender)
-                        }
-                        isNotificationsSidebarOpen() -> toggleNotificationsSidebar {
-                            rerender()
-                            toggleSettingsSidebar(::rerender)
-                        }
-                        else -> toggleSettingsSidebar(::rerender)
-                    }
-                },
-            )
-        )
         // App Settings — host-supplied content, or a host-supplied action.
         // Suppressed entirely when the app asked for neither, so apps that
         // haven't opted in don't get a phantom icon, and suppressed again
         // when `isAppSettingsAvailable` says no (a permission-gated settings
         // surface: omitted, not disabled). Sits immediately to the right of
-        // the Appearance gear so the toolkit's appearance-related cluster
-        // (theme / appearance / app-settings) reads as a left-to-right
-        // grouping.
+        // the Appearance pane's palette button so the toolkit's
+        // appearance-related cluster (appearance / app-settings) reads as a
+        // left-to-right grouping.
         //
         // `onAppSettingsActivate` wins over `appSettingsContent` when both
         // are set: the app has told us where its settings live, and opening
@@ -4984,16 +5009,22 @@ private class ShellState(
                 // Shape/density under their own key, so a theme change can
                 // never carry them along or clear them — see
                 // PersistKeys.APPEARANCE_SHAPE.
+                // The legacy single-mode fields are written back as read (so
+                // an older build still sees them), the per-mode entries beside
+                // them once the user has edited either mode.
                 spec.persister.write(
                     PersistKeys.APPEARANCE_SHAPE,
-                    AppearanceShape(
-                        themeState.cornerRadiusPx,
-                        themeState.uiDensity,
-                        themeState.selectionStyle,
-                        themeState.surfaceStyle,
-                        themeState.shellStyle,
-                        themeState.navigationMode,
-                    ).toJson(),
+                    ModeStyles.shapeBlob(
+                        AppearanceShape(
+                            cornerRadiusPx = themeState.cornerRadiusPx,
+                            uiDensity = themeState.uiDensity,
+                            selectionStyle = themeState.selectionStyle,
+                            surfaceStyle = themeState.surfaceStyle,
+                            shellStyle = themeState.shellStyle,
+                            navigationMode = themeState.navigationMode,
+                        ),
+                        themeState.modeStyles,
+                    ),
                 )
                 // ── Only what this shell's own host actually owns ────────────
                 //

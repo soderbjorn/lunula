@@ -133,81 +133,147 @@ class StylesheetIntegrityTest {
 
     @Test
     fun theDepthSurfaceRulesSurviveParsing() {
-        // Gated by applySurfaceStyle(): Depth is the absence of
-        // data-dt-surface="flat". Losing these rules would make the default
-        // silently flat — a regression nothing else would notice.
-        val depth = parsedSelectors().filter { it.contains("data-dt-surface=\"flat\"") }
+        // Gated by applySurfaceStyle(): Depth is the ABSENCE of
+        // data-dt-surface (Flat and Soft both stamp it). Losing these rules
+        // would make the default silently flat — a regression nothing else
+        // would notice.
+        val depth = parsedSelectors().filter { it.contains(":not([data-dt-surface])") }
         for (surface in listOf(".dt-pane", ".dt-pane-header", ".dt-app-frame", ".dt-sidebar-left", ".dt-tab")) {
             assertTrue(
                 depth.any { it.contains(surface) },
                 "Depth surface style has no rule for $surface — survived: $depth",
             )
         }
+        // And none is still gated the old way, which Soft would not switch off.
+        val stale = parsedSelectors().filter { it.contains(":not([data-dt-surface=\"flat\"])") }
+        assertTrue(stale.isEmpty(), "Depth rules still gated on Flat alone (Soft would keep them): $stale")
     }
 
     @Test
-    fun theCleanShellRulesSurviveParsing() {
-        // Gated by applyShellStyle(): Clean is data-dt-style="clean" on :root.
-        // Every surface the Clean block restyles is listed, because losing any
-        // one leaves a half-Clean shell (say, square sheet with Classic
-        // titlebars) that still looks wired from Kotlin's side.
-        val clean = parsedSelectors().filter { it.contains("data-dt-style=\"clean\"") }
-        assertTrue(clean.isNotEmpty(), "no Clean shell rules survived parsing")
-        for (surface in listOf(
-            ".dt-app-frame", ".dt-app-frame-main", ".dt-pane-root", ".dt-pane", ".dt-pane-focused",
-            ".dt-pane-floating", ".dt-pane-header", ".dt-pane-title", ".dt-pane-action",
-            ".dt-pane-action-separator", ".dt-tab", ".dt-pane-dock", ".dt-pane-dock-item",
-            ".dt-sidebar", ".dt-topbar",
-        )) {
+    fun noRuleReadsTheLegacyStyleStamp() {
+        // The Calm look is drawn by the individual settings now, and the
+        // legacy data-dt-style stamp is no longer written at all.
+        val legacy = parsedSelectors().filter { it.contains("data-dt-style") }
+        assertTrue(legacy.isEmpty(), "lunula.css still keys rules off data-dt-style: $legacy")
+    }
+
+    /**
+     * Asserts that some parsed rule gated on [attr] mentions each of
+     * [selectors]. Reads whole rule texts, so rules nested in an `@media`
+     * block count too.
+     *
+     * @param setting   the setting's name, for failure messages.
+     * @param attr      the attribute selector the setting's rules carry.
+     * @param selectors the selectors that must each appear in one of them.
+     */
+    private fun assertRulesFor(setting: String, attr: String, selectors: List<String>) {
+        val gated = parsedRuleTexts().filter { it.contains(attr) }
+        assertTrue(gated.isNotEmpty(), "no $setting rules survived parsing")
+        for (selector in selectors) {
             assertTrue(
-                clean.any { it.contains(surface) },
-                "Clean shell style has no rule for $surface — survived: $clean",
+                gated.any { it.contains(selector) },
+                "$setting has no rule for $selector — survived: ${gated.map { it.substringBefore('{').trim() }}",
             )
         }
     }
 
     @Test
-    fun theCleanSidebarTreeRulesSurviveParsing() {
-        // LNA-21: the sidebar tree under Clean. The selectors below are the
-        // ones whose loss would quietly bring back a Classic piece (uppercase
-        // headers, the Fill pill on the active row, Classic's active-row inset)
-        // inside an otherwise Clean sidebar.
-        val clean = parsedSelectors().filter { it.contains("data-dt-style=\"clean\"") }
-        for (selector in listOf(
+    fun theSheetWindowRulesSurviveParsing() {
+        // applyWindowLayout(Sheet). Losing any one leaves a half sheet (say,
+        // a square sheet with rounded cards inside it).
+        assertRulesFor("Windows: Sheet", "data-dt-windows=\"sheet\"", listOf(
+            ".dt-app-frame", ".dt-app-frame-main", ".dt-pane-root", ".dt-pane", ".dt-pane-floating",
+            ".dt-pane-focused", ".dt-maximized", ".dt-pane-dock", ".dt-pane-dock-item",
+        ))
+    }
+
+    @Test
+    fun theBlendedChromeRulesSurviveParsing() {
+        // applyChromeStyle(Blended): the ground, the chrome remap, the tabs,
+        // the window titlebar's geometry and its ghost buttons.
+        assertRulesFor("Chrome: Blended", "data-dt-chrome=\"blended\"", listOf(
+            ".dt-app-frame", ".dt-app-frame-main", ".dt-topbar", ".dt-bottombar", ".dt-sidebar", ".dt-tabbar",
+            ".dt-tab", ".dt-pane-header", ".dt-pane-action", ".dt-pane-action-separator",
+        ))
+    }
+
+    @Test
+    fun theBlendedSidebarTreeRulesSurviveParsing() {
+        // LNA-21: the sidebar tree under Blended. The selectors below are the
+        // ones whose loss would quietly bring back a themed piece (dim header
+        // colours, Classic's active-row inset) inside an otherwise blended
+        // sidebar.
+        assertRulesFor("Blended sidebar tree", "data-dt-chrome=\"blended\"", listOf(
             ".dt-sidebar-section-header",
             ".dt-sidebar-section.active-tab > .dt-sidebar-section-header",
             ".dt-sidebar-section-chevron",
             ".dt-sidebar-section.active-tab .dt-sidebar-row",
             ".dt-sidebar-row.dt-active",
-            "[data-dt-selection] .dt-sidebar-row.dt-active",
+            ".dt-sidebar-row:not(.dt-active)",
             ".dt-sidebar-row-icon",
             ".dt-sidebar-footer",
-        )) {
-            assertTrue(
-                clean.any { it.contains(selector) },
-                "Clean sidebar tree has no rule for $selector — survived: $clean",
-            )
-        }
+        ))
     }
 
     @Test
-    fun theCleanTopBarRulesSurviveParsing() {
-        // LNA-23: the top bar under Clean. Losing any of these brings back a
-        // Classic piece (30px square buttons, the accent chip on an open
-        // button, the 1px hairline) inside an otherwise Clean top bar.
-        val clean = parsedSelectors().filter { it.contains("data-dt-style=\"clean\"") }
-        for (selector in listOf(
+    fun theBlendedTopBarRulesSurviveParsing() {
+        // LNA-23: the top bar under Blended. Losing any of these brings back a
+        // themed piece (30px square buttons, the accent chip on an open
+        // button, the 1px hairline) inside an otherwise blended top bar.
+        assertRulesFor("Blended top bar", "data-dt-chrome=\"blended\"", listOf(
             ".dt-topbar-trailing",
             ".dt-topbar-icon-button",
             ".dt-topbar-icon-button > svg",
             ".dt-topbar-icon-button:hover",
             ".dt-topbar-icon-button.dt-active",
             ".dt-topbar-icon-button[aria-expanded=\"true\"]",
-        )) {
-            assertTrue(
-                clean.any { it.contains(selector) },
-                "Clean top bar has no rule for $selector — survived: $clean",
-            )
-        }
+        ))
     }
+
+    @Test
+    fun theToneFocusRulesSurviveParsing() {
+        // applyFocusStyle(Tone): the fills by state, the ring, the content
+        // slot, the titlebar and the out-of-flow action strip.
+        assertRulesFor("Active window: Tone", "data-dt-focus=\"tone\"", listOf(
+            ".dt-pane", ".dt-pane.dt-pane-focused", ".dt-maximized", ".dt-pane-floating::after",
+            ".dt-pane-content", ".dt-pane-header", ".dt-pane-title", ".dt-pane-header-icon",
+            ".dt-pane-action", ".dt-pane-header > .dt-pane-actions",
+        ))
+    }
+
+    @Test
+    fun theSentenceLabelRulesSurviveParsing() {
+        assertRulesFor("Labels: Sentence", "data-dt-labels=\"sentence\"", listOf(
+            ".dt-app-frame", ".dt-pane-title-input", ".dt-sidebar-section-header", ".dt-sidebar-header",
+        ))
+    }
+
+    @Test
+    fun theSoftSelectionRulesSurviveParsing() {
+        assertRulesFor("Selection: Soft", "data-dt-selection=\"soft\"", listOf(
+            ".dt-tab.dt-selected", ".dt-sidebar-row.dt-active", ".dt-pane.dt-pane-focused .dt-pane-header",
+            ".dt-pane-title",
+        ))
+    }
+
+    @Test
+    fun theSoftSurfaceRulesSurviveParsing() {
+        assertRulesFor("Surfaces: Soft", "data-dt-surface=\"soft\"", listOf(
+            ".dt-modal", ".pane-modal", ".dt-name-prompt", ".dt-hotkeys-panel",
+            ".dt-hover-menu", ".dt-pane-menu", ".dt-popover-menu", ".dt-scheme-menu", ".theme-manager-menu",
+        ))
+    }
+}
+
+/** Every top-level rule the parser accepted, as its whole text (an `@media` block with its nested rules). */
+private fun parsedRuleTexts(): List<String> {
+    injectLunulaStyles()
+    val sheets = document.styleSheets
+    val out = mutableListOf<String>()
+    for (i in 0 until sheets.length) {
+        val sheet = sheets.item(i) as? CSSStyleSheet ?: continue
+        val rules = runCatching { sheet.cssRules }.getOrNull() ?: continue
+        for (j in 0 until rules.length) out += rules.item(j)?.cssText ?: continue
+    }
+    return out
 }

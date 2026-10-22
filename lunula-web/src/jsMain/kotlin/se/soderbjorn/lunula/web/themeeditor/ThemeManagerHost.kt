@@ -18,6 +18,11 @@
 package se.soderbjorn.lunula.web.themeeditor
 
 import se.soderbjorn.lunula.core.Appearance
+import se.soderbjorn.lunula.core.AppearanceShape
+import se.soderbjorn.lunula.core.ModeStyles
+import se.soderbjorn.lunula.core.ResolvedAppearance
+import se.soderbjorn.lunula.core.appearanceLadder
+import se.soderbjorn.lunula.core.resolveAppearance
 import se.soderbjorn.lunula.core.NavigationMode
 import se.soderbjorn.lunula.core.Theme
 import se.soderbjorn.lunula.core.SelectionStyle
@@ -187,14 +192,12 @@ interface ThemeManagerHost {
     val surfaceStyle: SurfaceStyle? get() = null
 
     /**
-     * Which shell composition to draw, or `null` for [ShellStyle.Default]
-     * ([ShellStyle.Classic]).
+     * LEGACY look shorthand: a stored Classic / Calm pick from before the
+     * style settings were separate, or `null`.
      *
-     * A user setting beside [surfaceStyle], not a theme property. Read by
-     * `AppShellMount`'s host-apply pass, which resolves it (host → app default
-     * → [ShellStyle.Default]); no rendering keys off it yet. The default getter
-     * returns `null`, so a host that never overrides it gets Classic — override
-     * it together with [setShellStyle] to persist a choice.
+     * Read only while [modeStyles] is `null`, as the user's look beneath their
+     * single-mode values (see `AppearanceShape.lookLayer`). The Appearance
+     * settings never write it; they write [setModeStyles].
      *
      * @see ShellStyle
      * @see setShellStyle
@@ -216,6 +219,31 @@ interface ThemeManagerHost {
      * @see setNavigationMode
      */
     val navigationMode: NavigationMode? get() = null
+
+    /**
+     * The user's style settings for each appearance mode, or `null` when the
+     * host has never stored any.
+     *
+     * The style settings — look, corner roundness, spacing, selection,
+     * surfaces, chrome, windows, active window and labels — are remembered
+     * separately for dark and light mode, and the shell applies whichever
+     * entry matches the active appearance. Every write from the Appearance
+     * settings goes through [setModeStyles] with both entries.
+     *
+     * While this is `null` the shell falls back to the single-mode getters
+     * above ([cornerRadiusPx], [uiDensity], [selectionStyle], [surfaceStyle]
+     * and the legacy [shellStyle]) for BOTH modes, so values a host stored
+     * before the settings were per mode carry over; the first edit then seeds
+     * both entries from them.
+     *
+     * The default getter returns `null` and [setModeStyles] is a no-op, so a
+     * host that overrides neither keeps its single-mode values and does not
+     * remember edits. Override both together to persist them.
+     *
+     * @see ModeStyles
+     * @see setModeStyles
+     */
+    val modeStyles: ModeStyles? get() = null
 
     /** When `true`, the host renders an in-window titlebar drag region
      *  (Electron's `titleBarStyle: hiddenInset` pattern) instead of the
@@ -295,6 +323,82 @@ interface ThemeManagerHost {
      */
     fun setNavigationMode(value: NavigationMode?) {}
 
+    /**
+     * Persist the user's per-mode style settings (see [modeStyles]).
+     *
+     * Called by the Appearance settings after every style pick, and by
+     * `AppShellHandle.setShellStyle`, always with both entries. The shell
+     * re-reads [modeStyles] straight after this call to repaint, so the getter
+     * must return the new value by the time this returns: a host that persists
+     * asynchronously updates its in-memory state first (see Lunamux's
+     * undispatched launch).
+     *
+     * @param value both modes' settings, or `null` to forget them all and fall
+     *   back to the single-mode values and the app default.
+     * @see modeStyles
+     */
+    fun setModeStyles(value: ModeStyles?) {}
+
     /** Persist the custom-titlebar toggle. */
     fun setUseCustomTitleBar(value: Boolean) {}
 }
+
+/**
+ * The host's single-mode style values from before the settings were
+ * remembered per mode: corner radius, spacing, selection, surfaces and the
+ * legacy look shorthand.
+ *
+ * Read only while [ThemeManagerHost.modeStyles] is `null`, as the user's
+ * values for both modes.
+ *
+ * @return the legacy values as a shape.
+ * @see userStyleForMode
+ */
+fun ThemeManagerHost.legacyUserShape(): AppearanceShape = AppearanceShape(
+    cornerRadiusPx = cornerRadiusPx,
+    uiDensity = uiDensity,
+    selectionStyle = selectionStyle,
+    surfaceStyle = surfaceStyle,
+    shellStyle = shellStyle,
+)
+
+/**
+ * The user's own style values for one appearance mode: that mode's entry of
+ * [ThemeManagerHost.modeStyles], or the legacy single-mode values when the
+ * host has never stored per-mode ones.
+ *
+ * @param isDark whether the dark slot is the active one.
+ * @return the user's layer of the resolution ladder.
+ * @see resolveStyle
+ */
+fun ThemeManagerHost.userStyleForMode(isDark: Boolean): AppearanceShape =
+    modeStyles?.forMode(isDark) ?: legacyUserShape()
+
+/**
+ * The style settings in effect for one appearance mode: the user's values for
+ * that mode, then their legacy look, then [appDefault], then the app's legacy
+ * look, then the toolkit defaults.
+ *
+ * The one resolution both `AppShellMount`'s apply pass and the Appearance
+ * settings use, so the rows always ring what is painted.
+ *
+ * @param isDark     whether the dark slot is the active one.
+ * @param appDefault the app's (or brand's) default shape.
+ * @return the resolved values.
+ * @see appearanceLadder
+ */
+fun ThemeManagerHost.resolveStyle(isDark: Boolean, appDefault: AppearanceShape): ResolvedAppearance =
+    resolveAppearance(*appearanceLadder(userStyleForMode(isDark), appDefault))
+
+/**
+ * The per-mode settings to start an edit from: the host's stored pair, or —
+ * the first time — both modes seeded from the legacy single-mode values with
+ * their look shorthand folded in, so a user who had picked Calm keeps the
+ * whole look after changing one setting.
+ *
+ * @return the pair an edit should modify and hand to [ThemeManagerHost.setModeStyles].
+ * @see AppearanceShape.withLookExpanded
+ */
+fun ThemeManagerHost.editableModeStyles(): ModeStyles =
+    modeStyles ?: ModeStyles.bothFrom(legacyUserShape().withLookExpanded())
+

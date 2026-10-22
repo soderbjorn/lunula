@@ -81,7 +81,7 @@ class HostThemePushSurvivesManagerTest {
             // The mount reads the persister from an async init job; wait until
             // the topbar it builds afterwards exists.
             awaitCondition("topbar rendered") {
-                root.querySelector("button[title=\"Theme manager\"]") != null
+                root.querySelector("button[title=\"Themes and appearance\"]") != null
             }
 
             // The push an app makes when the person in front of the browser
@@ -95,7 +95,9 @@ class HostThemePushSurvivesManagerTest {
                 ),
             )
 
-            (root.querySelector("button[title=\"Theme manager\"]") as HTMLElement).clickIt()
+            // The pane reopens on the tab last shown; start on Themes.
+            resetAppearancePane()
+            (root.querySelector("button[title=\"Themes and appearance\"]") as HTMLElement).clickIt()
             awaitCondition("theme manager open") {
                 document.querySelector(".dt-theme-card") != null
             }

@@ -21,7 +21,7 @@
  *    rule written after them. The lint applies to what a theme claims, and a
  *    theme claims a text role by declaring it.
  *
- * Two later checks (LNA-18) cover pairings the Clean shell relies on —
+ * Two later checks (LNA-18) cover pairings the Calm look relies on —
  * [textDimClearsAAOnWindowIdle] and [accentTextClearsAAOnAccentSoft]. They run
  * over all built-ins, but a handful of existing palettes already fall short,
  * and fixing a palette is a design decision rather than a test change. So
@@ -120,9 +120,9 @@ private val KNOWN_TEXT_DIM_ON_WINDOW_IDLE_FAILURES: Set<String> = setOf(
     "Workbench",
     "C64",
     // Added when the derived idle fill moved from #f2f2f2 to #ececec on white
-    // surfaces (the Clean active window had to stand out more). Their textDim
+    // surfaces (the Calm active window had to stand out more). Their textDim
     // cleared AA on the old idle grey and falls just short on the new one;
-    // Clean paints dim type in the nudged cleanTextDim, so only the Classic
+    // Calm paints dim type in the nudged legibleTextDim, so only the Classic
     // palette value is affected.
     "Harbour",
     "Marmalade",
@@ -340,7 +340,7 @@ class ThemeContrastTest {
     /**
      * [Theme.textDim] stays legible on the idle-window fill.
      *
-     * The Clean shell paints resting windows in [ResolvedTheme.windowIdle], and
+     * The Calm look paints resting windows in [ResolvedTheme.windowIdle], and
      * their metadata (timestamps, counts, line numbers) is still drawn in the
      * dim tone, so the pair has to clear body-text AA.
      */
@@ -385,7 +385,7 @@ class ThemeContrastTest {
     }
 
     /**
-     * The calm themes (LNA-19) were drawn for the Clean shell, so they are
+     * The calm themes (LNA-19) were drawn for the Calm look, so they are
      * held to every check above with no exemption: none may appear in either
      * allowlist. Since [textDimClearsAAOnWindowIdle] and
      * [accentTextClearsAAOnAccentSoft] fail on any unlisted failure, this plus

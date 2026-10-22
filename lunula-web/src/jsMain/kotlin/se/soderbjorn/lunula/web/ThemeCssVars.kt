@@ -19,9 +19,13 @@ package se.soderbjorn.lunula.web
 
 import org.w3c.dom.HTMLElement
 import se.soderbjorn.lunula.core.Appearance
+import se.soderbjorn.lunula.core.ChromeStyle
+import se.soderbjorn.lunula.core.FocusStyle
+import se.soderbjorn.lunula.core.LabelCase
+import se.soderbjorn.lunula.core.ResolvedAppearance
 import se.soderbjorn.lunula.core.ResolvedTheme
+import se.soderbjorn.lunula.core.WindowLayout
 import se.soderbjorn.lunula.core.SelectionStyle
-import se.soderbjorn.lunula.core.ShellStyle
 import se.soderbjorn.lunula.core.SurfaceStyle
 import se.soderbjorn.lunula.core.UiDensity
 import se.soderbjorn.lunula.core.argbToCss
@@ -58,10 +62,10 @@ fun isDarkActive(appearance: Appearance): Boolean = when (appearance) {
  *
  * Every value is produced via [argbToCss].
  *
- * The Clean-only vars — `--t-accent-soft-solid`, `--t-clean-text-dim`,
- * `--t-clean-accent-text` and `--t-window-ring` — are likewise always emitted,
- * opaque, for the `data-dt-style="clean"` stylesheet block to read; Classic
- * rules ignore them.
+ * The style-setting vars — `--t-window-idle`, `--t-window-active`,
+ * `--t-window-ring`, `--t-accent-soft-solid`, `--t-text-dim-legible` and
+ * `--t-accent-soft-text` — are likewise always emitted, opaque, for the
+ * Tone, Sheet, Blended and Soft rules to read; the default rules ignore them.
  *
  * The 9 chrome/canvas vars are always emitted: [ResolvedTheme] has already
  * applied each optional token's fallback, so a theme that doesn't split its
@@ -96,15 +100,18 @@ fun ResolvedTheme.toCssVarMap(): Map<String, String> = buildMap {
     put("--t-accent-text", argbToCss(accentText))
     put("--t-selection", argbToCss(selection))
     put("--t-window-idle", argbToCss(windowIdle))
-    // Clean's focused-window ring: border nudged toward text. Classic never
-    // reads it. See ResolvedTheme.windowRing.
+    // The focused window's fill under Focus = Tone: surface, lifted when it
+    // would sit too close to the idle fill. See ResolvedTheme.windowActive.
+    put("--t-window-active", argbToCss(windowActive))
+    // The Tone focused-window ring: border nudged toward text. The default
+    // settings never read it. See ResolvedTheme.windowRing.
     put("--t-window-ring", argbToCss(windowRing))
-    // Clean-only derived tokens (LNA-19). Always emitted; Classic's rules never
-    // read them. Each equals its source exactly when the source is already
-    // legible — see ResolvedTheme.cleanTextDim / cleanAccentText.
+    // Legible derivations for the soft selection and the dim chrome text
+    // (LNA-19). Always emitted; the default rules never read them. Each equals its source exactly when the source is already
+    // legible — see ResolvedTheme.legibleTextDim / accentSoftText.
     put("--t-accent-soft-solid", argbToCss(accentSoftSolid))
-    put("--t-clean-text-dim", argbToCss(cleanTextDim))
-    put("--t-clean-accent-text", argbToCss(cleanAccentText))
+    put("--t-text-dim-legible", argbToCss(legibleTextDim))
+    put("--t-accent-soft-text", argbToCss(accentSoftText))
     put("--t-glow", argbToCss(glow))
     put("--t-warn", argbToCss(warn))
     put("--t-warn-on", argbToCss(warnOn))
@@ -163,7 +170,7 @@ fun clearCssVars(element: HTMLElement, vars: Map<String, String>) {
  * lets the browser style native form controls and scrollbars to match the
  * theme. Apps typically call this on `document.documentElement` alongside
  * [applyCssVars]. Also writes the per-side tuning vars of the Depth surface
- * ([depthTuningVars]) and of the Clean shell ([cleanTuningVars]).
+ * ([depthTuningVars]) and of the soft lift ([softLiftTuningVars]).
  *
  * @param element the target element (e.g. `document.documentElement`)
  * @param isDark whether the current theme is the dark variant
@@ -171,19 +178,19 @@ fun clearCssVars(element: HTMLElement, vars: Map<String, String>) {
 fun applyColorScheme(element: HTMLElement, isDark: Boolean) {
     element.style.setProperty("color-scheme", if (isDark) "dark" else "light")
     applyCssVars(element, depthTuningVars(isDark))
-    applyCssVars(element, cleanTuningVars(isDark))
+    applyCssVars(element, softLiftTuningVars(isDark))
 }
 
 /**
- * The light/dark tuning of the Clean shell style ([ShellStyle.Clean]), as the
- * `--dt-clean-*` custom properties `lunula.css` reads for the focused window's
- * lift.
+ * The light/dark tuning of the soft lift, as the `--dt-soft-lift` custom
+ * property `lunula.css` reads for the focused window under
+ * [FocusStyle.Tone] and for dialogs and menus under [SurfaceStyle.Soft].
  *
  * Written by [applyColorScheme] next to [depthTuningVars], for the same
- * reason: the values are inert under Classic, where no rule reads them, so
- * switching to Clean never has to wait for a theme repaint.
+ * reason: the values are inert under the default settings, where no rule reads them, so
+ * switching a setting never has to wait for a theme repaint.
  *
- * `--dt-clean-lift` is the soft two-layer drop shadow under the focused
+ * `--dt-soft-lift` is the soft two-layer drop shadow under the focused
  * window (a tight contact shadow plus a wide ambient one). It is black on
  * both sides, but at about 3.5× the alpha on dark grounds, where a light
  * theme's 5 % / 10 % would not show at all.
@@ -192,10 +199,10 @@ fun applyColorScheme(element: HTMLElement, isDark: Boolean) {
  * @return CSS custom property name → value.
  * @see depthTuningVars
  */
-fun cleanTuningVars(isDark: Boolean): Map<String, String> = if (isDark) mapOf(
-    "--dt-clean-lift" to "0 2px 4px rgba(0, 0, 0, 0.2), 0 12px 32px rgba(0, 0, 0, 0.35)",
+fun softLiftTuningVars(isDark: Boolean): Map<String, String> = if (isDark) mapOf(
+    "--dt-soft-lift" to "0 2px 4px rgba(0, 0, 0, 0.2), 0 12px 32px rgba(0, 0, 0, 0.35)",
 ) else mapOf(
-    "--dt-clean-lift" to "0 2px 4px rgba(0, 0, 0, 0.05), 0 12px 32px rgba(0, 0, 0, 0.1)",
+    "--dt-soft-lift" to "0 2px 4px rgba(0, 0, 0, 0.05), 0 12px 32px rgba(0, 0, 0, 0.1)",
 )
 
 /**
@@ -265,9 +272,9 @@ fun applyTheme(element: HTMLElement, theme: ResolvedTheme, isDark: Boolean) {
  * attribute. `null` means "nobody has chosen", and resolves to
  * [SelectionStyle.Default].
  *
- * Only Fill is written; [SelectionStyle.Tint] *removes* the attribute, because
- * the stylesheet paints tint in its base rules and keys only the fill overrides
- * off the selector. The asymmetry is deliberate — it keeps the default
+ * Fill and Soft are written; [SelectionStyle.Tint] *removes* the attribute,
+ * because the stylesheet paints tint in its base rules and keys only the Fill
+ * and Soft overrides off the selector. The asymmetry is deliberate — it keeps the default
  * expressible in one Kotlin constant instead of forcing the whole selection
  * section of `lunula.css` to be rewritten as `:not([data-dt-selection="tint"])`
  * every time the default moves.
@@ -502,81 +509,137 @@ fun applyUiDensity(density: UiDensity?) {
 /**
  * Apply [style] as the shell's surface treatment.
  *
- * Stamps `data-dt-surface="flat"` on `documentElement` for [SurfaceStyle.Flat]
- * and removes the attribute otherwise — `null` resolves to
- * [SurfaceStyle.Default] (Depth). `lunula.css` writes the Depth rules under
- * `:root:not([data-dt-surface="flat"])`, so the flat look is exactly the base
- * stylesheet with nothing layered on, and the default needs no attribute.
+ * Stamps `data-dt-surface` on `documentElement` — `flat` for
+ * [SurfaceStyle.Flat], `soft` for [SurfaceStyle.Soft] — and removes the
+ * attribute for Depth; `null` resolves to [SurfaceStyle.Default] (Depth).
+ * `lunula.css` writes the Depth rules under `:root:not([data-dt-surface])`, so
+ * Flat and Soft both start from the base stylesheet with nothing layered on,
+ * Soft adds its calm cards, and the default needs no attribute.
  *
  * Like [applyUiDensity] this is a user setting, not a theme property: it rides
  * the host-apply pass in `AppShellMount` (restored at boot, re-applied on every
- * rebuild, untouched by theme changes) and is called directly by the Settings
- * sidebar's "Surfaces" row. The light/dark tuning it depends on comes from
- * [depthTuningVars], written by [applyColorScheme].
+ * rebuild, untouched by theme changes) through [applyAppearance]. The
+ * light/dark tuning it depends on comes from [depthTuningVars], written by
+ * [applyColorScheme].
  *
  * @param style the surface style, or `null` for the default.
  * @see SurfaceStyle
- * @see se.soderbjorn.lunula.web.themeeditor.ThemeManagerHost.surfaceStyle
+ * @see applyAppearance
  */
 fun applySurfaceStyle(style: SurfaceStyle?) {
     val root = kotlinx.browser.document.documentElement as? HTMLElement ?: return
-    if ((style ?: SurfaceStyle.Default) == SurfaceStyle.Flat) root.setAttribute("data-dt-surface", "flat")
-    else root.removeAttribute("data-dt-surface")
-}
-
-/**
- * Apply [style] as the shell's overall composition (epic LNA-16).
- *
- * Stamps `data-dt-style="clean"` on [element] for [ShellStyle.Clean] and
- * removes the attribute otherwise. `null` resolves to [ShellStyle.Default]
- * (Classic). `lunula.css` writes every Clean rule under
- * `:root[data-dt-style="clean"]`, in one block at the end of the file, so
- * Classic is exactly the stylesheet as it was before Clean existed and the
- * default needs no attribute. This is the same asymmetry as
- * [applySurfaceStyle] and [applySelectionStyle].
- *
- * Clean is layered over the user's other shape settings rather than writing
- * them: the stylesheet forces a 14px corner and Comfortable spacing, and
- * cancels the Fill selection and Depth surface visuals, while those settings
- * keep their stored values (and their own `data-dt-*` stamps) for when the
- * user switches back to Classic.
- *
- * Like the other shape settings this is a user setting, not a theme property:
- * it rides the host-apply pass in `AppShellMount` (`applyHostFontVars`, which
- * resolves user pick, then app default, then [ShellStyle.Default]) and is
- * untouched by theme changes.
- *
- * @param element the themed root (e.g. `document.documentElement`); the
- *   stylesheet keys off `:root`, so any other element has no visual effect.
- * @param style   the shell style, or `null` for [ShellStyle.Default].
- * @see ShellStyle
- * @see applySurfaceStyle
- * @see applySelectionStyle
- */
-fun applyShellStyle(element: HTMLElement, style: ShellStyle?) {
-    if ((style ?: ShellStyle.Default) == ShellStyle.Clean) {
-        element.setAttribute("data-dt-style", ShellStyle.Clean.cssValue)
-    } else {
-        element.removeAttribute("data-dt-style")
+    when (style ?: SurfaceStyle.Default) {
+        SurfaceStyle.Depth -> root.removeAttribute("data-dt-surface")
+        else -> root.setAttribute("data-dt-surface", (style ?: SurfaceStyle.Default).cssValue)
     }
 }
 
 /**
- * Reads back the shell style [applyShellStyle] last stamped on [element]:
- * [ShellStyle.Clean] when `data-dt-style="clean"` is present, otherwise
- * [ShellStyle.Classic].
+ * Stamps [attr] on [element] with [value], or removes it when [value] is
+ * `null`. The shared mechanics of the four style appliers below, each of
+ * which writes its attribute only for the non-default option so the base
+ * stylesheet stays the default look.
+ */
+private fun stampOrClear(element: HTMLElement, attr: String, value: String?) {
+    if (value == null) element.removeAttribute(attr) else element.setAttribute(attr, value)
+}
+
+/**
+ * Apply [style] as the chrome treatment: `data-dt-chrome="blended"` for
+ * [ChromeStyle.Blended], no attribute for Themed (the base stylesheet).
  *
- * The stamp on `:root` is the RESOLVED style (user pick, then app/brand
- * default, then [ShellStyle.Default], resolved by `AppShellMount`'s
- * host-apply pass), so this is how code without access to the shell — the
- * Theme Manager's picker ordering (`calmFirst`) — follows a Clean default
- * the user never picked, which the host's own `shellStyle` getter (null in
- * that case) cannot tell it. Before anything is stamped it reads Classic, the
+ * @param element the themed root (e.g. `document.documentElement`).
+ * @param style   the chrome style, or `null` for [ChromeStyle.Default].
+ * @see ChromeStyle
+ * @see applyAppearance
+ */
+fun applyChromeStyle(element: HTMLElement, style: ChromeStyle?) =
+    stampOrClear(element, "data-dt-chrome", (style ?: ChromeStyle.Default).takeIf { it != ChromeStyle.Themed }?.cssValue)
+
+/**
+ * Apply [layout] as the window layout: `data-dt-windows="sheet"` for
+ * [WindowLayout.Sheet], no attribute for Cards (the base stylesheet).
+ *
+ * @param element the themed root (e.g. `document.documentElement`).
+ * @param layout  the window layout, or `null` for [WindowLayout.Default].
+ * @see WindowLayout
+ * @see applyAppearance
+ */
+fun applyWindowLayout(element: HTMLElement, layout: WindowLayout?) =
+    stampOrClear(element, "data-dt-windows", (layout ?: WindowLayout.Default).takeIf { it != WindowLayout.Cards }?.cssValue)
+
+/**
+ * Apply [style] as the focus treatment: `data-dt-focus="tone"` for
+ * [FocusStyle.Tone], no attribute for Accent (the base stylesheet).
+ *
+ * @param element the themed root (e.g. `document.documentElement`).
+ * @param style   the focus style, or `null` for [FocusStyle.Default].
+ * @see FocusStyle
+ * @see applyAppearance
+ */
+fun applyFocusStyle(element: HTMLElement, style: FocusStyle?) =
+    stampOrClear(element, "data-dt-focus", (style ?: FocusStyle.Default).takeIf { it != FocusStyle.Accent }?.cssValue)
+
+/**
+ * Apply [case] as the chrome label casing: `data-dt-labels="sentence"` for
+ * [LabelCase.Sentence], no attribute for Uppercase (the base stylesheet).
+ *
+ * @param element the themed root (e.g. `document.documentElement`).
+ * @param case    the casing, or `null` for [LabelCase.Default].
+ * @see LabelCase
+ * @see applyAppearance
+ */
+fun applyLabelCase(element: HTMLElement, case: LabelCase?) =
+    stampOrClear(element, "data-dt-labels", (case ?: LabelCase.Default).takeIf { it != LabelCase.Uppercase }?.cssValue)
+
+/**
+ * Applies every style setting of [resolved] at once: corner radius, spacing,
+ * selection, surfaces, chrome, windows, active window and labels.
+ *
+ * Called by `AppShellMount`'s host-apply pass (on boot, on every rebuild, and
+ * when the appearance switches between dark and light, since each mode has
+ * its own values) and by the Appearance settings after a pick.
+ *
+ * @param element  the themed root, normally `document.documentElement`.
+ * @param resolved the values to paint.
+ * @see se.soderbjorn.lunula.core.resolveAppearance
+ * @see appliedAppearance
+ */
+fun applyAppearance(element: HTMLElement, resolved: ResolvedAppearance) {
+    applyCornerRadiusPx(resolved.cornerRadiusPx)
+    applyUiDensity(resolved.uiDensity)
+    applySelectionStyle(element, resolved.selectionStyle)
+    applySurfaceStyle(resolved.surfaceStyle)
+    applyChromeStyle(element, resolved.chromeStyle)
+    applyWindowLayout(element, resolved.windowLayout)
+    applyFocusStyle(element, resolved.focusStyle)
+    applyLabelCase(element, resolved.labelCase)
+}
+
+/**
+ * Reads back the style settings [applyAppearance] last stamped on [element].
+ *
+ * The stamps on `:root` are the RESOLVED values (user pick for the active
+ * mode, then app/brand default, then toolkit default), so this is how code
+ * without access to the shell follows them: the Theme Manager's thumbnails,
+ * and an app deciding whether its terminal canvas should go transparent under
+ * [FocusStyle.Tone]. Before anything is stamped it reads the defaults, the
  * same as what is painted.
  *
  * @param element the themed root, normally `document.documentElement`.
- * @return the style in effect on [element].
- * @see applyShellStyle
+ * @return the values in effect on [element].
+ * @see applyAppearance
  */
-fun appliedShellStyle(element: HTMLElement): ShellStyle =
-    if (element.getAttribute("data-dt-style") == ShellStyle.Clean.cssValue) ShellStyle.Clean else ShellStyle.Classic
+fun appliedAppearance(element: HTMLElement): ResolvedAppearance {
+    val radius = element.style.getPropertyValue("--dt-corner-radius").removeSuffix("px").trim().toIntOrNull()
+    return ResolvedAppearance(
+        cornerRadiusPx = radius,
+        uiDensity = UiDensity.fromRaw(element.getAttribute("data-dt-density")) ?: UiDensity.Compact,
+        selectionStyle = SelectionStyle.fromRaw(element.getAttribute("data-dt-selection")) ?: SelectionStyle.Tint,
+        surfaceStyle = SurfaceStyle.fromRaw(element.getAttribute("data-dt-surface")) ?: SurfaceStyle.Depth,
+        chromeStyle = ChromeStyle.fromRaw(element.getAttribute("data-dt-chrome")) ?: ChromeStyle.Themed,
+        windowLayout = WindowLayout.fromRaw(element.getAttribute("data-dt-windows")) ?: WindowLayout.Cards,
+        focusStyle = FocusStyle.fromRaw(element.getAttribute("data-dt-focus")) ?: FocusStyle.Accent,
+        labelCase = LabelCase.fromRaw(element.getAttribute("data-dt-labels")) ?: LabelCase.Uppercase,
+    )
+}

@@ -1,14 +1,16 @@
 /*
  * SurfaceStyleTest.kt (jsTest)
  *
- * Pins how `applySurfaceStyle` expresses the Depth / Flat surface setting on
- * `documentElement`, and that the light/dark depth tuning written by
- * `applyColorScheme` differs per side.
+ * Pins how `applySurfaceStyle` expresses the Depth / Flat / Soft surface
+ * setting on `documentElement`, that the light/dark depth tuning written by
+ * `applyColorScheme` differs per side, and that the Depth rules switch off
+ * under Soft exactly as under Flat.
  *
  * The attribute contract matters because `lunula.css` writes every depth rule
- * under `:root:not([data-dt-surface="flat"])`: Depth (and "never chosen") must
- * leave the attribute absent, and only Flat may stamp it — otherwise the
- * default would silently be flat, or Flat would not look like the old shell.
+ * under `:root:not([data-dt-surface])`: Depth (and "never chosen") must leave
+ * the attribute absent, and Flat and Soft each stamp their own value —
+ * otherwise the default would silently be flat, or Soft would keep Depth's
+ * shadows under its calm cards.
  *
  * @see se.soderbjorn.lunula.web.applySurfaceStyle
  * @see se.soderbjorn.lunula.web.depthTuningVars
@@ -16,10 +18,12 @@
 package se.soderbjorn.lunula.web.shell
 
 import kotlinx.browser.document
+import kotlinx.browser.window
 import org.w3c.dom.HTMLElement
 import se.soderbjorn.lunula.core.SurfaceStyle
 import se.soderbjorn.lunula.web.applyColorScheme
 import se.soderbjorn.lunula.web.applySurfaceStyle
+import se.soderbjorn.lunula.web.injectLunulaStyles
 import se.soderbjorn.lunula.web.depthTuningVars
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -71,5 +75,53 @@ class SurfaceStyleTest {
         assertEquals("2.6", el.style.getPropertyValue("--dt-depth-strength"))
         applyColorScheme(el, isDark = false)
         assertEquals("1", el.style.getPropertyValue("--dt-depth-strength"))
+    }
+
+    /** Soft stamps its own value, and Depth clears it again. */
+    @Test
+    fun softStampsAndDepthClears() {
+        applySurfaceStyle(SurfaceStyle.Soft)
+        assertEquals("soft", surfaceAttr())
+        applySurfaceStyle(SurfaceStyle.Depth)
+        assertNull(surfaceAttr())
+    }
+
+    /**
+     * With the stylesheet loaded, a window, its titlebar and the frame paint
+     * the same under Soft as under Flat (the Depth rules are off), and
+     * differently under Depth.
+     */
+    @Test
+    fun depthRulesAreOffUnderSoft() {
+        injectLunulaStyles()
+        val frame = (document.createElement("div") as HTMLElement).also {
+            it.className = "dt-app-frame"
+            it.style.width = "400px"
+            it.style.height = "300px"
+            document.body!!.appendChild(it)
+        }
+        val pane = (document.createElement("div") as HTMLElement).also {
+            it.className = "dt-pane dt-pane-floating dt-pane-focused"
+            frame.appendChild(it)
+        }
+        val header = (document.createElement("div") as HTMLElement).also {
+            it.className = "dt-pane-header"
+            pane.appendChild(it)
+        }
+        fun snap(): List<String> = listOf(frame, pane, header).flatMap { el ->
+            el.style.transition = "none"
+            val st = window.getComputedStyle(el)
+            listOf(st.boxShadow, st.backgroundImage)
+        }
+        try {
+            applySurfaceStyle(SurfaceStyle.Flat)
+            val flat = snap()
+            applySurfaceStyle(SurfaceStyle.Soft)
+            assertEquals(flat, snap(), "Soft must drop every Depth effect, as Flat does")
+            applySurfaceStyle(SurfaceStyle.Depth)
+            assertNotEquals(flat, snap(), "Depth paints something, so this test proves something")
+        } finally {
+            frame.remove()
+        }
     }
 }

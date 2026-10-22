@@ -63,10 +63,11 @@ enum class Appearance { Auto, Dark, Light }
  * `accentSoft`, which a theme may now pin to an explicit opaque value (the
  * calm themes do). Every other token is a literal value with no computation.
  *
- * ### Clean-only derived tokens
- * The Clean shell reads three more resolved values that Classic ignores:
- * [ResolvedTheme.accentSoftSolid], [ResolvedTheme.cleanTextDim] and
- * [ResolvedTheme.cleanAccentText]. They are computed in [resolve], not stored,
+ * ### Derived tokens for the style settings
+ * The style settings (Tone, Blended chrome, Soft selection) read three more
+ * resolved values that the default settings ignore:
+ * [ResolvedTheme.accentSoftSolid], [ResolvedTheme.legibleTextDim] and
+ * [ResolvedTheme.accentSoftText]. They are computed in [resolve], not stored,
  * and each equals its source exactly whenever the source is already legible.
  *
  * ### The three zones
@@ -136,7 +137,7 @@ enum class Appearance { Auto, Dark, Light }
  *   declares it, and a custom theme saved before it existed gets the legible
  *   fallback [effectiveSelection].
  * @property windowIdle       optional — fill of an idle (unfocused, resting) window in the
- *   Clean shell; falls back to a derivation from [surface] — see [effectiveWindowIdle].
+ *   Calm look; falls back to a derivation from [surface] — see [effectiveWindowIdle].
  * @property accentSoft       optional — an **opaque** accent wash (the active sidebar row, a
  *   soft highlight). Unset, the wash is [accent] at [ACCENT_SOFT_ALPHA] as before; set, it
  *   replaces that translucent value outright — see [effectiveAccentSoftSolid].
@@ -222,7 +223,7 @@ data class Theme(
     // apps) is unchanged for a theme that leaves it out.
     @EncodeDefault(EncodeDefault.Mode.NEVER) val selection: String? = null,
     // ---- Optional idle-window fill ----
-    // The resting fill of a window that is not the focused one, for the Clean
+    // The resting fill of a window that is not the focused one, for the Tone
     // shell (epic LNA-16). Optional and never-encoded like every token above,
     // so a theme that leaves it out serializes exactly as before; when unset
     // it is derived from [surface] — see [effectiveWindowIdle].
@@ -425,7 +426,37 @@ data class Theme(
         )
 
     /**
-     * The hairline ring the Clean shell draws around the focused window:
+     * The focused window's fill under [FocusStyle.Tone]: [surface], lifted
+     * toward [text] only as far as needed for the active window to stand
+     * [WINDOW_TONE_MIN_CONTRAST] apart from [effectiveWindowIdle].
+     *
+     * Needed because the idle fill of a dark theme is derived by sinking
+     * [surface] toward [bg], and in most dark palettes the two are nearly the
+     * same colour: Lunamux Classic Dark's surface `#0c1611` on `#08110c` gives
+     * an idle `#09120d` nobody can tell from the active window (contrast
+     * 1.02). Lifting the active window instead keeps the idle ones at the
+     * background level, so nothing goes darker than [bg].
+     *
+     * A theme that declares [windowIdle] has tuned the pair by hand (the Calm
+     * themes), and keeps [surface] exactly; so does every light theme, whose
+     * derived idle already sits about 1.18 apart.
+     *
+     * @return the active-window fill as a `#rrggbb` hex string.
+     * @see ResolvedTheme.windowActive
+     */
+    val effectiveWindowActive: String
+        get() {
+            if (windowIdle != null) return surface
+            val surfaceArgb = hexToArgb(surface)
+            val lifted = nudgeForContrast(
+                surfaceArgb, hexToArgb(text), listOf(hexToArgb(effectiveWindowIdle)),
+                WINDOW_TONE_MIN_CONTRAST, WINDOW_TONE_STEP,
+            )
+            return if (lifted == surfaceArgb) surface else argbToHex(lifted)
+        }
+
+    /**
+     * The hairline ring the Calm look draws around the focused window:
      * [border] mixed [WINDOW_RING_TOWARD_TEXT] toward [text], one step
      * stronger than an ordinary hairline so the active window's edge reads
      * on every side (`#E3E3DF` with text `#1A1C1E` → `#D5D5D1`).
@@ -447,7 +478,7 @@ data class Theme(
      * browser actually paints for the translucent wash on a surface.
      *
      * Read by [resolve] (for [ResolvedTheme.accentSoftSolid] and as the
-     * backdrop of [ResolvedTheme.cleanAccentText]) and by [token], so the
+     * backdrop of [ResolvedTheme.accentSoftText]) and by [token], so the
      * editor shows a real swatch for a theme that never declared a wash.
      *
      * @return the opaque wash as a `#rrggbb` hex string.
@@ -459,58 +490,59 @@ data class Theme(
         )
 
     /**
-     * [textDim] made legible for the Clean shell: unchanged when it already
-     * clears [CLEAN_TEXT_AA] on [effectiveWindowIdle], [bg] and [surface];
-     * otherwise nudged toward [text] in [CLEAN_NUDGE_STEP] steps
+     * [textDim] made legible for the Calm look: unchanged when it already
+     * clears [LEGIBLE_TEXT_AA] on [effectiveWindowIdle], [bg] and [surface];
+     * otherwise nudged toward [text] in [LEGIBLE_NUDGE_STEP] steps
      * ([nudgeForContrast]) until it does.
      *
-     * Clean paints an inactive window's title in the dim tone on the
+     * The style settings paint an inactive window's title in the dim tone on the
      * idle-window fill, a pairing no theme was drawn for — 69 built-ins fall
-     * short of AA there (LNA-18). Rather than re-tint every palette, Clean
-     * reads this derived value and Classic keeps reading [textDim] untouched.
+     * short of AA there (LNA-18). Rather than re-tint every palette, the style
+     * settings read this derived value and the default rules keep reading
+     * [textDim] untouched.
      *
      * Should even [text] fall short (a low-headroom palette), the ladder
      * carries on from [text] toward black or white — whichever the
      * idle-window fill contrasts with more — so the result always clears the
      * floor.
      *
-     * @return the Clean dim-text colour as ARGB.
-     * @see ResolvedTheme.cleanTextDim
+     * @return the legible dim-text colour as ARGB.
+     * @see ResolvedTheme.legibleTextDim
      */
-    private fun cleanTextDimArgb(): Long {
-        val backdrops = listOf(hexToArgb(effectiveWindowIdle), hexToArgb(bg), hexToArgb(surface))
-        val towardText = nudgeForContrast(hexToArgb(textDim), hexToArgb(text), backdrops, CLEAN_TEXT_AA, CLEAN_NUDGE_STEP)
-        if (backdrops.all { contrastRatio(towardText, it) >= CLEAN_TEXT_AA }) return towardText
-        return nudgeForContrast(towardText, onColorFor(backdrops.first()), backdrops, CLEAN_TEXT_AA, CLEAN_NUDGE_STEP)
+    private fun legibleTextDimArgb(): Long {
+        val backdrops = listOf(hexToArgb(effectiveWindowIdle), hexToArgb(bg), hexToArgb(surface), hexToArgb(effectiveWindowActive))
+        val towardText = nudgeForContrast(hexToArgb(textDim), hexToArgb(text), backdrops, LEGIBLE_TEXT_AA, LEGIBLE_NUDGE_STEP)
+        if (backdrops.all { contrastRatio(towardText, it) >= LEGIBLE_TEXT_AA }) return towardText
+        return nudgeForContrast(towardText, onColorFor(backdrops.first()), backdrops, LEGIBLE_TEXT_AA, LEGIBLE_NUDGE_STEP)
     }
 
     /**
-     * The accent as type, made legible on the opaque accent wash for the Clean
+     * The accent as type, made legible on the opaque accent wash for Soft
      * shell: [effectiveAccentText] unchanged when it already clears
-     * [CLEAN_TEXT_AA] on [effectiveAccentSoftSolid]; otherwise nudged in
-     * [CLEAN_NUDGE_STEP] steps toward the readable extreme until it does.
+     * [LEGIBLE_TEXT_AA] on [effectiveAccentSoftSolid]; otherwise nudged in
+     * [LEGIBLE_NUDGE_STEP] steps toward the readable extreme until it does.
      *
      * The extreme is [text] when [text] itself clears the floor on the wash and
      * contrasts with it more than the accent text does (keeping the result in
      * the palette's own ink); otherwise black or white, whichever contrasts
      * with the wash more ([onColorFor], which clears the floor for any fill).
-     * Clean paints the active sidebar row in this colour on that wash, where 51
+     * Soft selection paints the active row and tab in this colour on that wash, where 51
      * built-ins' accent text falls short (LNA-18).
      *
-     * @return the Clean accent-text colour as ARGB.
-     * @see ResolvedTheme.cleanAccentText
+     * @return the soft accent-text colour as ARGB.
+     * @see ResolvedTheme.accentSoftText
      */
-    private fun cleanAccentTextArgb(): Long {
+    private fun accentSoftTextArgb(): Long {
         val wash = hexToArgb(effectiveAccentSoftSolid)
         val accentTextArgb = hexToArgb(effectiveAccentText)
         val textArgb = hexToArgb(text)
         val textRatio = contrastRatio(textArgb, wash)
-        val target = if (textRatio >= CLEAN_TEXT_AA && textRatio > contrastRatio(accentTextArgb, wash)) {
+        val target = if (textRatio >= LEGIBLE_TEXT_AA && textRatio > contrastRatio(accentTextArgb, wash)) {
             textArgb
         } else {
             onColorFor(wash)
         }
-        return nudgeForContrast(accentTextArgb, target, listOf(wash), CLEAN_TEXT_AA, CLEAN_NUDGE_STEP)
+        return nudgeForContrast(accentTextArgb, target, listOf(wash), LEGIBLE_TEXT_AA, LEGIBLE_NUDGE_STEP)
     }
 
     /** [tintAlpha] if set, else the tone default (0.16 light / 0.18 dark). */
@@ -588,13 +620,16 @@ data class Theme(
         selection = hexToArgb(effectiveSelection),
         // Declared, or derived from surface by tone — see effectiveWindowIdle.
         windowIdle = hexToArgb(effectiveWindowIdle),
+        // Surface, lifted when it sits too close to the idle fill — see
+        // effectiveWindowActive.
+        windowActive = hexToArgb(effectiveWindowActive),
         // Derived from border and text — see effectiveWindowRing.
         windowRing = hexToArgb(effectiveWindowRing),
-        // Clean-only derived tokens; Classic never reads them. Each equals its
+        // Derived tokens for the style settings; the default settings never read them. Each equals its
         // source exactly when the source already clears AA.
         accentSoftSolid = hexToArgb(effectiveAccentSoftSolid),
-        cleanTextDim = cleanTextDimArgb(),
-        cleanAccentText = cleanAccentTextArgb(),
+        legibleTextDim = legibleTextDimArgb(),
+        accentSoftText = accentSoftTextArgb(),
     )
 
     companion object {
@@ -632,7 +667,7 @@ data class Theme(
          * How far [effectiveWindowIdle]'s light-tone fallback mixes [surface]
          * toward black: `0.075` takes `#FFFFFF` to `#ECECEC`. Raised from
          * `0.05` (`#F2F2F2`) so a white focused window stands clearly apart
-         * from the idle ones under Clean.
+         * from the idle ones under Tone.
          */
         const val WINDOW_IDLE_LIGHT_TOWARD_BLACK: Double = 0.075
 
@@ -651,6 +686,18 @@ data class Theme(
         const val WINDOW_RING_TOWARD_TEXT: Double = 0.07
 
         /**
+         * The least contrast [effectiveWindowActive] keeps between the active
+         * and the idle window fill: about Moss Calm Dark's hand-tuned 1.11, the
+         * difference that still reads as "this one is active" on a dark ground.
+         * Measured across the built-ins, 33 of the 37 dark themes without a
+         * declared idle fill fell short (median 1.06, worst 1.02).
+         */
+        const val WINDOW_TONE_MIN_CONTRAST: Double = 1.10
+
+        /** The mix increment of [effectiveWindowActive]'s lift toward [text]. */
+        const val WINDOW_TONE_STEP: Double = 0.01
+
+        /**
          * Opacity of the derived accent wash, [ResolvedTheme.accentSoft]: the
          * design's "accent at 15 %". Ignored by a theme that declares an
          * opaque [accentSoft].
@@ -658,18 +705,18 @@ data class Theme(
         const val ACCENT_SOFT_ALPHA: Double = 0.15
 
         /**
-         * The contrast floor the Clean-only text tokens are nudged to reach —
-         * WCAG AA for body text. See [ResolvedTheme.cleanTextDim] and
-         * [ResolvedTheme.cleanAccentText].
+         * The contrast floor the legible text tokens are nudged to reach —
+         * WCAG AA for body text. See [ResolvedTheme.legibleTextDim] and
+         * [ResolvedTheme.accentSoftText].
          */
-        const val CLEAN_TEXT_AA: Double = 4.5
+        const val LEGIBLE_TEXT_AA: Double = 4.5
 
         /**
          * The mix increment of each nudge toward a more legible colour (see
          * [nudgeForContrast]): small, so a failing colour moves only as far as
          * it must and keeps as much of its hue as it can.
          */
-        const val CLEAN_NUDGE_STEP: Double = 0.02
+        const val LEGIBLE_NUDGE_STEP: Double = 0.02
 
         /** Opaque black, the light-tone mix target for [effectiveWindowIdle]. */
         private const val BLACK: Long = 0xFF000000L

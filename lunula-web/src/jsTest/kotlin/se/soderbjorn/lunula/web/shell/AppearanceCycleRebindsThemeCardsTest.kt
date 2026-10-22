@@ -99,7 +99,7 @@ class AppearanceCycleRebindsThemeCardsTest {
             )
 
             awaitThat("topbar rendered") {
-                root.querySelector("button[title=\"Theme manager\"]") != null
+                root.querySelector("button[title=\"Themes and appearance\"]") != null
             }
             awaitThat("seeded snapshot applied") {
                 persistedSnapshot(persister).appearance == Appearance.Dark
@@ -108,7 +108,9 @@ class AppearanceCycleRebindsThemeCardsTest {
             // Open the manager first, so its cards are built while the
             // appearance is still Dark. Opening it afterwards would build them
             // against the flipped value and prove nothing.
-            (root.querySelector("button[title=\"Theme manager\"]") as HTMLElement).dispatchClick()
+            // The pane reopens on the tab last shown; start on Themes.
+            resetAppearancePane()
+            (root.querySelector("button[title=\"Themes and appearance\"]") as HTMLElement).dispatchClick()
             awaitThat("theme manager open") { document.querySelector(".dt-theme-card") != null }
 
             // Dark → Light. The button cycles Auto → Dark → Light → Auto.
