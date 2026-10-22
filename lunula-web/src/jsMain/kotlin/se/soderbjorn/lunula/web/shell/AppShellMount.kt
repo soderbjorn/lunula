@@ -1506,9 +1506,8 @@ private class ShellState(
 
     /**
      * Changes the user's navigation mode at runtime and redraws the chrome to
-     * match. The entry point a settings control calls (the Appearance control
-     * itself lives in the Appearance settings); also exposed as
-     * [AppShellHandle.setNavigationMode].
+     * match. Exposed as [AppShellHandle.setNavigationMode]; the Appearance
+     * pane offers no control for it (the sidebar has its own toggle).
      *
      * Writes through the same `settingsHost ?: themeHost` ladder every other
      * appearance setting uses. With the toolkit's own host, the setter fires
@@ -2209,8 +2208,6 @@ private class ShellState(
         appDefaultShape = { spec.defaultAppearanceShape() },
         isDarkMode = { activeModeIsDark },
         onStylesChanged = { setModeStyles(it) },
-        resolvedNavigationMode = { this@ShellState.resolvedNavigationMode },
-        onPickNavigationMode = { setNavigationMode(it) },
         appAppearanceContent = spec.appAppearanceContent,
         // Size rows ring the brand's default too, for the same
         // reason the family rows do.
@@ -2403,7 +2400,7 @@ private class ShellState(
         // slide-in animation in its `build*Sidebar` factory.
         rightSlot.innerHTML = ""
         if (isThemeManagerSidebarOpen()) {
-            // The Appearance pane: Themes and Appearance tabs in one sidebar.
+            // The Appearance pane: Themes and the settings tabs in one sidebar.
             // Same `settingsHost ?: themeHost` ladder for both tabs — apps
             // that supply their own host (e.g. termtastic's
             // [TermtasticThemeManagerHost] backed by appVm) need it here too,
@@ -2414,7 +2411,9 @@ private class ShellState(
             // highlight stay locked to the host's startup appearance.
             rightSlot.appendChild(buildThemeManagerSidebar(
                 host = spec.settingsHost ?: themeHost,
-                appearanceBody = { target -> renderSettingsBody(target, appearanceSettingsSpec()) },
+                appearanceBody = { tab, target -> renderSettingsBody(target, appearanceSettingsSpec(), tab) },
+                // Behaviour holds only the Custom title bar, which is Electron-only.
+                appearanceTabs = AppearanceTab.entries.filter { it != AppearanceTab.Behaviour || spec.isElectron },
             ))
         } else if (isSettingsSidebarOpen()) {
             // Only reachable when an app opens the standalone settings sidebar

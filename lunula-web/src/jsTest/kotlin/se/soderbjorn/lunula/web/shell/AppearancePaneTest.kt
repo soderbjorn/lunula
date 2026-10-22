@@ -5,9 +5,10 @@
  * [Persister], for two things the style-settings split changed:
  *
  *  - The Appearance pane. The top bar has one palette button ("Themes and
- *    appearance"); it opens a right-hand pane with a "Themes" | "Appearance"
- *    tab strip, where Themes is the Theme Manager and Appearance is the
- *    appearance settings (the separate "Aa" button is gone). The pane reopens
+ *    appearance"); it opens a right-hand pane with a "Themes" | "Appearance" |
+ *    "Fonts" | "Behaviour" tab strip, where Themes is the Theme Manager and
+ *    the other three are the settings pages (the separate "Aa" button is
+ *    gone). The pane reopens
  *    on the tab last shown, and [AppShellHandle.openAppearance] opens or
  *    switches it.
  *  - Per-mode style settings. With [ModeStyles] stored (dark = the Calm look,
@@ -104,12 +105,14 @@ private fun HTMLElement.trailingNames(): List<String> {
  * @param appearance   the appearance the persisted theme selection starts in.
  * @param blob         the persisted [PersistKeys.APPEARANCE_SHAPE], or `null`.
  * @param settingsHost an app-supplied host, or `null` for the toolkit's own.
+ * @param isElectron   the spec's [AppShellSpec.isElectron].
  * @param body         the test, given the root, the handle and the persister.
  */
 private suspend fun withPaneShell(
     appearance: Appearance = Appearance.Dark,
     blob: String? = null,
     settingsHost: ThemeManagerHost? = null,
+    isElectron: Boolean = false,
     body: suspend (root: HTMLElement, handle: AppShellHandle, persister: PaneMemoryPersister) -> Unit,
 ) {
     closeSettingsSidebar()
@@ -133,6 +136,7 @@ private suspend fun withPaneShell(
                 paneContent = { document.createElement("div") as HTMLElement },
                 tabSource = TabSource(subscribe = { }, onSelect = { }),
                 settingsHost = settingsHost,
+                isElectron = isElectron,
             ),
         )
         eventually("topbar rendered") { root.querySelector(APPEARANCE_PANE_BUTTON) != null }
@@ -188,9 +192,10 @@ class AppearancePaneTest {
     }
 
     /**
-     * The palette button opens the pane on Themes (the Theme Manager), the
-     * Appearance tab shows the two settings groups instead, and the pane
-     * reopens on the tab last shown.
+     * The palette button opens the pane on Themes (the Theme Manager); the
+     * Appearance tab shows the style settings instead and Fonts the font
+     * lines. Outside Electron there is no Behaviour tab (its only row is the
+     * Custom title bar).
      */
     @Test
     fun thePaletteButtonOpensTheTabbedPane() = GlobalScope.promise {
@@ -201,6 +206,8 @@ class AppearancePaneTest {
             assertNotNull(document.querySelector(".dt-appearance-pane .dt-appearance-tabs"), "the tab strip")
             assertEquals("Themes", tabButton("themes")?.textContent)
             assertEquals("Appearance", tabButton("appearance")?.textContent)
+            assertEquals("Fonts", tabButton("fonts")?.textContent)
+            assertNull(tabButton("behaviour"), "no Behaviour tab outside Electron")
             assertEquals("true", tabButton("themes")!!.getAttribute("aria-selected"))
             assertEquals("false", tabButton("appearance")!!.getAttribute("aria-selected"))
             assertNotNull(document.querySelector(".dt-appearance-pane-close"), "the pane's close button")
@@ -208,18 +215,45 @@ class AppearancePaneTest {
 
             tabButton("appearance")!!.tap()
             eventually("Appearance tab shown") { document.querySelector(".dt-settings-group") != null }
-            assertEquals(2, document.querySelectorAll(".dt-appearance-pane .dt-settings-group").length)
+            assertEquals(1, document.querySelectorAll(".dt-appearance-pane .dt-settings-group").length)
             assertNotNull(document.querySelector(".dt-settings-group[data-dt-group=\"mode-style\"]"))
-            assertNotNull(document.querySelector(".dt-settings-group[data-dt-group=\"shared\"]"))
+            assertNull(document.querySelector(".dt-fonts-section"), "Fonts have a tab of their own")
+            assertFalse(document.body!!.textContent!!.contains("Navigation"), "no navigation setting")
             assertNull(document.querySelector(".dt-theme-card"), "the Theme Manager is unmounted")
             assertEquals("true", tabButton("appearance")!!.getAttribute("aria-selected"))
             assertEquals(AppearanceTab.Appearance, currentAppearanceTab)
             assertFalse(isSettingsSidebarOpen(), "no separate settings sidebar is opened")
 
+            tabButton("fonts")!!.tap()
+            eventually("Fonts tab shown") { document.querySelector(".dt-fonts-section") != null }
+            assertNull(document.querySelector(".dt-settings-group[data-dt-group=\"mode-style\"]"))
+            assertEquals(AppearanceTab.Fonts, currentAppearanceTab)
+
+            // Asked for by name, the missing Behaviour tab falls back to Themes.
+            handle.openAppearance(AppearanceTab.Behaviour)
+            eventually("fell back to Themes") { document.querySelector(".dt-theme-card") != null }
+
             // Back to Themes through the handle, on the open pane.
             handle.openAppearance(AppearanceTab.Themes)
             eventually("Themes again") { document.querySelector(".dt-theme-card") != null }
             assertNull(document.querySelector(".dt-settings-group"))
+        }
+    }
+
+    /** Under Electron the Behaviour tab holds the Custom title bar, and no navigation row. */
+    @Test
+    fun theBehaviourTabHoldsTheCustomTitleBarUnderElectron() = GlobalScope.promise {
+        withPaneShell(isElectron = true) { _, handle, _ ->
+            handle.openAppearance(AppearanceTab.Behaviour)
+            eventually("Behaviour tab shown") { document.querySelector(".dt-settings-group") != null }
+            assertEquals("Behaviour", tabButton("behaviour")?.textContent)
+            assertEquals("true", tabButton("behaviour")!!.getAttribute("aria-selected"))
+            val labels = document.querySelectorAll(".dt-appearance-pane .dt-settings-label")
+            assertEquals(
+                listOf("Custom title bar"),
+                (0 until labels.length).map { (labels.item(it) as HTMLElement).textContent },
+            )
+            assertNull(document.querySelector(".dt-fonts-section"))
         }
     }
 

@@ -4909,81 +4909,11 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     margin-top: -10px;
 }
 
-/* The Presets block (SettingsSidebar `buildPresetsSection`) at the head of the
-   "Style for … mode" group. A preset is not a setting of its own: picking one
-   sets all the settings below it. So it is framed as a box of its own above
-   them, its options are cards that name and describe what they apply rather
-   than pills, and a status line says which preset the current settings match,
-   if any. */
-.dt-settings-presets {
-    padding: 10px 12px 12px;
-    border: 1px solid var(--t-border, rgba(255,255,255,0.10));
-    border-radius: 8px;
-    background: var(--t-surface-alt, rgba(255,255,255,0.03));
-}
-.dt-settings-preset-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 8px;
-}
-.dt-settings-preset-btn {
-    appearance: none;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 3px;
-    padding: 8px 10px;
-    text-align: left;
-    font: inherit;
-    background: var(--t-surface, rgba(255,255,255,0.04));
-    color: var(--t-text, #e6e6e6);
-    border: 1px solid var(--t-border, rgba(255,255,255,0.10));
-    border-radius: 6px;
-    cursor: pointer;
-    transition: border-color 0.12s, background 0.12s;
-}
-.dt-settings-preset-btn:hover {
-    border-color: var(--t-accent, #4f8cff);
-}
-.dt-settings-preset-btn.dt-selected {
-    border-color: var(--t-accent, #4f8cff);
-    box-shadow: inset 0 0 0 1px var(--t-accent, #4f8cff);
-}
-.dt-settings-preset-head {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-.dt-settings-preset-name {
-    font-size: 12px;
-    font-weight: 600;
-}
-.dt-settings-preset-badge {
-    font-size: 10px;
-    font-weight: 600;
-    padding: 1px 6px;
-    border-radius: 999px;
-    background: var(--t-accent, #4f8cff);
-    color: var(--t-accent-on, #000000);
-}
-.dt-settings-preset-desc {
-    font-size: 11px;
-    line-height: 1.35;
-    color: var(--t-text-dim, #9a9a9a);
-}
-.dt-settings-preset-status {
-    font-size: 11px;
-    color: var(--t-text-dim, #9a9a9a);
-}
-.dt-settings-preset-status[data-dt-look="custom"] {
-    font-style: italic;
-}
-
 /* ── The Appearance pane (ThemeManagerSidebar `mountAppearancePane`) ──
-   One right sidebar with two tabs, Themes and Appearance, opened from the
-   top bar's palette button. The tab strip names the tab and closes the pane,
-   so the two bodies' own titles and close buttons are hidden here (their
-   filters and controls stay). */
+   One right sidebar with four tabs — Themes, Appearance, Fonts and Behaviour —
+   opened from the top bar's palette button. The tab strip names the tab and
+   closes the pane, so the bodies' own titles and close buttons are hidden
+   here (their filters and controls stay). */
 .dt-appearance-pane .dt-appearance-tabs {
     display: flex;
     align-items: center;

@@ -25,9 +25,9 @@
  *
  * ### The Appearance pane
  * Given an `appearanceBody`, the same sidebar becomes the toolkit's one
- * Appearance pane: a tab strip ("Themes" | "Appearance") above the body, where
- * Themes is the Theme Manager and Appearance is the appearance settings the
- * caller mounts. `AppShellMount` always builds it this way, opened from the
+ * Appearance pane: a tab strip ("Themes" | "Appearance" | "Fonts" |
+ * "Behaviour") above the body, where Themes is the Theme Manager and the other
+ * tabs are the settings pages the caller mounts. `AppShellMount` always builds it this way, opened from the
  * single palette button in the top bar. The pane reopens on the tab last
  * shown ([currentAppearanceTab]); [openAppearancePane] opens it on a given one.
  */
@@ -54,11 +54,15 @@ private var lastWidthPx: Int = 480
  * The tabs of the Appearance pane.
  *
  *  - [Themes] — the Theme Manager: the palettes for the dark and light slots.
- *  - [Appearance] — the appearance settings: style per mode, navigation, fonts.
+ *  - [Appearance] — the style settings, remembered per dark/light mode.
+ *  - [Fonts] — one line per surface: its font and size.
+ *  - [Behaviour] — how the shell behaves: the tab strip and the custom title bar.
  */
 enum class AppearanceTab(val label: String) {
     Themes("Themes"),
     Appearance("Appearance"),
+    Fonts("Fonts"),
+    Behaviour("Behaviour"),
 }
 
 /**
@@ -68,7 +72,7 @@ enum class AppearanceTab(val label: String) {
 var currentAppearanceTab: AppearanceTab = AppearanceTab.Themes
     private set
 
-/** Document-level Escape handler installed while the Appearance tab is shown. */
+/** Document-level Escape handler installed while a settings tab is shown. */
 private var appearanceTabEscHandler: ((Event) -> Unit)? = null
 
 /**
@@ -94,7 +98,7 @@ fun isThemeManagerSidebarOpen(): Boolean = sidebarOpen
  * Opens the Appearance pane on [tab], or switches an open pane to it.
  *
  * Called by `AppShellHandle.openAppearance` (e.g. an app's own settings
- * linking to "Themes" or "Appearance"). An open pane switches tab through a
+ * linking to "Themes" or "Fonts"). An open pane switches tab through a
  * rebuild; a closed one slides open on that tab.
  *
  * @param tab            the tab to show.
@@ -183,7 +187,7 @@ internal fun closeThemeManagerSidebar() {
     currentSidebar = null
 }
 
-/** Removes the Appearance tab's Escape handler, if installed. */
+/** Removes the settings tabs' Escape handler, if installed. */
 private fun teardownAppearanceTabEsc() {
     appearanceTabEscHandler?.let { document.removeEventListener("keydown", it) }
     appearanceTabEscHandler = null
@@ -216,9 +220,13 @@ private fun teardownAppearanceTabEsc() {
  *   Within-session width is preserved via the module-level last-width memory;
  *   pass an [onResize] callback to also persist across reloads.
  * @param appearanceBody   when set, the sidebar is the Appearance pane: a
- *   "Themes" | "Appearance" tab strip above the body, and this fills the
- *   Appearance tab's body (it is handed an empty element to fill). `null`
- *   (the default) mounts the Theme Manager alone, as before.
+ *   "Themes" | "Appearance" | "Fonts" | "Behaviour" tab strip above the body,
+ *   and this fills every tab's body but Themes (it is handed the tab and an
+ *   empty element to fill). `null` (the default) mounts the Theme Manager
+ *   alone, as before.
+ * @param appearanceTabs   the tabs the Appearance pane shows, in order; a tab
+ *   with nothing in it (Behaviour outside Electron) is left out. Themes is
+ *   always shown. Ignored without [appearanceBody].
  * @return the freshly-mounted sidebar element.
  */
 fun buildThemeManagerSidebar(
@@ -232,7 +240,8 @@ fun buildThemeManagerSidebar(
     maxWidthPx: Int = 1100,
     onResize: ((Int) -> Unit)? = null,
     isResizable: Boolean = true,
-    appearanceBody: ((HTMLElement) -> Unit)? = null,
+    appearanceBody: ((AppearanceTab, HTMLElement) -> Unit)? = null,
+    appearanceTabs: List<AppearanceTab> = AppearanceTab.entries,
 ): HTMLElement {
     // Hosts persist sidebar widths in app-level layout state, where the
     // default is often 260px (LayoutState.SidebarState.DEFAULT_SIDEBAR_WIDTH_PX).
@@ -295,7 +304,7 @@ fun buildThemeManagerSidebar(
     val mountContent: () -> Unit = if (appearanceBody == null) {
         { showThemeManager(hostArg = host, mountInto = mountTarget) }
     } else {
-        { mountAppearancePane(mountTarget, host, appearanceBody, requestClose) }
+        { mountAppearancePane(mountTarget, host, appearanceBody, appearanceTabs, requestClose) }
     }
 
     if (isReMount) {
@@ -332,7 +341,7 @@ fun buildThemeManagerSidebar(
  *
  * Switching tab re-mounts the body in place, without a shell rebuild. Leaving
  * Themes closes the Theme Manager (which owns the Escape key while it is
- * shown); the Appearance tab installs its own Escape handler instead. The
+ * shown); the settings tabs install their own Escape handler instead. The
  * inner panels' own headers keep their filters and controls; their titles and
  * close buttons are hidden by `lunula.css` under `.dt-appearance-pane`, since
  * the tab strip names the tab and closes the pane.
@@ -341,15 +350,18 @@ fun buildThemeManagerSidebar(
  *
  * @param target         the sidebar's content element.
  * @param host           the Theme Manager's host.
- * @param appearanceBody fills the Appearance tab's body.
+ * @param appearanceBody fills a settings tab's body (every tab but Themes).
+ * @param tabs           the tabs to show, in order.
  * @param requestClose   closes the whole pane (animated).
  */
 private fun mountAppearancePane(
     target: HTMLElement,
     host: ThemeManagerHost,
-    appearanceBody: (HTMLElement) -> Unit,
+    appearanceBody: (AppearanceTab, HTMLElement) -> Unit,
+    tabs: List<AppearanceTab>,
     requestClose: () -> Unit,
 ) {
+    val shown = if (AppearanceTab.Themes in tabs) tabs else listOf(AppearanceTab.Themes) + tabs
     target.innerHTML = ""
     target.classList.add("dt-appearance-pane")
 
@@ -380,10 +392,10 @@ private fun mountAppearancePane(
                 themeManagerOnCloseRequested = requestClose
                 showThemeManager(hostArg = host, mountInto = bodyTarget)
             }
-            AppearanceTab.Appearance -> {
+            AppearanceTab.Appearance, AppearanceTab.Fonts, AppearanceTab.Behaviour -> {
                 closeThemeManager()
                 bodyTarget.innerHTML = ""
-                appearanceBody(bodyTarget)
+                appearanceBody(tab, bodyTarget)
                 teardownAppearanceTabEsc()
                 val handler: (Event) -> Unit = { ev ->
                     if ((ev as? KeyboardEvent)?.key == "Escape") requestClose()
@@ -393,7 +405,7 @@ private fun mountAppearancePane(
             }
         }
     }
-    for (tab in AppearanceTab.entries) {
+    for (tab in shown) {
         val btn = document.createElement("button") as HTMLElement
         btn.setAttribute("type", "button")
         btn.setAttribute("role", "tab")
@@ -412,6 +424,8 @@ private fun mountAppearancePane(
     close.addEventListener("click", { requestClose() })
     strip.appendChild(close)
 
-    show(currentAppearanceTab)
+    // A tab this pane leaves out (opened by name, or last shown in another
+    // app) falls back to Themes.
+    show(if (currentAppearanceTab in shown) currentAppearanceTab else AppearanceTab.Themes)
 }
 

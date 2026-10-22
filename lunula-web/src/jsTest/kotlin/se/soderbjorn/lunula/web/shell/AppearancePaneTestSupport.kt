@@ -3,7 +3,7 @@
  *
  * Shared helpers for tests that drive the shell's Appearance pane: the right
  * sidebar opened by the top bar's single palette button ("Themes and
- * appearance"), with a "Themes" | "Appearance" tab strip.
+ * appearance"), with a "Themes" | "Appearance" | "Fonts" | "Behaviour" tab strip.
  *
  * The pane is module-wide state and reopens on the tab last shown
  * ([currentAppearanceTab]), so a test that leaves it on the Appearance tab
