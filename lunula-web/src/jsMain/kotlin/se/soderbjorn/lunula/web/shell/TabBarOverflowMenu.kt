@@ -13,6 +13,8 @@
  *       - "Move to workspace"      (when `onMoveToWorld` is set)
  *       - "Hide / Show in tab bar" (when `onSetHidden` is set)
  *       - "Hide / Show in side bar"(when `onSetHiddenFromSidebar` is set)
+ *       - "Show in both" / "Hide in both" (when both of the above are set,
+ *         each only when it would change something)
  *     Called from [buildTabElement] for every visible tab.
  *
  *  2. The far-right **overflow menu** (`appendTabBarOverflowMenu`) — the
@@ -121,7 +123,8 @@ private const val SUBMENU_HIDE_GRACE_MS = 220
  * Called from [buildTabElement] for every visible tab.
  *
  * The menu surfaces only the actions that target *this* tab — Rename,
- * Close, Move to workspace, Hide/Show in tab bar, Hide/Show in side bar —
+ * Close, Move to workspace, Hide/Show in tab bar, Hide/Show in side bar,
+ * Show/Hide in both —
  * each gated on the matching [TabBarCallbacks] being non-null (and, for
  * Rename, on [TabSpec.isRenamable]). When none apply, no button is rendered
  * so read-only tabs stay chromeless.
@@ -203,10 +206,52 @@ internal fun appendTabDotMenu(tabEl: HTMLElement, tab: TabSpec, spec: TabBarSpec
                 cb.onSetHiddenFromSidebar!!.invoke(tab.id, !tab.isHiddenFromSidebar)
             })
         }
+
+        // "Show in both" / "Hide in both" — only when both toggles are
+        // wired, and each only when it would change something: a tab
+        // already shown in both places gets no "Show in both", one already
+        // hidden from both gets no "Hide in both". Each fires only the
+        // callback(s) whose flag actually needs flipping.
+        if (canHide && canHideSidebar) {
+            if (tab.isHidden || tab.isHiddenFromSidebar) {
+                panel.appendChild(menuRow("Show in both", ICON_SHOW_TAB) {
+                    closeMenu()
+                    setTabVisibilityEverywhere(tab, cb, hidden = false)
+                })
+            }
+            if (!tab.isHidden || !tab.isHiddenFromSidebar) {
+                panel.appendChild(menuRow("Hide in both", ICON_HIDE_TAB) {
+                    closeMenu()
+                    setTabVisibilityEverywhere(tab, cb, hidden = true)
+                })
+            }
+        }
     }
 
     menuWrap.appendChild(menuBtn)
     tabEl.appendChild(menuWrap)
+}
+
+/**
+ * Set a tab's tab-bar and side-bar visibility to the same value in one
+ * gesture. Fired by the dot menu's "Show in both" / "Hide in both" rows
+ * (see [appendTabDotMenu]), which only render when both
+ * [TabBarCallbacks.onSetHidden] and [TabBarCallbacks.onSetHiddenFromSidebar]
+ * are wired.
+ *
+ * Fires each callback only when its flag differs from [hidden], so a host
+ * never sees a no-op toggle. The two flags are independent in every host,
+ * so firing them back to back is safe.
+ *
+ * @param tab    the tab whose visibility changes.
+ * @param cb     the tab-bar callbacks supplying the two toggles.
+ * @param hidden `true` to hide the tab in both places, `false` to show it.
+ * @see TabBarCallbacks.onSetHidden
+ * @see TabBarCallbacks.onSetHiddenFromSidebar
+ */
+private fun setTabVisibilityEverywhere(tab: TabSpec, cb: TabBarCallbacks, hidden: Boolean) {
+    if (tab.isHidden != hidden) cb.onSetHidden?.invoke(tab.id, hidden)
+    if (tab.isHiddenFromSidebar != hidden) cb.onSetHiddenFromSidebar?.invoke(tab.id, hidden)
 }
 
 /**
