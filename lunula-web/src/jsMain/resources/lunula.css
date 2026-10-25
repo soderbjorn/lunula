@@ -397,6 +397,21 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     -webkit-app-region: no-drag;
     app-region: no-drag;
 }
+/* Popovers raised from the topbar are mounted on <body>, not inside it, so
+   the rule above never reaches them — yet they hang down OVER the topbar
+   whenever it is taller than the button they open from (a second tab row,
+   say). Electron builds its drag region from every element's app-region,
+   later no-drag areas cutting holes in earlier drag ones, so a popover
+   that says nothing leaves the drag region intact beneath it: those parts
+   of the panel are the window's, not the page's. The pointer crossing one
+   reads to the page as leaving the menu, and a hover-opened menu (the "+",
+   the layout grid, the world switcher) closes under the cursor on its way
+   to a row. Declaring no-drag punches the panel out of the drag region. */
+.dt-hover-menu,
+.dt-layout-preset-grid {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+}
 .dt-topbar-tabstrip {
     display: flex;
     /* Top-align the tab bar so the first row stays anchored to the
