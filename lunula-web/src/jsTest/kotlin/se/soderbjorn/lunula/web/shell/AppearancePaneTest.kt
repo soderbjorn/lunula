@@ -240,7 +240,7 @@ class AppearancePaneTest {
         }
     }
 
-    /** Under Electron the Behaviour tab holds the Custom title bar, and no navigation row. */
+    /** Under Electron the Behaviour tab holds the Custom title bar, with no navigation row and no group heading. */
     @Test
     fun theBehaviourTabHoldsTheCustomTitleBarUnderElectron() = GlobalScope.promise {
         withPaneShell(isElectron = true) { _, handle, _ ->
@@ -254,6 +254,9 @@ class AppearancePaneTest {
                 (0 until labels.length).map { (labels.item(it) as HTMLElement).textContent },
             )
             assertNull(document.querySelector(".dt-fonts-section"))
+            // The whole tab is shared, so its group carries no heading or hint.
+            assertNull(document.querySelector(".dt-appearance-pane .dt-settings-group-title"))
+            assertNull(document.querySelector(".dt-appearance-pane .dt-settings-group-hint"))
         }
     }
 

@@ -15,8 +15,8 @@
  *  - **Fonts** — shared by both modes: one line per surface (Sidebar, Tab bar,
  *    Window title, Text, Headings, Code), naming the font actually painted
  *    there with a − / + size stepper.
- *  - **Behaviour** — shared by both modes: the Custom title bar toggle. It is
- *    the tab's only row and Electron-only, so outside Electron there is no
+ *  - **Behaviour** — shared by both modes: the Custom title bar toggle, with
+ *    no group heading. It is the tab's only row and Electron-only, so outside Electron there is no
  *    Behaviour tab (see `AppShellMount`) and [buildSettingsSidebar] leaves it out.
  *
  * Navigation (sidebar / tab strip) is not offered here: the sidebar has its own
@@ -544,15 +544,16 @@ private fun renderFontsPage(body: HTMLElement, spec: SettingsSidebarSpec) {
 }
 
 /**
- * Fills [body] with the Behaviour tab: the Custom title bar toggle in a
- * "Shared by both modes" group. Adds nothing outside Electron, where the tab
- * has no rows.
+ * Fills [body] with the Behaviour tab: the Custom title bar toggle in an
+ * unheaded shared group (the whole tab is shared, so the "Shared by both
+ * modes" heading would say nothing). Adds nothing outside Electron, where the
+ * tab has no rows.
  *
  * Called by [renderSettingsBody].
  */
 private fun renderBehaviourPage(body: HTMLElement, spec: SettingsSidebarSpec) {
     if (!spec.isElectron) return
-    val sharedGroup = makeSharedGroup()
+    val sharedGroup = makeSharedGroup(withHeading = false)
     body.appendChild(sharedGroup)
     // Custom title bar: the window chrome reflows on flip, and it concerns the
     // OS window, which has no dark or light mode of its own.
@@ -568,11 +569,15 @@ private fun renderBehaviourPage(body: HTMLElement, spec: SettingsSidebarSpec) {
 /**
  * Builds an empty "Shared by both modes" group (`data-dt-group="shared"`), for
  * the settings that do not follow dark/light mode.
+ *
+ * @param withHeading `false` to leave out the group's heading and hint, for a
+ *   tab whose settings are all shared (Behaviour).
+ * @return the group element (`.dt-settings-group`).
  */
-private fun makeSharedGroup(): HTMLElement {
+private fun makeSharedGroup(withHeading: Boolean = true): HTMLElement {
     val group = makeGroup(
-        title = "Shared by both modes",
-        hint = "Kept the same in dark and light mode.",
+        title = if (withHeading) "Shared by both modes" else null,
+        hint = if (withHeading) "Kept the same in dark and light mode." else null,
     )
     group.setAttribute("data-dt-group", "shared")
     return group
@@ -582,21 +587,27 @@ private fun makeSharedGroup(): HTMLElement {
  * Builds one of the panel's two groups: a titled block with a hint, which the
  * caller fills with sections.
  *
- * @param title the group heading ("Style for dark mode", "Shared by both modes").
- * @param hint  the muted line under it, saying how the group behaves.
+ * @param title the group heading ("Style for dark mode", "Shared by both modes"),
+ *   or `null` for none.
+ * @param hint  the muted line under it, saying how the group behaves, or `null`
+ *   for none.
  * @return the group element (`.dt-settings-group`).
  */
-private fun makeGroup(title: String, hint: String): HTMLElement {
+private fun makeGroup(title: String?, hint: String?): HTMLElement {
     val group = document.createElement("div") as HTMLElement
     group.className = "dt-settings-group"
-    val heading = document.createElement("div") as HTMLElement
-    heading.className = "dt-settings-group-title"
-    heading.textContent = title
-    group.appendChild(heading)
-    val hintEl = document.createElement("div") as HTMLElement
-    hintEl.className = "dt-settings-group-hint"
-    hintEl.textContent = hint
-    group.appendChild(hintEl)
+    if (title != null) {
+        val heading = document.createElement("div") as HTMLElement
+        heading.className = "dt-settings-group-title"
+        heading.textContent = title
+        group.appendChild(heading)
+    }
+    if (hint != null) {
+        val hintEl = document.createElement("div") as HTMLElement
+        hintEl.className = "dt-settings-group-hint"
+        hintEl.textContent = hint
+        group.appendChild(hintEl)
+    }
     return group
 }
 
