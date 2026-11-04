@@ -3279,6 +3279,22 @@ private class ShellState(
             // paints the lighter pill treatment.
             isFixed = fixedStrip,
         )
+        // The strip installs the tab hotkeys (next / previous, Cmd+digit)
+        // itself each time it is drawn. With no strip drawn the shell must,
+        // or the bindings keep acting on the tab list — and the active tab —
+        // from the last time a strip was: Next would always land on the same
+        // tab. They then walk the tabs the sidebar lists, as the strip's walk
+        // its own.
+        if (!navigationLayout.showsTabStrip) {
+            installTabNavigationHotkeys(
+                tabBarSpec,
+                isListed = if (navigationLayout.showsSidebar) {
+                    { t -> !t.isHiddenFromSidebar }
+                } else {
+                    { t -> !t.isHidden }
+                },
+            )
+        }
 
         // Leading: sidebar-toggle button to the LEFT of the tab strip
         // (matching termtastic / notegrow chrome layout). Omitted when

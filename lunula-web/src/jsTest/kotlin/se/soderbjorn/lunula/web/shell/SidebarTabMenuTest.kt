@@ -11,6 +11,8 @@
  *  - an app-defined (fixed) tab set offers no sidebar menu;
  *  - a sidebar tab section drags by its header to reorder the tabs, and
  *    takes drops from the strip too ([wireSidebarTabReorder]);
+ *  - the next / previous tab hotkeys keep working once the strip is turned
+ *    off, walking the tabs the sidebar lists ([installTabNavigationHotkeys]);
  *  - with no tab strip drawn, tabs hidden from the sidebar stay reachable —
  *    the active one is still drawn, the rest are listed under "Unlisted
  *    tabs" — while with a strip the sidebar keeps leaving them out, as it
@@ -84,9 +86,10 @@ private fun threeTabSnapshot(hiddenFromSidebar: Set<String> = emptySet()) = TabL
     activeTabId = "t1",
 )
 
-/** What the host's tab callbacks were asked to do, in order. */
+/** What the host's tab callbacks were asked to do, in order, and the mounted shell's handle. */
 private class Calls {
     val log = mutableListOf<String>()
+    var handle: AppShellHandle? = null
 }
 
 /** A persister seeded with the user's navigation pick. */
@@ -146,6 +149,7 @@ private suspend fun withShell(
                 tabSource = source,
             ),
         )
+        calls.handle = handle
         waitFor("tab source subscribe") { push != null }
         push!!(current)
         waitFor("sidebar drawn") { root.querySelector(".dt-sidebar-section") != null }
@@ -387,6 +391,43 @@ class SidebarTabMenuTest {
         }
     }
 
+    // ── Tab hotkeys without a strip ─────────────────────────────────
+
+    /**
+     * Turning the strip off with the middle tab active must not freeze the
+     * hotkeys on that moment: Next walks on through the tabs and wraps, and
+     * Previous walks back. (Bound only when a strip was drawn, they kept the
+     * middle tab as "current" forever, so it could never be reached again.)
+     */
+    @Test
+    fun tabHotkeysKeepWorkingAfterTheStripIsTurnedOff() = GlobalScope.promise {
+        withShell(NavigationMode.Both) { root, calls ->
+            (root.querySelector(".${TabBarClassNames.TAB}[data-tab-id=\"t2\"]") as HTMLElement).click()
+            waitFor("t2 active") { root.querySelector(".dt-sidebar-section.active-tab")?.let { it === root.sidebarSection("Two") } == true }
+            calls.handle!!.setNavigationMode(NavigationMode.Sidebar)
+            waitFor("strip gone") { root.querySelector(".${TabBarClassNames.BAR}") == null }
+            calls.log.clear()
+
+            pressTabHotkey(forward = true)
+            waitFor("next → t3") { calls.log == listOf("select:t3") }
+            pressTabHotkey(forward = true)
+            waitFor("next wraps → t1") { calls.log == listOf("select:t3", "select:t1") }
+            pressTabHotkey(forward = false)
+            waitFor("previous → t3") { calls.log == listOf("select:t3", "select:t1", "select:t3") }
+            pressTabHotkey(forward = false)
+            waitFor("previous → t2, the middle tab") { calls.log.lastOrNull() == "select:t2" }
+        }
+    }
+
+    /** Without a strip the hotkeys walk the tabs the sidebar lists, skipping those hidden from it. */
+    @Test
+    fun withoutAStripTabHotkeysSkipTabsHiddenFromTheSidebar() = GlobalScope.promise {
+        withShell(NavigationMode.Sidebar, threeTabSnapshot(hiddenFromSidebar = setOf("t2"))) { _, calls ->
+            pressTabHotkey(forward = true)
+            waitFor("next skips t2") { calls.log == listOf("select:t3") }
+        }
+    }
+
     // ── Hidden tabs stay reachable without a strip ──────────────────
 
     /**
@@ -469,6 +510,19 @@ private fun newDataTransfer(): dynamic = js("new DataTransfer()")
 private fun yIn(el: HTMLElement, top: Boolean): Double {
     val rect = el.getBoundingClientRect()
     return if (top) rect.top + rect.height / 4 else rect.bottom - rect.height / 4
+}
+
+/** Presses the default Next (or Previous) tab chord, Ctrl+Alt+Shift+→ / ←. */
+private fun pressTabHotkey(forward: Boolean) {
+    val init = KeyboardEventInit(
+        key = if (forward) "ArrowRight" else "ArrowLeft",
+        ctrlKey = true,
+        altKey = true,
+        shiftKey = true,
+        bubbles = true,
+        cancelable = true,
+    )
+    kotlinx.browser.window.dispatchEvent(KeyboardEvent("keydown", init))
 }
 
 /** Waits for the tab-close confirm dialog and returns its confirm button. */
