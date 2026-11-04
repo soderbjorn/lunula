@@ -66,6 +66,7 @@ import se.soderbjorn.lunula.web.settings.AppSettingsSidebarSpec
 import se.soderbjorn.lunula.web.settings.HotkeysSidebarSpec
 import se.soderbjorn.lunula.web.settings.NotificationsSidebarSpec
 import se.soderbjorn.lunula.web.settings.SettingsSidebarSpec
+import se.soderbjorn.lunula.web.settings.TabStripSetting
 import se.soderbjorn.lunula.web.settings.buildAppSettingsSidebar
 import se.soderbjorn.lunula.web.settings.buildHotkeysSidebar
 import se.soderbjorn.lunula.web.settings.buildNotificationsSidebar
@@ -1506,8 +1507,9 @@ private class ShellState(
 
     /**
      * Changes the user's navigation mode at runtime and redraws the chrome to
-     * match. Exposed as [AppShellHandle.setNavigationMode]; the Appearance
-     * pane offers no control for it (the sidebar has its own toggle).
+     * match. Exposed as [AppShellHandle.setNavigationMode], and the entry
+     * point of the Appearance pane's "Tabs in the top bar" toggle (see
+     * [appearanceSettingsSpec]); the sidebar has its own top-bar toggle.
      *
      * Writes through the same `settingsHost ?: themeHost` ladder every other
      * appearance setting uses. With the toolkit's own host, the setter fires
@@ -2219,7 +2221,35 @@ private class ShellState(
         monoSizeDefault = spec.defaultMonoFontSizePx() ?: 14,
         displaySizeDefault = spec.defaultDisplayFontSizePx() ?: spec.defaultProseFontSizePx() ?: 14,
         fontSizeHidden = spec.fontSizeHidden,
+        tabStrip = if (offersTabStripSetting) {
+            TabStripSetting(
+                isShown = { resolvedNavigationMode.showsTabStrip },
+                onChange = { show ->
+                    setNavigationMode(
+                        navigationModeWithTabStrip(
+                            userMode = (spec.settingsHost ?: themeHost).navigationMode,
+                            appDefaultMode = spec.defaultAppearanceShape().navigationMode,
+                            show = show,
+                        ),
+                    )
+                },
+            )
+        } else {
+            null
+        },
     )
+
+    /**
+     * Whether the Appearance pane offers "Tabs in the top bar": only when the
+     * app draws both navigation surfaces. An app that opted out of the sidebar
+     * or the tab strip ([AppShellSpec.showSidebar] / [AppShellSpec.showTabStrip])
+     * has decided the question, and the toggle could change nothing.
+     *
+     * Read by [appearanceSettingsSpec] (the row) and [rerender] (whether the
+     * Behaviour tab exists).
+     */
+    private val offersTabStripSetting: Boolean
+        get() = spec.showSidebar && spec.showTabStrip
 
     /**
      * Opens the Appearance pane on [tab] (or switches an open one to it),
@@ -2412,8 +2442,11 @@ private class ShellState(
             rightSlot.appendChild(buildThemeManagerSidebar(
                 host = spec.settingsHost ?: themeHost,
                 appearanceBody = { tab, target -> renderSettingsBody(target, appearanceSettingsSpec(), tab) },
-                // Behaviour holds only the Custom title bar, which is Electron-only.
-                appearanceTabs = AppearanceTab.entries.filter { it != AppearanceTab.Behaviour || spec.isElectron },
+                // Behaviour holds "Tabs in the top bar" (when the app draws
+                // both surfaces) and the Electron-only Custom title bar.
+                appearanceTabs = AppearanceTab.entries.filter {
+                    it != AppearanceTab.Behaviour || spec.isElectron || offersTabStripSetting
+                },
             ))
         } else if (isSettingsSidebarOpen()) {
             // Only reachable when an app opens the standalone settings sidebar

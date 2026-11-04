@@ -194,8 +194,8 @@ class AppearancePaneTest {
     /**
      * The palette button opens the pane on Themes (the Theme Manager); the
      * Appearance tab shows the style settings instead and Fonts the font
-     * lines. Outside Electron there is no Behaviour tab (its only row is the
-     * Custom title bar).
+     * lines. Outside Electron the Behaviour tab is still there, for "Tabs in
+     * the top bar" (the app draws both surfaces).
      */
     @Test
     fun thePaletteButtonOpensTheTabbedPane() = GlobalScope.promise {
@@ -207,7 +207,7 @@ class AppearancePaneTest {
             assertEquals("Themes", tabButton("themes")?.textContent)
             assertEquals("Appearance", tabButton("appearance")?.textContent)
             assertEquals("Fonts", tabButton("fonts")?.textContent)
-            assertNull(tabButton("behaviour"), "no Behaviour tab outside Electron")
+            assertEquals("Behaviour", tabButton("behaviour")?.textContent)
             assertEquals("true", tabButton("themes")!!.getAttribute("aria-selected"))
             assertEquals("false", tabButton("appearance")!!.getAttribute("aria-selected"))
             assertNotNull(document.querySelector(".dt-appearance-pane-close"), "the pane's close button")
@@ -229,9 +229,14 @@ class AppearancePaneTest {
             assertNull(document.querySelector(".dt-settings-group[data-dt-group=\"mode-style\"]"))
             assertEquals(AppearanceTab.Fonts, currentAppearanceTab)
 
-            // Asked for by name, the missing Behaviour tab falls back to Themes.
-            handle.openAppearance(AppearanceTab.Behaviour)
-            eventually("fell back to Themes") { document.querySelector(".dt-theme-card") != null }
+            tabButton("behaviour")!!.tap()
+            eventually("Behaviour tab shown") { document.querySelector("[data-dt-setting=\"tab-strip\"]") != null }
+            val behaviourLabels = document.querySelectorAll(".dt-appearance-pane .dt-settings-label")
+            assertEquals(
+                listOf("Tabs in the top bar"),
+                (0 until behaviourLabels.length).map { (behaviourLabels.item(it) as HTMLElement).textContent },
+                "no Custom title bar outside Electron",
+            )
 
             // Back to Themes through the handle, on the open pane.
             handle.openAppearance(AppearanceTab.Themes)
@@ -240,7 +245,7 @@ class AppearancePaneTest {
         }
     }
 
-    /** Under Electron the Behaviour tab holds the Custom title bar, with no navigation row and no group heading. */
+    /** Under Electron the Behaviour tab adds the Custom title bar under the tab-strip toggle, with no group heading. */
     @Test
     fun theBehaviourTabHoldsTheCustomTitleBarUnderElectron() = GlobalScope.promise {
         withPaneShell(isElectron = true) { _, handle, _ ->
@@ -250,7 +255,7 @@ class AppearancePaneTest {
             assertEquals("true", tabButton("behaviour")!!.getAttribute("aria-selected"))
             val labels = document.querySelectorAll(".dt-appearance-pane .dt-settings-label")
             assertEquals(
-                listOf("Custom title bar"),
+                listOf("Tabs in the top bar", "Custom title bar"),
                 (0 until labels.length).map { (labels.item(it) as HTMLElement).textContent },
             )
             assertNull(document.querySelector(".dt-fonts-section"))

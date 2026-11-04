@@ -11,8 +11,9 @@
  *    remembered per appearance mode. No presets.
  *  - Fonts: "Shared by both modes" (`data-dt-group="shared"`) with the font lines.
  *
- * Navigation has no row any more (the sidebar has its own toggle), but a stored
- * or app-default mode still draws.
+ * Navigation has no row on these pages (the Behaviour tab's "Tabs in the top
+ * bar" is its one control; see NavigationModeTest), but a stored or
+ * app-default mode still draws.
  *
  * Checked: the rows ring the RESOLVED values (including an app default the
  * user never picked), a pick applies live on `:root` and is persisted in the

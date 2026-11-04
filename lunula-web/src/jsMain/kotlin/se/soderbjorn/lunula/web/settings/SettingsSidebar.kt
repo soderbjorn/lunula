@@ -15,13 +15,17 @@
  *  - **Fonts** — shared by both modes: one line per surface (Sidebar, Tab bar,
  *    Window title, Text, Headings, Code), naming the font actually painted
  *    there with a − / + size stepper.
- *  - **Behaviour** — shared by both modes: the Custom title bar toggle, with
- *    no group heading. It is the tab's only row and Electron-only, so outside Electron there is no
- *    Behaviour tab (see `AppShellMount`) and [buildSettingsSidebar] leaves it out.
+ *  - **Behaviour** — shared by both modes, with no group heading: "Tabs in the
+ *    top bar" ([SettingsSidebarSpec.tabStrip]), offered when the app draws both
+ *    the sidebar and the tab strip, and the Custom title bar toggle, which is
+ *    Electron-only. With neither there is no Behaviour tab (see
+ *    `AppShellMount`) and [buildSettingsSidebar] leaves it out.
  *
- * Navigation (sidebar / tab strip) is not offered here: the sidebar has its own
- * toggle in the top bar. An app or brand default, or a Lunicle embed's `?nav=`,
- * still sets it through `AppShellSpec.defaultAppearanceShape`.
+ * Navigation is offered as that one toggle, not as a Sidebar / Tab strip /
+ * Both choice: the sidebar already has its own toggle in the top bar, so the
+ * only half without a control is the tab strip. An app or brand default, or a
+ * Lunicle embed's `?nav=`, still sets the mode through
+ * `AppShellSpec.defaultAppearanceShape`.
  *
  * Every row rings the RESOLVED value (the user's pick for the mode, then the
  * app/brand default, then the toolkit default), so a branded instance shows
@@ -210,6 +214,29 @@ data class SettingsSidebarSpec(
      * of the appearance settings instead of in the app's own settings.
      */
     val appAppearanceContent: (() -> HTMLElement)? = null,
+    /**
+     * The Behaviour tab's "Tabs in the top bar" toggle, or `null` to leave it
+     * out. `AppShellMount` passes one only when the app draws both the sidebar
+     * and the tab strip: an app that opted out of either has nothing for the
+     * toggle to change. `null` by default, so a panel mounted outside the
+     * shell shows only what it can apply.
+     */
+    val tabStrip: TabStripSetting? = null,
+)
+
+/**
+ * The "Tabs in the top bar" setting, as [SettingsSidebarSpec.tabStrip] wires
+ * it: what to show and what to do on a pick. The shell resolves both (the
+ * user's pick, the app default, the mapping to a
+ * [se.soderbjorn.lunula.core.NavigationMode]); the panel only draws the row.
+ *
+ * @property isShown  whether the resolved navigation mode draws the tab strip,
+ *   which the row rings.
+ * @property onChange called with the user's pick; must store it and redraw.
+ */
+data class TabStripSetting(
+    val isShown: () -> Boolean,
+    val onChange: (Boolean) -> Unit,
 )
 
 
@@ -544,17 +571,30 @@ private fun renderFontsPage(body: HTMLElement, spec: SettingsSidebarSpec) {
 }
 
 /**
- * Fills [body] with the Behaviour tab: the Custom title bar toggle in an
- * unheaded shared group (the whole tab is shared, so the "Shared by both
- * modes" heading would say nothing). Adds nothing outside Electron, where the
- * tab has no rows.
+ * Fills [body] with the Behaviour tab: "Tabs in the top bar" (when
+ * [SettingsSidebarSpec.tabStrip] is set) and the Custom title bar toggle
+ * (under Electron), in an unheaded shared group (the whole tab is shared, so
+ * the "Shared by both modes" heading would say nothing). Adds nothing when
+ * neither applies, where the tab has no rows.
  *
  * Called by [renderSettingsBody].
  */
 private fun renderBehaviourPage(body: HTMLElement, spec: SettingsSidebarSpec) {
-    if (!spec.isElectron) return
+    val tabStrip = spec.tabStrip
+    if (tabStrip == null && !spec.isElectron) return
     val sharedGroup = makeSharedGroup(withHeading = false)
     body.appendChild(sharedGroup)
+    if (tabStrip != null) {
+        sharedGroup.appendChild(buildToggleSection(
+            settingId = "tab-strip",
+            title = "Tabs in the top bar",
+            hint = "Off keeps tabs in the sidebar only. Right-click a tab there, or use its ⋮ button, " +
+                "to rename, close or hide it, and drag it by its name to reorder.",
+            currentValue = tabStrip.isShown,
+            onPick = tabStrip.onChange,
+        ))
+    }
+    if (!spec.isElectron) return
     // Custom title bar: the window chrome reflows on flip, and it concerns the
     // OS window, which has no dark or light mode of its own.
     sharedGroup.appendChild(buildToggleSection(
@@ -1014,12 +1054,28 @@ private fun buildPxChoiceSection(
     return section.element
 }
 
+/**
+ * Builds a labelled On / Off row: two `.dt-settings-choice-btn`s, the current
+ * value marked `.dt-selected`, picked optimistically with the caller doing the
+ * store + apply. Used by [renderBehaviourPage].
+ *
+ * @param settingId    stamped as `data-dt-setting` on the section when given,
+ *   so the row can be found without matching on its label.
+ * @param title        the row's label.
+ * @param hint         the muted line under the label, or `null` for none.
+ * @param currentValue reader for the value to ring.
+ * @param onPick       called with the clicked value.
+ * @return the section element.
+ */
 private fun buildToggleSection(
     title: String,
     currentValue: () -> Boolean,
     onPick: (Boolean) -> Unit,
+    settingId: String? = null,
+    hint: String? = null,
 ): HTMLElement {
-    val section = makeSection(title)
+    val section = makeSection(title, hint)
+    if (settingId != null) section.element.setAttribute("data-dt-setting", settingId)
     val row = section.row
     val current = currentValue()
     for ((label, value) in listOf("On" to true, "Off" to false)) {

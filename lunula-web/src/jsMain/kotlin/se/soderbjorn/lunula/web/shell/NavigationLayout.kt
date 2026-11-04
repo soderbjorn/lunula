@@ -20,8 +20,13 @@
  * with no way to move between tabs and windows. Only an app that hard-
  * disables both surfaces gets neither — that is the app's own statement.
  *
- * Contains [NavigationLayout], [resolveNavigationLayout] and
- * [applyNavigationAttribute]. Consumed by `ShellState` in AppShellMount.kt.
+ * The user changes (2) through one control, the Behaviour tab's "Tabs in the
+ * top bar" toggle; the sidebar's own top-bar button covers the other half.
+ * [navigationModeWithTabStrip] turns that toggle into a mode.
+ *
+ * Contains [NavigationLayout], [resolveNavigationLayout],
+ * [navigationModeWithTabStrip] and [applyNavigationAttribute]. Consumed by
+ * `ShellState` in AppShellMount.kt.
  *
  * @see NavigationMode
  */
@@ -96,6 +101,40 @@ internal fun resolveNavigationLayout(
         return NavigationLayout(mode, appAllowsSidebar, appAllowsTabStrip)
     }
     return NavigationLayout(mode, sidebar, strip)
+}
+
+/**
+ * The user's navigation pick after they turn the tab strip on or off, keeping
+ * whatever else the mode says.
+ *
+ * Off always means [NavigationMode.Sidebar]: the strip goes and the sidebar
+ * stays (or comes back, from [NavigationMode.TabStrip]), so there is still a
+ * way between tabs. On from [NavigationMode.Sidebar] means
+ * [NavigationMode.Both], what the shell drew before the strip was turned off.
+ * A pick that lands on the default in effect without one (the app's, else
+ * [NavigationMode.Default]) is cleared instead, so a user who turns the strip
+ * off and on again follows the app default, as one who never touched it does.
+ *
+ * Pure, so the mapping is testable without a shell. Called by
+ * `ShellState.appearanceSettingsSpec` for the Behaviour tab's toggle.
+ *
+ * @param userMode       the user's current pick, or `null` for none.
+ * @param appDefaultMode the app's default, or `null`.
+ * @param show           whether the user wants the tab strip.
+ * @return the pick to store, or `null` to clear it; [userMode] itself when the
+ *   resolved mode already matches [show].
+ * @see resolveNavigationLayout
+ */
+internal fun navigationModeWithTabStrip(
+    userMode: NavigationMode?,
+    appDefaultMode: NavigationMode?,
+    show: Boolean,
+): NavigationMode? {
+    val fallback = appDefaultMode ?: NavigationMode.Default
+    val effective = userMode ?: fallback
+    if (effective.showsTabStrip == show) return userMode
+    val next = if (show) NavigationMode.Both else NavigationMode.Sidebar
+    return if (next == fallback) null else next
 }
 
 /**
