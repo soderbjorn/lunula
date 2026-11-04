@@ -871,13 +871,45 @@ private fun wireInlineRename(label: HTMLElement, tab: TabSpec, spec: TabBarSpec)
  * @param tab   tab metadata for seeding the input + identifying the tab
  *   in the rename callback
  * @param spec  parent spec, used to fire [TabBarCallbacks.onRename]
+ * @see startInlineLabelEdit
  */
 internal fun triggerInlineRename(label: HTMLElement, tab: TabSpec, spec: TabBarSpec) {
+    startInlineLabelEdit(label, tab.label, TabBarClassNames.TAB_LABEL_INPUT) { newLabel ->
+        spec.callbacks.onRename?.invoke(tab.id, newLabel)
+    }
+}
+
+/**
+ * Swap [label] for an editable input seeded with [current], and report a
+ * changed, non-blank value through [onCommit]. Enter or blur commits;
+ * Escape — or a blank or unchanged value — puts [label] back untouched.
+ *
+ * The surface-neutral half of inline rename, split from
+ * [triggerInlineRename] (which uses it for a strip tab's label) so any
+ * surface that draws a tab's name can edit it in place. Neither mutates the
+ * host's model; [onCommit] reports the new value and the host's re-render
+ * replaces the transient input.
+ *
+ * Clicks and presses inside the input stop there, so they neither start a
+ * drag of the element being renamed nor fire its own click (selecting the
+ * tab).
+ *
+ * @param label      the element showing the label, swapped out while editing.
+ * @param current    the label's current text, seeding the input.
+ * @param inputClass the class the input wears, styled per surface.
+ * @param onCommit   receives the trimmed new label.
+ */
+internal fun startInlineLabelEdit(
+    label: HTMLElement,
+    current: String,
+    inputClass: String,
+    onCommit: (String) -> Unit,
+) {
     val parent = label.parentElement ?: return
     val input = document.createElement("input") as HTMLInputElement
     input.type = "text"
-    input.className = TabBarClassNames.TAB_LABEL_INPUT
-    input.value = tab.label
+    input.className = inputClass
+    input.value = current
     // Suppress the parent .dt-tab's drag handler while editing so a
     // mouse-down inside the input doesn't initiate a drag.
     input.setAttribute("draggable", "false")
@@ -889,8 +921,8 @@ internal fun triggerInlineRename(label: HTMLElement, tab: TabSpec, spec: TabBarS
         if (committed) return
         committed = true
         val trimmed = value.trim()
-        if (trimmed.isNotEmpty() && trimmed != tab.label) {
-            spec.callbacks.onRename?.invoke(tab.id, trimmed)
+        if (trimmed.isNotEmpty() && trimmed != current) {
+            onCommit(trimmed)
         } else {
             // Restore the label in place since the host won't
             // re-render for a no-op rename.

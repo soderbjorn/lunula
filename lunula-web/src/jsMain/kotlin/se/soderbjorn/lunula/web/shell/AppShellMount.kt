@@ -3008,36 +3008,73 @@ private class ShellState(
         else -> emptyList()
     }
 
-    private fun buildTopBar(): HTMLElement {
-        val view = viewTabs()
-        val activeId = viewActiveTabId()
-        val srcMode = spec.tabSource != null
-        // An app-defined strip is only expressible through a TabSource —
-        // the local tab list IS the user's own persisted arrangement, so
-        // there is nothing for a local-mode host to have declared. That
-        // also means this whole branch is unreachable for every consumer
-        // that predates the flag.
-        val fixedStrip = spec.tabSource?.isFixed == true
+    /**
+     * Whether the tab set is app-defined ([TabSource.isFixed]): the user may
+     * select tabs but not add, close, rename, reorder or move them.
+     *
+     * An app-defined strip is only expressible through a TabSource — the
+     * local tab list IS the user's own persisted arrangement, so there is
+     * nothing for a local-mode host to have declared. That also means every
+     * branch keyed on this is unreachable for consumers that predate the flag.
+     *
+     * Read by [buildTopBar] (through [tabSpecFor] and [buildTabCallbacks]).
+     */
+    private val isTabSetFixed: Boolean
+        get() = spec.tabSource?.isFixed == true
 
-        val tabs = view.map { t ->
-            TabSpec(
-                id = t.id,
-                label = t.label,
-                // No inline × close button on tabs themselves — close lives
-                // in the tab's own `⋮` dot menu (alongside Rename, Hide,
-                // etc.; see appendTabDotMenu). One canonical place to close
-                // a tab keeps the affordance discoverable without the visual
-                // clutter of a per-tab cross.
-                isClosable = false,
-                isDraggable = !fixedStrip && (if (srcMode) spec.tabSource!!.onReorder != null else true),
-                isRenamable = !fixedStrip && (if (srcMode) spec.tabSource!!.onRename != null else true),
-                trailingBadge = spec.tabTrailingBadge(t.id),
-                badge = t.badge,
-                isHidden = t.isHidden,
-                isHiddenFromSidebar = t.isHiddenFromSidebar,
-            )
-        }
-        val callbacks = if (srcMode) {
+    /**
+     * The [TabSpec] describing [t] to the tab menus: identity, label,
+     * visibility flags and which edits the tab allows — without the strip's
+     * badges.
+     *
+     * Called by [buildTopBar], which adds the badges. Badges stay out of this
+     * part on purpose, so a surface describing a tab outside the strip can
+     * use it: the trailing badge comes from the app's
+     * [AppShellSpec.tabTrailingBadge] factory, and calling it a second time
+     * could hand that surface the element the strip is meant to show.
+     *
+     * @param t the tab as the shell currently sees it.
+     * @return the tab's spec, with no badges.
+     * @see buildTabCallbacks
+     */
+    private fun tabSpecFor(t: TabView): TabSpec {
+        val src = spec.tabSource
+        return TabSpec(
+            id = t.id,
+            label = t.label,
+            // No inline × close button on tabs themselves — close lives
+            // in the tab's own `⋮` dot menu (alongside Rename, Hide,
+            // etc.; see appendTabDotMenu). One canonical place to close
+            // a tab keeps the affordance discoverable without the visual
+            // clutter of a per-tab cross.
+            isClosable = false,
+            isDraggable = !isTabSetFixed && (src == null || src.onReorder != null),
+            isRenamable = !isTabSetFixed && (src == null || src.onRename != null),
+            isHidden = t.isHidden,
+            isHiddenFromSidebar = t.isHiddenFromSidebar,
+        )
+    }
+
+    /**
+     * The tab callbacks the tab strip acts through — the strip itself, its
+     * menus and the topbar "New" button.
+     *
+     * In source mode they forward to the app's [TabSource] (and its
+     * [WorldSource] for "Move to workspace"); in local mode they mutate the
+     * toolkit's own persisted tab list. On an app-defined tab set
+     * ([isTabSetFixed]) every edit callback is null, which is what makes each
+     * surface withhold its edit affordances.
+     *
+     * Called by [buildTopBar] on every rerender, so the strip always acts on
+     * the current snapshot.
+     *
+     * @return a fresh callbacks object.
+     * @see tabSpecFor
+     */
+    private fun buildTabCallbacks(): TabBarCallbacks {
+        val srcMode = spec.tabSource != null
+        val fixedStrip = isTabSetFixed
+        return if (srcMode) {
             val src = spec.tabSource!!
             TabBarCallbacks(
                 onSelect = { id ->
@@ -3179,6 +3216,15 @@ private class ShellState(
                 confirmTabClose = true,
             )
         }
+    }
+
+    private fun buildTopBar(): HTMLElement {
+        val activeId = viewActiveTabId()
+        val tabs = viewTabs().map { t ->
+            tabSpecFor(t).copy(trailingBadge = spec.tabTrailingBadge(t.id), badge = t.badge)
+        }
+        val callbacks = buildTabCallbacks()
+        val fixedStrip = isTabSetFixed
         val tabBarSpec = TabBarSpec(
             tabs = tabs,
             activeTabId = activeId,

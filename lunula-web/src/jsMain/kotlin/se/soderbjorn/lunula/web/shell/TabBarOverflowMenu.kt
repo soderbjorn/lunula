@@ -122,12 +122,10 @@ private const val SUBMENU_HIDE_GRACE_MS = 220
  * Append the per-tab `⋮` dot menu (button + panel) to a single tab element.
  * Called from [buildTabElement] for every visible tab.
  *
- * The menu surfaces only the actions that target *this* tab — Rename,
- * Close, Move to workspace, Hide/Show in tab bar, Hide/Show in side bar,
- * Show/Hide in both —
- * each gated on the matching [TabBarCallbacks] being non-null (and, for
- * Rename, on [TabSpec.isRenamable]). When none apply, no button is rendered
- * so read-only tabs stay chromeless.
+ * The menu surfaces only the actions that target *this* tab — see
+ * [appendTabActionRows] for the rows and what gates each one. When none
+ * apply ([hasTabActions] is `false`), no button is rendered, so read-only
+ * tabs stay chromeless.
  *
  * @param tabEl the `.dt-tab` element to attach the menu button to (the
  *   panel is mounted on `document.body` when the button is pressed).
@@ -138,98 +136,168 @@ private const val SUBMENU_HIDE_GRACE_MS = 220
  */
 internal fun appendTabDotMenu(tabEl: HTMLElement, tab: TabSpec, spec: TabBarSpec) {
     val cb = spec.callbacks
-    val canRename = tab.isRenamable && cb.onRename != null
-    val canClose = cb.onClose != null
-    val canMoveWorld = cb.onMoveToWorld != null && cb.moveToWorlds.isNotEmpty()
-    val canHide = cb.onSetHidden != null
-    val canHideSidebar = cb.onSetHiddenFromSidebar != null
-    if (!canRename && !canClose && !canMoveWorld && !canHide && !canHideSidebar) return
+    if (!hasTabActions(tab, cb)) return
 
     val menuWrap = document.createElement("div") as HTMLElement
     menuWrap.className = "dt-tab-menu"
 
+    val menuBtn = buildTabMenuButton()
+    // Don't let a mousedown on the menu button initiate the parent tab's
+    // HTML5 drag (mirrors the close-button guard in buildTabElement).
+    menuBtn.addEventListener("mousedown", { ev: Event -> ev.stopPropagation() })
+
+    // The dot menu only exists on tabs that are actually in the strip (a
+    // hidden tab is rendered only while active), so the label is always in
+    // the DOM here and inline rename can target it.
+    val startRename: (() -> Unit)? = if (tab.isRenamable && cb.onRename != null) {
+        {
+            val label = tabEl.querySelector(".${TabBarClassNames.TAB_LABEL}") as? HTMLElement
+            if (label != null) triggerInlineRename(label, tab, spec)
+        }
+    } else {
+        null
+    }
+    val buildRows: (HTMLElement, () -> Unit) -> Unit = { panel, closeMenu ->
+        appendTabActionRows(panel, tab, cb, closeMenu, startRename)
+    }
+
+    wireDotMenu(menuWrap, menuBtn, buildRows = buildRows)
+
+    menuWrap.appendChild(menuBtn)
+    tabEl.appendChild(menuWrap)
+}
+
+/**
+ * Whether [tab] has any action for a tab menu to offer — i.e. whether
+ * [appendTabActionRows] would add at least one row.
+ *
+ * Called by [appendTabDotMenu] to decide whether to render a `⋮` at all, so
+ * a read-only tab gets no dead trigger.
+ *
+ * @param tab the tab the menu would act on.
+ * @param cb  the callbacks that gate each row.
+ * @return `true` when at least one row would render.
+ * @see appendTabActionRows
+ */
+internal fun hasTabActions(tab: TabSpec, cb: TabBarCallbacks): Boolean =
+    (tab.isRenamable && cb.onRename != null) ||
+        cb.onClose != null ||
+        (cb.onMoveToWorld != null && cb.moveToWorlds.isNotEmpty()) ||
+        cb.onSetHidden != null ||
+        cb.onSetHiddenFromSidebar != null
+
+/**
+ * Fill a tab menu [panel] with the actions that target [tab]: Rename,
+ * Close, Move to workspace, Hide/Show in tab bar, Hide/Show in side bar and
+ * Show/Hide in both — each gated on the matching [TabBarCallbacks] being
+ * non-null (and Rename on [startRename]).
+ *
+ * Split out of [appendTabDotMenu] so any surface that lists a tab can offer
+ * the same rows. Only Rename differs per surface (it edits the label where
+ * that surface draws it), which is why the caller supplies it.
+ *
+ * @param panel       the freshly built menu panel to append to.
+ * @param tab         the tab the rows act on.
+ * @param cb          the callbacks the rows fire.
+ * @param closeMenu   closes the menu; every row calls it before acting.
+ * @param startRename starts an inline rename of [tab]'s label on the calling
+ *   surface, or `null` when the tab can't be renamed there (no Rename row).
+ * @see hasTabActions
+ */
+internal fun appendTabActionRows(
+    panel: HTMLElement,
+    tab: TabSpec,
+    cb: TabBarCallbacks,
+    closeMenu: () -> Unit,
+    startRename: (() -> Unit)?,
+) {
+    val canClose = cb.onClose != null
+    val canMoveWorld = cb.onMoveToWorld != null && cb.moveToWorlds.isNotEmpty()
+    val canHide = cb.onSetHidden != null
+    val canHideSidebar = cb.onSetHiddenFromSidebar != null
+
+    if (startRename != null) {
+        panel.appendChild(menuRow("Rename", ICON_RENAME) {
+            closeMenu()
+            startRename()
+        })
+    }
+
+    if (canClose) {
+        panel.appendChild(menuRow("Close", ICON_CLOSE_TAB) {
+            closeMenu()
+            requestTabClose(tab, cb)
+        })
+    }
+
+    // "Move to workspace" opens a submenu listing every other world (issue:
+    // move a tab between worlds). Sits with the act-on-this-tab group.
+    if (canMoveWorld) {
+        appendMoveToWorldSubmenu(panel, tab, cb, closeMenu)
+    }
+
+    // Divider between the act-on-this-tab group (Rename / Close / Move to
+    // workspace) and the visibility group (Hide / Show in tab bar / side bar).
+    if ((startRename != null || canClose || canMoveWorld) && (canHide || canHideSidebar)) {
+        panel.appendChild(menuSeparator())
+    }
+
+    if (canHide) {
+        val label = if (tab.isHidden) "Show in tab bar" else "Hide in tab bar"
+        val icon = if (tab.isHidden) ICON_SHOW_TAB else ICON_HIDE_TAB
+        panel.appendChild(menuRow(label, icon) {
+            closeMenu()
+            cb.onSetHidden!!.invoke(tab.id, !tab.isHidden)
+        })
+    }
+
+    if (canHideSidebar) {
+        val label = if (tab.isHiddenFromSidebar) "Show in side bar" else "Hide in side bar"
+        val icon = if (tab.isHiddenFromSidebar) ICON_SHOW_TAB else ICON_HIDE_TAB
+        panel.appendChild(menuRow(label, icon) {
+            closeMenu()
+            cb.onSetHiddenFromSidebar!!.invoke(tab.id, !tab.isHiddenFromSidebar)
+        })
+    }
+
+    // "Show in both" / "Hide in both" — only when both toggles are
+    // wired, and each only when it would change something: a tab
+    // already shown in both places gets no "Show in both", one already
+    // hidden from both gets no "Hide in both". Each fires only the
+    // callback(s) whose flag actually needs flipping.
+    if (canHide && canHideSidebar) {
+        if (tab.isHidden || tab.isHiddenFromSidebar) {
+            panel.appendChild(menuRow("Show in both", ICON_SHOW_TAB) {
+                closeMenu()
+                setTabVisibilityEverywhere(tab, cb, hidden = false)
+            })
+        }
+        if (!tab.isHidden || !tab.isHiddenFromSidebar) {
+            panel.appendChild(menuRow("Hide in both", ICON_HIDE_TAB) {
+                closeMenu()
+                setTabVisibilityEverywhere(tab, cb, hidden = true)
+            })
+        }
+    }
+}
+
+/**
+ * Build the `⋮` trigger button every per-tab menu wears (`.dt-tab-menu-button`,
+ * labelled "Tab actions").
+ *
+ * Called by [appendTabDotMenu]; split out so every per-tab trigger is the
+ * same element with the same accessible name.
+ *
+ * @return the unwired button; the caller hands it to [wireDotMenu].
+ */
+internal fun buildTabMenuButton(): HTMLElement {
     val menuBtn = document.createElement("button") as HTMLElement
     menuBtn.className = "dt-tab-menu-button"
     menuBtn.setAttribute("type", "button")
     menuBtn.title = "Tab actions"
     menuBtn.setAttribute("aria-label", "Tab actions")
     menuBtn.textContent = "⋮"
-    // Don't let a mousedown on the menu button initiate the parent tab's
-    // HTML5 drag (mirrors the close-button guard in buildTabElement).
-    menuBtn.addEventListener("mousedown", { ev: Event -> ev.stopPropagation() })
-
-    wireDotMenu(menuWrap, menuBtn) { panel, closeMenu ->
-        // The dot menu only exists on tabs that are actually in the strip (a
-        // hidden tab is rendered only while active), so the label is always in
-        // the DOM here and inline rename can target it.
-        if (canRename) {
-            panel.appendChild(menuRow("Rename", ICON_RENAME) {
-                closeMenu()
-                val label = tabEl.querySelector(".${TabBarClassNames.TAB_LABEL}") as? HTMLElement
-                if (label != null) triggerInlineRename(label, tab, spec)
-            })
-        }
-
-        if (canClose) {
-            panel.appendChild(menuRow("Close", ICON_CLOSE_TAB) {
-                closeMenu()
-                requestTabClose(tab, cb)
-            })
-        }
-
-        // "Move to workspace" opens a submenu listing every other world (issue:
-        // move a tab between worlds). Sits with the act-on-this-tab group.
-        if (canMoveWorld) {
-            appendMoveToWorldSubmenu(panel, tab, cb, closeMenu)
-        }
-
-        // Divider between the act-on-this-tab group (Rename / Close / Move to
-        // workspace) and the visibility group (Hide / Show in tab bar / side bar).
-        if ((canRename || canClose || canMoveWorld) && (canHide || canHideSidebar)) {
-            panel.appendChild(menuSeparator())
-        }
-
-        if (canHide) {
-            val label = if (tab.isHidden) "Show in tab bar" else "Hide in tab bar"
-            val icon = if (tab.isHidden) ICON_SHOW_TAB else ICON_HIDE_TAB
-            panel.appendChild(menuRow(label, icon) {
-                closeMenu()
-                cb.onSetHidden!!.invoke(tab.id, !tab.isHidden)
-            })
-        }
-
-        if (canHideSidebar) {
-            val label = if (tab.isHiddenFromSidebar) "Show in side bar" else "Hide in side bar"
-            val icon = if (tab.isHiddenFromSidebar) ICON_SHOW_TAB else ICON_HIDE_TAB
-            panel.appendChild(menuRow(label, icon) {
-                closeMenu()
-                cb.onSetHiddenFromSidebar!!.invoke(tab.id, !tab.isHiddenFromSidebar)
-            })
-        }
-
-        // "Show in both" / "Hide in both" — only when both toggles are
-        // wired, and each only when it would change something: a tab
-        // already shown in both places gets no "Show in both", one already
-        // hidden from both gets no "Hide in both". Each fires only the
-        // callback(s) whose flag actually needs flipping.
-        if (canHide && canHideSidebar) {
-            if (tab.isHidden || tab.isHiddenFromSidebar) {
-                panel.appendChild(menuRow("Show in both", ICON_SHOW_TAB) {
-                    closeMenu()
-                    setTabVisibilityEverywhere(tab, cb, hidden = false)
-                })
-            }
-            if (!tab.isHidden || !tab.isHiddenFromSidebar) {
-                panel.appendChild(menuRow("Hide in both", ICON_HIDE_TAB) {
-                    closeMenu()
-                    setTabVisibilityEverywhere(tab, cb, hidden = true)
-                })
-            }
-        }
-    }
-
-    menuWrap.appendChild(menuBtn)
-    tabEl.appendChild(menuWrap)
+    return menuBtn
 }
 
 /**
@@ -497,38 +565,63 @@ internal fun wireDotMenu(
         closeTabBarMenus()
         if (wasOpen) return@addEventListener
 
-        val panel = document.createElement("div") as HTMLElement
-        panel.className = listOf(
-            "dt-hover-menu",
-            TabMenuClassNames.PANEL,
-            MenuTriggerClassNames.CHROME,
-            extraPanelClass,
-        ).filter { it.isNotEmpty() }.joinToString(" ")
-        panel.setAttribute("role", "menu")
-        buildRows(panel) { closeTabBarMenus() }
-        document.body?.appendChild(panel)
-        positionMenuPanel(menuBtn, panel)
-
-        menuWrap.classList.add(TabMenuClassNames.OPEN)
-        menuBtn.setAttribute("aria-expanded", "true")
-
-        // Transparent backdrop beneath the panel — any press on it (including
-        // over the titlebar drag region) closes the menu.
-        val backdrop = document.createElement("div") as HTMLElement
-        backdrop.className = TabMenuClassNames.BACKDROP
-        backdrop.addEventListener("mousedown", { e: Event ->
-            e.stopPropagation()
-            closeTabBarMenus()
-        })
-        document.body?.appendChild(backdrop)
-
-        // Escape closes, like every other menu in the toolkit.
-        val onEsc: (Event) -> Unit = handler@{ e ->
-            if ((e as? KeyboardEvent)?.key == "Escape") closeTabBarMenus()
+        openMenuPanel(menuWrap, extraPanelClass, buildRows) { panel ->
+            positionMenuPanel(menuBtn, panel)
         }
-        document.addEventListener("keydown", onEsc)
-        openMenuEscapeHandler = onEsc
     })
+}
+
+/**
+ * Build, mount and arm one menu panel: the shared surface, its dismissal
+ * backdrop and its `Escape` listener. Assumes the caller has already run
+ * [closeTabBarMenus], so at most one panel is ever up.
+ *
+ * Split out of [wireDotMenu], which anchors the panel under its `⋮`
+ * through [place].
+ *
+ * @param menuWrap        the trigger wrapper to mark [TabMenuClassNames.OPEN].
+ * @param extraPanelClass host classes appended to the panel.
+ * @param buildRows       fills the panel; receives it and a `closeMenu` lambda.
+ * @param place           positions the panel once it is in the document (so
+ *   its measured size is real).
+ */
+private fun openMenuPanel(
+    menuWrap: HTMLElement,
+    extraPanelClass: String,
+    buildRows: (panel: HTMLElement, closeMenu: () -> Unit) -> Unit,
+    place: (panel: HTMLElement) -> Unit,
+) {
+    val panel = document.createElement("div") as HTMLElement
+    panel.className = listOf(
+        "dt-hover-menu",
+        TabMenuClassNames.PANEL,
+        MenuTriggerClassNames.CHROME,
+        extraPanelClass,
+    ).filter { it.isNotEmpty() }.joinToString(" ")
+    panel.setAttribute("role", "menu")
+    buildRows(panel) { closeTabBarMenus() }
+    document.body?.appendChild(panel)
+    place(panel)
+
+    menuWrap.classList.add(TabMenuClassNames.OPEN)
+    (menuWrap.querySelector("button") as? HTMLElement)?.setAttribute("aria-expanded", "true")
+
+    // Transparent backdrop beneath the panel — any press on it (including
+    // over the titlebar drag region) closes the menu.
+    val backdrop = document.createElement("div") as HTMLElement
+    backdrop.className = TabMenuClassNames.BACKDROP
+    backdrop.addEventListener("mousedown", { e: Event ->
+        e.stopPropagation()
+        closeTabBarMenus()
+    })
+    document.body?.appendChild(backdrop)
+
+    // Escape closes, like every other menu in the toolkit.
+    val onEsc: (Event) -> Unit = handler@{ e ->
+        if ((e as? KeyboardEvent)?.key == "Escape") closeTabBarMenus()
+    }
+    document.addEventListener("keydown", onEsc)
+    openMenuEscapeHandler = onEsc
 }
 
 /**
