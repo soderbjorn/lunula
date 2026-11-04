@@ -15,7 +15,12 @@
  *       - "Hide / Show in side bar"(when `onSetHiddenFromSidebar` is set)
  *       - "Show in both" / "Hide in both" (when both of the above are set,
  *         each only when it would change something)
- *     Called from [buildTabElement] for every visible tab.
+ *     Called from [buildTabElement] for every visible tab. The same rows
+ *     ([appendTabActionRows]) also back the sidebar's per-tab menu
+ *     ([attachSidebarTabMenu]), and both surfaces open them on a right-click
+ *     as well as from the `⋮` ([wireContextMenu]), so a tab offers the same
+ *     actions wherever it is listed — including when the user's navigation
+ *     mode draws no tab strip at all.
  *
  *  2. The far-right **overflow menu** (`appendTabBarOverflowMenu`) — the
  *     `⋮` button after the last tab. It now holds only the cross-tab
@@ -59,6 +64,7 @@ import kotlinx.browser.window
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.events.Event
 import org.w3c.dom.events.KeyboardEvent
+import org.w3c.dom.events.MouseEvent
 
 /**
  * DOM class names used by the click-opened menus in this file.
@@ -119,13 +125,14 @@ private var openMenuEscapeHandler: ((Event) -> Unit)? = null
 private const val SUBMENU_HIDE_GRACE_MS = 220
 
 /**
- * Append the per-tab `⋮` dot menu (button + panel) to a single tab element.
+ * Append the per-tab `⋮` dot menu (button + panel) to a single tab element,
+ * and open the same menu when the tab is right-clicked.
  * Called from [buildTabElement] for every visible tab.
  *
  * The menu surfaces only the actions that target *this* tab — see
  * [appendTabActionRows] for the rows and what gates each one. When none
- * apply ([hasTabActions] is `false`), no button is rendered, so read-only
- * tabs stay chromeless.
+ * apply ([hasTabActions] is `false`), no button is rendered and a right-click
+ * does nothing, so read-only tabs stay chromeless.
  *
  * @param tabEl the `.dt-tab` element to attach the menu button to (the
  *   panel is mounted on `document.body` when the button is pressed).
@@ -133,6 +140,7 @@ private const val SUBMENU_HIDE_GRACE_MS = 220
  * @param spec  the parent spec; supplies the callbacks + the label seed
  *   for inline rename.
  * @see wireDotMenu
+ * @see wireContextMenu
  */
 internal fun appendTabDotMenu(tabEl: HTMLElement, tab: TabSpec, spec: TabBarSpec) {
     val cb = spec.callbacks
@@ -162,6 +170,7 @@ internal fun appendTabDotMenu(tabEl: HTMLElement, tab: TabSpec, spec: TabBarSpec
     }
 
     wireDotMenu(menuWrap, menuBtn, buildRows = buildRows)
+    wireContextMenu(tabEl, menuWrap, buildRows = buildRows)
 
     menuWrap.appendChild(menuBtn)
     tabEl.appendChild(menuWrap)
@@ -171,8 +180,9 @@ internal fun appendTabDotMenu(tabEl: HTMLElement, tab: TabSpec, spec: TabBarSpec
  * Whether [tab] has any action for a tab menu to offer — i.e. whether
  * [appendTabActionRows] would add at least one row.
  *
- * Called by [appendTabDotMenu] to decide whether to render a `⋮` at all, so
- * a read-only tab gets no dead trigger.
+ * Called by [appendTabDotMenu] and [attachSidebarTabMenu] to decide whether
+ * to render a `⋮` (and answer a right-click) at all, so a read-only tab gets
+ * no dead trigger.
  *
  * @param tab the tab the menu would act on.
  * @param cb  the callbacks that gate each row.
@@ -192,9 +202,11 @@ internal fun hasTabActions(tab: TabSpec, cb: TabBarCallbacks): Boolean =
  * Show/Hide in both — each gated on the matching [TabBarCallbacks] being
  * non-null (and Rename on [startRename]).
  *
- * Split out of [appendTabDotMenu] so any surface that lists a tab can offer
- * the same rows. Only Rename differs per surface (it edits the label where
- * that surface draws it), which is why the caller supplies it.
+ * The one row set behind every per-tab menu — the strip's dot menu
+ * ([appendTabDotMenu]) and the sidebar's ([attachSidebarTabMenu]), opened
+ * from their `⋮` or by a right-click — so a tab offers the same actions
+ * wherever it is listed. Only Rename differs per surface (it edits the label
+ * where that surface draws it), which is why the caller supplies it.
  *
  * @param panel       the freshly built menu panel to append to.
  * @param tab         the tab the rows act on.
@@ -285,8 +297,8 @@ internal fun appendTabActionRows(
  * Build the `⋮` trigger button every per-tab menu wears (`.dt-tab-menu-button`,
  * labelled "Tab actions").
  *
- * Called by [appendTabDotMenu]; split out so every per-tab trigger is the
- * same element with the same accessible name.
+ * Called by [appendTabDotMenu] and [attachSidebarTabMenu], so the strip's and
+ * the sidebar's trigger are the same element with the same accessible name.
  *
  * @return the unwired button; the caller hands it to [wireDotMenu].
  */
@@ -572,21 +584,62 @@ internal fun wireDotMenu(
 }
 
 /**
+ * Open the same menu a `⋮` trigger opens when [target] is right-clicked,
+ * placed at the pointer instead of under the trigger.
+ *
+ * Suppresses the browser's own context menu for [target] and stops the event
+ * there, so an enclosing element can't answer the same right-click with a
+ * second menu. A right-click while another of these menus is up replaces it
+ * (the backdrop takes the press down, and the `contextmenu` that follows
+ * lands on whatever is underneath).
+ *
+ * Called by [appendTabDotMenu] (the strip's tabs) and [attachSidebarTabMenu]
+ * (the sidebar's tab headers), so a tab answers a right-click wherever it is
+ * listed.
+ *
+ * @param target          the element that answers the right-click.
+ * @param menuWrap        the `⋮` wrapper to paint pressed while the menu is up,
+ *   or `null` when [target] has no visible trigger.
+ * @param extraPanelClass host classes appended to the panel; see [wireDotMenu].
+ * @param buildRows       fills the freshly built panel, exactly as for
+ *   [wireDotMenu].
+ * @see wireDotMenu
+ */
+internal fun wireContextMenu(
+    target: HTMLElement,
+    menuWrap: HTMLElement?,
+    extraPanelClass: String = "",
+    buildRows: (panel: HTMLElement, closeMenu: () -> Unit) -> Unit,
+) {
+    target.addEventListener("contextmenu", { ev: Event ->
+        val mouse = ev as? MouseEvent ?: return@addEventListener
+        ev.preventDefault()
+        ev.stopPropagation()
+        closeTabBarMenus()
+        openMenuPanel(menuWrap, extraPanelClass, buildRows) { panel ->
+            positionMenuPanelAt(mouse.clientX.toDouble(), mouse.clientY.toDouble(), panel)
+        }
+    })
+}
+
+/**
  * Build, mount and arm one menu panel: the shared surface, its dismissal
  * backdrop and its `Escape` listener. Assumes the caller has already run
  * [closeTabBarMenus], so at most one panel is ever up.
  *
- * Split out of [wireDotMenu], which anchors the panel under its `⋮`
- * through [place].
+ * The common half of [wireDotMenu] (anchored under a `⋮`) and
+ * [wireContextMenu] (anchored at the pointer); [place] is the only part
+ * that differs.
  *
- * @param menuWrap        the trigger wrapper to mark [TabMenuClassNames.OPEN].
+ * @param menuWrap        the trigger wrapper to mark [TabMenuClassNames.OPEN],
+ *   or `null` when there is no visible trigger to paint pressed.
  * @param extraPanelClass host classes appended to the panel.
  * @param buildRows       fills the panel; receives it and a `closeMenu` lambda.
  * @param place           positions the panel once it is in the document (so
  *   its measured size is real).
  */
 private fun openMenuPanel(
-    menuWrap: HTMLElement,
+    menuWrap: HTMLElement?,
     extraPanelClass: String,
     buildRows: (panel: HTMLElement, closeMenu: () -> Unit) -> Unit,
     place: (panel: HTMLElement) -> Unit,
@@ -603,8 +656,10 @@ private fun openMenuPanel(
     document.body?.appendChild(panel)
     place(panel)
 
-    menuWrap.classList.add(TabMenuClassNames.OPEN)
-    (menuWrap.querySelector("button") as? HTMLElement)?.setAttribute("aria-expanded", "true")
+    if (menuWrap != null) {
+        menuWrap.classList.add(TabMenuClassNames.OPEN)
+        (menuWrap.querySelector("button") as? HTMLElement)?.setAttribute("aria-expanded", "true")
+    }
 
     // Transparent backdrop beneath the panel — any press on it (including
     // over the titlebar drag region) closes the menu.
@@ -688,7 +743,7 @@ private const val ICON_SHOW_TAB: String =
         "<path d=\"M2 8c2-3 4-4.5 6-4.5S12 5 14 8c-2 3-4 4.5-6 4.5S4 11 2 8z\"/>" +
         "<circle cx=\"8\" cy=\"8\" r=\"1.6\"/></svg>"
 
-private const val ICON_HIDDEN_TAB: String =
+internal const val ICON_HIDDEN_TAB: String =
     "<svg viewBox=\"0 0 16 16\" width=\"14\" height=\"14\" fill=\"none\" " +
         "stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" " +
         "stroke-linejoin=\"round\">" +
@@ -793,4 +848,28 @@ private fun positionMenuPanel(button: HTMLElement, panel: HTMLElement) {
     val leftPos = (rect.right - panelWidth).coerceAtLeast(4.0)
     panel.style.left = "${leftPos}px"
     panel.style.top = "${rect.bottom + 4}px"
+}
+
+/**
+ * Position the body-mounted [panel] with its top-left corner at the pointer,
+ * the way a desktop context menu opens, flipping it up and/or left when it
+ * would run past the viewport and clamping 4px from every edge. Must run
+ * after the panel is in the document so the size read is real.
+ *
+ * Called by [wireContextMenu].
+ *
+ * @param x     the pointer's viewport x (`MouseEvent.clientX`).
+ * @param y     the pointer's viewport y (`MouseEvent.clientY`).
+ * @param panel the panel to place.
+ * @see positionMenuPanel
+ */
+private fun positionMenuPanelAt(x: Double, y: Double, panel: HTMLElement) {
+    val width = panel.offsetWidth.toDouble()
+    val height = panel.offsetHeight.toDouble()
+    val maxLeft = window.innerWidth - width - 4.0
+    val maxTop = window.innerHeight - height - 4.0
+    val left = (if (x > maxLeft) x - width else x).coerceAtMost(maxLeft).coerceAtLeast(4.0)
+    val top = (if (y > maxTop) y - height else y).coerceAtMost(maxTop).coerceAtLeast(4.0)
+    panel.style.left = "${left}px"
+    panel.style.top = "${top}px"
 }

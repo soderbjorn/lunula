@@ -801,9 +801,10 @@ private fun isPaneDragOver(dynamicEv: dynamic): Boolean {
  * Returns `true` when the drag event's `dataTransfer.types` includes the
  * toolkit's tab-drag MIME type. Used to filter out foreign drags so
  * dragging text or files into the tab bar doesn't trigger reorder
- * indicators.
+ * indicators. The sidebar's tab sections ([wireSidebarTabReorder]) filter
+ * on it too, so a tab dragged from either surface lands on the other.
  */
-private fun isTabDrag(dynamicEv: dynamic): Boolean {
+internal fun isTabDrag(dynamicEv: dynamic): Boolean {
     val types = dynamicEv.dataTransfer?.types ?: return false
     val len = (types.length as? Number)?.toInt() ?: return false
     for (i in 0 until len) if (types[i] == DT_TAB_DRAG_MIME) return true
@@ -884,15 +885,14 @@ internal fun triggerInlineRename(label: HTMLElement, tab: TabSpec, spec: TabBarS
  * changed, non-blank value through [onCommit]. Enter or blur commits;
  * Escape — or a blank or unchanged value — puts [label] back untouched.
  *
- * The surface-neutral half of inline rename, split from
- * [triggerInlineRename] (which uses it for a strip tab's label) so any
- * surface that draws a tab's name can edit it in place. Neither mutates the
- * host's model; [onCommit] reports the new value and the host's re-render
- * replaces the transient input.
+ * The surface-neutral half of inline rename: [triggerInlineRename] uses it
+ * for a strip tab's label, [attachSidebarTabMenu] for a sidebar tab header's
+ * title. Neither mutates the host's model; [onCommit] reports the new value
+ * and the host's re-render replaces the transient input.
  *
  * Clicks and presses inside the input stop there, so they neither start a
  * drag of the element being renamed nor fire its own click (selecting the
- * tab).
+ * tab, or collapsing a sidebar section).
  *
  * @param label      the element showing the label, swapped out while editing.
  * @param current    the label's current text, seeding the input.

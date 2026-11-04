@@ -1460,6 +1460,85 @@ body.dt-electron-mac.dt-custom-titlebar:not(.dt-mac-fullscreen) .dt-topbar {
     align-items: center;
     flex-shrink: 0;
 }
+/* ── Sidebar tab ⋮ (SidebarTabMenu.kt#attachSidebarTabMenu) ──
+   A tab section's header carries the same "Tab actions" ⋮ the tab strip
+   does, reusing .dt-tab-menu / .dt-tab-menu-button wholesale (as the world
+   switcher's rows do). Only the strip-tuned negative margins are neutralized,
+   the header's uppercase tracking kept off the glyph, and the reveal keyed
+   off the header's hover (the base rule keys off .dt-tab:hover). The button
+   keeps its box at opacity 0 at rest, so revealing it never shifts the
+   title. */
+.dt-sidebar-tab-menu {
+    margin: 0 -4px 0 0;
+}
+.dt-sidebar-tab-menu .dt-tab-menu-button {
+    letter-spacing: 0;
+    text-transform: none;
+}
+.dt-sidebar-section-header:hover .dt-sidebar-tab-menu .dt-tab-menu-button,
+.dt-sidebar-tab-menu .dt-tab-menu-button:focus-visible {
+    opacity: 1;
+}
+/* Inline rename of a sidebar tab (a whole section header, or an unlisted
+   row's label). Inherits the surrounding size and weight but not the
+   header's uppercase styling, so the user edits the name as it is actually
+   stored. */
+.dt-sidebar-section-title-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    font: inherit;
+    text-transform: none;
+    letter-spacing: normal;
+    color: var(--t-chrome-text, #e6e6e6);
+    background: var(--t-chrome-track, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--t-chrome-border, rgba(255, 255, 255, 0.18));
+    border-radius: 3px;
+    padding: 0 4px;
+    outline: none;
+}
+/* Standing in for a whole section header (the input can't live inside the
+   header's <button> — see SidebarTabMenu.kt#attachSidebarTabMenu): take the
+   header's place and its text size, inset to line up with its title. */
+.dt-sidebar-section-header-input {
+    flex: 0 0 auto;
+    margin: 6px 10px 2px 28px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 18px;
+}
+/* The active tab, drawn although hidden from the sidebar because no tab strip
+   is shown (see buildLeftSidebarContent): quieter title, the sidebar's
+   counterpart of the strip's dashed "unlisted" tab. */
+.dt-sidebar-section-unlisted > .dt-sidebar-section-header .dt-sidebar-section-title {
+    font-style: italic;
+    opacity: 0.7;
+}
+/* ── Sidebar tab drag-to-reorder (SidebarTabReorder.kt) ──
+   The header is the drag source; the dragged section dims, and the section
+   under the pointer shows the pane rows' 2px accent insertion bar, centred
+   in the 4px gap above or below it so "after this" and "before the next"
+   draw the same line. `position: relative` only while a bar is shown, so
+   nothing inside a section is re-anchored the rest of the time. */
+.dt-sidebar-section.dt-sidebar-section-dragging {
+    opacity: 0.45;
+}
+.dt-sidebar-section.dt-sidebar-section-drop-before,
+.dt-sidebar-section.dt-sidebar-section-drop-after {
+    position: relative;
+}
+.dt-sidebar-section.dt-sidebar-section-drop-before::before,
+.dt-sidebar-section.dt-sidebar-section-drop-after::after {
+    content: "";
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    height: 2px;
+    background: var(--t-chrome-accent, #ff8a3d);
+    pointer-events: none;
+    border-radius: 1px;
+}
+.dt-sidebar-section.dt-sidebar-section-drop-before::before { top: -3px; }
+.dt-sidebar-section.dt-sidebar-section-drop-after::after { bottom: -3px; }
 .dt-sidebar-section-children {
     display: flex;
     flex-direction: column;
