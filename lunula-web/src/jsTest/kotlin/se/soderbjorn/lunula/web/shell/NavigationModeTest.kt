@@ -10,7 +10,11 @@
  *  - a mounted shell switching modes through [AppShellHandle.setNavigationMode]
  *    without a remount: the sidebar and tab strip appear and disappear, the
  *    active tab and pane are kept, the sidebar's toggle-collapse survives a
- *    round trip, the choice is persisted, and an app's opt-out still wins.
+ *    round trip, the choice is persisted, and an app's opt-out still wins;
+ *  - [navigationModeWithTabStrip], the mapping behind the Behaviour tab's
+ *    "Tabs in the top bar" toggle, and that toggle in a mounted shell: it
+ *    hides and restores the strip, and is offered only when the app draws
+ *    both surfaces.
  *
  * The mounted tests drive the real [mountAppShell] in source mode with an
  * in-memory [Persister] and a hand-pushed [TabSource] snapshot, the same
@@ -20,6 +24,7 @@
  *
  * @see resolveNavigationLayout
  * @see AppShellHandle.setNavigationMode
+ * @see navigationModeWithTabStrip
  */
 package se.soderbjorn.lunula.web.shell
 
@@ -29,6 +34,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.promise
 import org.w3c.dom.HTMLElement
 import se.soderbjorn.lunula.core.AppearanceShape
+import se.soderbjorn.lunula.web.themeeditor.AppearanceTab
+import se.soderbjorn.lunula.web.themeeditor.isThemeManagerSidebarOpen
 import se.soderbjorn.lunula.core.NavigationMode
 import se.soderbjorn.lunula.core.PersistKeys
 import se.soderbjorn.lunula.core.Persister
@@ -171,6 +178,7 @@ class NavigationModeTest {
     fun reset() {
         leftSidebarController.setInitial(open = true, widthPx = leftSidebarController.widthPx)
         (document.documentElement as HTMLElement).removeAttribute("data-dt-nav")
+        resetAppearancePane()
     }
 
     // ── Precedence and fallback ─────────────────────────────────────
@@ -246,6 +254,46 @@ class NavigationModeTest {
             assertFalse(layout.showsTabStrip)
             assertEquals("none", layout.cssValue)
         }
+    }
+
+    // ── The tab-strip toggle's mapping ──────────────────────────────
+
+    /** Off always lands on Sidebar, the one mode with no strip but a way between tabs. */
+    @Test
+    fun turningTheStripOffPicksSidebar() {
+        assertEquals(NavigationMode.Sidebar, navigationModeWithTabStrip(null, null, show = false))
+        assertEquals(NavigationMode.Sidebar, navigationModeWithTabStrip(NavigationMode.Both, null, show = false))
+        assertEquals(
+            NavigationMode.Sidebar,
+            navigationModeWithTabStrip(NavigationMode.TabStrip, null, show = false),
+            "from strip-only, the sidebar comes back rather than leaving nothing",
+        )
+    }
+
+    /** On from Sidebar brings Both back, clearing the pick when Both is the default anyway. */
+    @Test
+    fun turningTheStripOnRestoresBoth() {
+        assertNull(navigationModeWithTabStrip(NavigationMode.Sidebar, null, show = true), "Both is the default: cleared")
+        assertEquals(
+            NavigationMode.Both,
+            navigationModeWithTabStrip(NavigationMode.Sidebar, NavigationMode.Sidebar, show = true),
+            "an app defaulting to Sidebar needs an explicit Both",
+        )
+        assertEquals(NavigationMode.Both, navigationModeWithTabStrip(null, NavigationMode.Sidebar, show = true))
+    }
+
+    /** Off where the app default is already Sidebar clears the pick instead of storing a copy. */
+    @Test
+    fun aPickMatchingTheAppDefaultIsCleared() {
+        assertNull(navigationModeWithTabStrip(NavigationMode.Both, NavigationMode.Sidebar, show = false))
+    }
+
+    /** Asking for what the resolved mode already does keeps the pick as it is. */
+    @Test
+    fun aNoOpPickKeepsTheUsersMode() {
+        assertEquals(NavigationMode.TabStrip, navigationModeWithTabStrip(NavigationMode.TabStrip, null, show = true))
+        assertNull(navigationModeWithTabStrip(null, null, show = true))
+        assertNull(navigationModeWithTabStrip(null, NavigationMode.Sidebar, show = false))
     }
 
     // ── The mounted shell ───────────────────────────────────────────
@@ -349,6 +397,50 @@ class NavigationModeTest {
     }
 
     /**
+     * The Behaviour tab's "Tabs in the top bar" rings the strip's state,
+     * Off hides the strip and stores Sidebar, and On brings it back and
+     * clears the pick (Both is the default).
+     */
+    @Test
+    fun theBehaviourToggleHidesAndRestoresTheTabStrip() = GlobalScope.promise {
+        val persister = NavMemoryPersister()
+        withShell(persister = persister) { root, handle ->
+            handle.openAppearance(AppearanceTab.Behaviour)
+            waitFor("Behaviour tab shown") { tabStripRow() != null }
+            assertEquals("On", selectedChoice(tabStripRow()!!))
+
+            choice(tabStripRow()!!, "Off").click()
+            waitFor("tab strip hidden") { root.tabStrip() == null }
+            assertNotNull(root.leftSidebar())
+            waitFor("Sidebar persisted") { storedNavigationMode(persister) == NavigationMode.Sidebar }
+            assertTrue(isThemeManagerSidebarOpen(), "the pane stays open")
+            waitFor("row redrawn") { tabStripRow()?.let(::selectedChoice) == "Off" }
+
+            choice(tabStripRow()!!, "On").click()
+            waitFor("tab strip back") { root.tabStrip() != null }
+            waitFor("pick cleared") {
+                persister.store[PersistKeys.APPEARANCE_SHAPE] != null && storedNavigationMode(persister) == null
+            }
+        }
+    }
+
+    /**
+     * An app that opted out of a surface has decided the question: no toggle,
+     * and outside Electron no Behaviour tab at all (asked for by name, the
+     * pane falls back to Themes).
+     */
+    @Test
+    fun anAppOptOutGetsNoTabStripToggle() = GlobalScope.promise {
+        withShell(showTabStrip = false) { _, handle ->
+            handle.openAppearance(AppearanceTab.Behaviour)
+            waitFor("pane open") { document.querySelector(".dt-appearance-pane") != null }
+            assertNull(document.querySelector(".dt-appearance-tab[data-dt-appearance-tab=\"behaviour\"]"), "no Behaviour tab")
+            assertNull(tabStripRow())
+            waitFor("fell back to Themes") { document.querySelector(".dt-theme-card") != null }
+        }
+    }
+
+    /**
      * A sidebar collapsed with the toggle stays collapsed through a trip to
      * Tab strip and back: the mode decides whether the sidebar is mounted,
      * the controller still decides whether it is open.
@@ -379,3 +471,25 @@ class NavigationModeTest {
         }
     }
 }
+
+/** The Behaviour tab's "Tabs in the top bar" row, if shown. */
+private fun tabStripRow(): HTMLElement? =
+    document.querySelector(".dt-settings-section[data-dt-setting=\"tab-strip\"]") as? HTMLElement
+
+/** The [label]led choice button in [row]. */
+private fun choice(row: HTMLElement, label: String): HTMLElement {
+    val buttons = row.querySelectorAll(".dt-settings-choice-btn")
+    for (i in 0 until buttons.length) {
+        val b = buttons.item(i) as HTMLElement
+        if (b.textContent == label) return b
+    }
+    fail("no \"$label\" choice")
+}
+
+/** The label of [row]'s selected choice, or `null`. */
+private fun selectedChoice(row: HTMLElement): String? =
+    (row.querySelector(".dt-settings-choice-btn.dt-selected") as? HTMLElement)?.textContent
+
+/** The navigation pick stored under the shape key, or `null` for none. */
+private fun storedNavigationMode(persister: NavMemoryPersister): NavigationMode? =
+    AppearanceShape.fromJson(persister.store[PersistKeys.APPEARANCE_SHAPE]).navigationMode

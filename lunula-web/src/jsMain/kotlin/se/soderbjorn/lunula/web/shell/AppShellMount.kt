@@ -66,6 +66,7 @@ import se.soderbjorn.lunula.web.settings.AppSettingsSidebarSpec
 import se.soderbjorn.lunula.web.settings.HotkeysSidebarSpec
 import se.soderbjorn.lunula.web.settings.NotificationsSidebarSpec
 import se.soderbjorn.lunula.web.settings.SettingsSidebarSpec
+import se.soderbjorn.lunula.web.settings.TabStripSetting
 import se.soderbjorn.lunula.web.settings.buildAppSettingsSidebar
 import se.soderbjorn.lunula.web.settings.buildHotkeysSidebar
 import se.soderbjorn.lunula.web.settings.buildNotificationsSidebar
@@ -1506,8 +1507,9 @@ private class ShellState(
 
     /**
      * Changes the user's navigation mode at runtime and redraws the chrome to
-     * match. Exposed as [AppShellHandle.setNavigationMode]; the Appearance
-     * pane offers no control for it (the sidebar has its own toggle).
+     * match. Exposed as [AppShellHandle.setNavigationMode], and the entry
+     * point of the Appearance pane's "Tabs in the top bar" toggle (see
+     * [appearanceSettingsSpec]); the sidebar has its own top-bar toggle.
      *
      * Writes through the same `settingsHost ?: themeHost` ladder every other
      * appearance setting uses. With the toolkit's own host, the setter fires
@@ -2219,7 +2221,35 @@ private class ShellState(
         monoSizeDefault = spec.defaultMonoFontSizePx() ?: 14,
         displaySizeDefault = spec.defaultDisplayFontSizePx() ?: spec.defaultProseFontSizePx() ?: 14,
         fontSizeHidden = spec.fontSizeHidden,
+        tabStrip = if (offersTabStripSetting) {
+            TabStripSetting(
+                isShown = { resolvedNavigationMode.showsTabStrip },
+                onChange = { show ->
+                    setNavigationMode(
+                        navigationModeWithTabStrip(
+                            userMode = (spec.settingsHost ?: themeHost).navigationMode,
+                            appDefaultMode = spec.defaultAppearanceShape().navigationMode,
+                            show = show,
+                        ),
+                    )
+                },
+            )
+        } else {
+            null
+        },
     )
+
+    /**
+     * Whether the Appearance pane offers "Tabs in the top bar": only when the
+     * app draws both navigation surfaces. An app that opted out of the sidebar
+     * or the tab strip ([AppShellSpec.showSidebar] / [AppShellSpec.showTabStrip])
+     * has decided the question, and the toggle could change nothing.
+     *
+     * Read by [appearanceSettingsSpec] (the row) and [rerender] (whether the
+     * Behaviour tab exists).
+     */
+    private val offersTabStripSetting: Boolean
+        get() = spec.showSidebar && spec.showTabStrip
 
     /**
      * Opens the Appearance pane on [tab] (or switches an open one to it),
@@ -2412,8 +2442,11 @@ private class ShellState(
             rightSlot.appendChild(buildThemeManagerSidebar(
                 host = spec.settingsHost ?: themeHost,
                 appearanceBody = { tab, target -> renderSettingsBody(target, appearanceSettingsSpec(), tab) },
-                // Behaviour holds only the Custom title bar, which is Electron-only.
-                appearanceTabs = AppearanceTab.entries.filter { it != AppearanceTab.Behaviour || spec.isElectron },
+                // Behaviour holds "Tabs in the top bar" (when the app draws
+                // both surfaces) and the Electron-only Custom title bar.
+                appearanceTabs = AppearanceTab.entries.filter {
+                    it != AppearanceTab.Behaviour || spec.isElectron || offersTabStripSetting
+                },
             ))
         } else if (isSettingsSidebarOpen()) {
             // Only reachable when an app opens the standalone settings sidebar
@@ -3008,36 +3041,75 @@ private class ShellState(
         else -> emptyList()
     }
 
-    private fun buildTopBar(): HTMLElement {
-        val view = viewTabs()
-        val activeId = viewActiveTabId()
-        val srcMode = spec.tabSource != null
-        // An app-defined strip is only expressible through a TabSource —
-        // the local tab list IS the user's own persisted arrangement, so
-        // there is nothing for a local-mode host to have declared. That
-        // also means this whole branch is unreachable for every consumer
-        // that predates the flag.
-        val fixedStrip = spec.tabSource?.isFixed == true
+    /**
+     * Whether the tab set is app-defined ([TabSource.isFixed]): the user may
+     * select tabs but not add, close, rename, reorder or move them.
+     *
+     * An app-defined strip is only expressible through a TabSource — the
+     * local tab list IS the user's own persisted arrangement, so there is
+     * nothing for a local-mode host to have declared. That also means every
+     * branch keyed on this is unreachable for consumers that predate the flag.
+     *
+     * Read by [buildTopBar] and [buildLeftSidebarContent] (through
+     * [tabSpecFor] and [buildTabCallbacks]).
+     */
+    private val isTabSetFixed: Boolean
+        get() = spec.tabSource?.isFixed == true
 
-        val tabs = view.map { t ->
-            TabSpec(
-                id = t.id,
-                label = t.label,
-                // No inline × close button on tabs themselves — close lives
-                // in the tab's own `⋮` dot menu (alongside Rename, Hide,
-                // etc.; see appendTabDotMenu). One canonical place to close
-                // a tab keeps the affordance discoverable without the visual
-                // clutter of a per-tab cross.
-                isClosable = false,
-                isDraggable = !fixedStrip && (if (srcMode) spec.tabSource!!.onReorder != null else true),
-                isRenamable = !fixedStrip && (if (srcMode) spec.tabSource!!.onRename != null else true),
-                trailingBadge = spec.tabTrailingBadge(t.id),
-                badge = t.badge,
-                isHidden = t.isHidden,
-                isHiddenFromSidebar = t.isHiddenFromSidebar,
-            )
-        }
-        val callbacks = if (srcMode) {
+    /**
+     * The [TabSpec] describing [t] to the tab menus: identity, label,
+     * visibility flags and which edits the tab allows — without the strip's
+     * badges.
+     *
+     * Called by [buildTopBar], which adds the badges, and by
+     * [buildLeftSidebarContent], which needs only what the sidebar's tab menu
+     * reads. Badges stay out of the shared part on purpose: the trailing
+     * badge comes from the app's [AppShellSpec.tabTrailingBadge] factory, and
+     * calling it a second time for the sidebar could hand the sidebar the
+     * element the strip is meant to show.
+     *
+     * @param t the tab as the shell currently sees it.
+     * @return the tab's spec, with no badges.
+     * @see buildTabCallbacks
+     */
+    private fun tabSpecFor(t: TabView): TabSpec {
+        val src = spec.tabSource
+        return TabSpec(
+            id = t.id,
+            label = t.label,
+            // No inline × close button on tabs themselves — close lives
+            // in the tab's own `⋮` dot menu (alongside Rename, Hide,
+            // etc.; see appendTabDotMenu). One canonical place to close
+            // a tab keeps the affordance discoverable without the visual
+            // clutter of a per-tab cross.
+            isClosable = false,
+            isDraggable = !isTabSetFixed && (src == null || src.onReorder != null),
+            isRenamable = !isTabSetFixed && (src == null || src.onRename != null),
+            isHidden = t.isHidden,
+            isHiddenFromSidebar = t.isHiddenFromSidebar,
+        )
+    }
+
+    /**
+     * The tab callbacks every tab surface acts through — the tab strip, its
+     * menus, the topbar "New" button, and the sidebar's per-tab menus.
+     *
+     * In source mode they forward to the app's [TabSource] (and its
+     * [WorldSource] for "Move to workspace"); in local mode they mutate the
+     * toolkit's own persisted tab list. On an app-defined tab set
+     * ([isTabSetFixed]) every edit callback is null, which is what makes each
+     * surface withhold its edit affordances.
+     *
+     * Called by [buildTopBar] and [buildLeftSidebarContent] on every
+     * rerender, so both surfaces always act on the current snapshot.
+     *
+     * @return a fresh callbacks object.
+     * @see tabSpecFor
+     */
+    private fun buildTabCallbacks(): TabBarCallbacks {
+        val srcMode = spec.tabSource != null
+        val fixedStrip = isTabSetFixed
+        return if (srcMode) {
             val src = spec.tabSource!!
             TabBarCallbacks(
                 onSelect = { id ->
@@ -3179,6 +3251,15 @@ private class ShellState(
                 confirmTabClose = true,
             )
         }
+    }
+
+    private fun buildTopBar(): HTMLElement {
+        val activeId = viewActiveTabId()
+        val tabs = viewTabs().map { t ->
+            tabSpecFor(t).copy(trailingBadge = spec.tabTrailingBadge(t.id), badge = t.badge)
+        }
+        val callbacks = buildTabCallbacks()
+        val fixedStrip = isTabSetFixed
         val tabBarSpec = TabBarSpec(
             tabs = tabs,
             activeTabId = activeId,
@@ -3198,6 +3279,22 @@ private class ShellState(
             // paints the lighter pill treatment.
             isFixed = fixedStrip,
         )
+        // The strip installs the tab hotkeys (next / previous, Cmd+digit)
+        // itself each time it is drawn. With no strip drawn the shell must,
+        // or the bindings keep acting on the tab list — and the active tab —
+        // from the last time a strip was: Next would always land on the same
+        // tab. They then walk the tabs the sidebar lists, as the strip's walk
+        // its own.
+        if (!navigationLayout.showsTabStrip) {
+            installTabNavigationHotkeys(
+                tabBarSpec,
+                isListed = if (navigationLayout.showsSidebar) {
+                    { t -> !t.isHiddenFromSidebar }
+                } else {
+                    { t -> !t.isHidden }
+                },
+            )
+        }
 
         // Leading: sidebar-toggle button to the LEFT of the tab strip
         // (matching termtastic / notegrow chrome layout). Omitted when
@@ -3822,9 +3919,20 @@ private class ShellState(
         // row carries `dt-active`. Clicking a pane row activates that
         // tab/pane (in source mode it forwards to onPaneSelect; in
         // local mode it just flips activeTabId).
-        // Skip tabs the user has hidden from the sidebar via the
-        // tab-bar overflow menu's "Hide in side bar" entry.
-        for (tab in viewTabs().filterNot { it.isHiddenFromSidebar }) {
+        // Skip tabs the user has hidden from the sidebar via a tab menu's
+        // "Hide in side bar" entry. Without a tab strip, though, the sidebar
+        // is the only way to reach a tab, so it keeps two ways back, the same
+        // two the strip offers for its own hidden tabs: the ACTIVE tab stays
+        // drawn (marked unlisted) so its menu — "Show in side bar" included —
+        // is reachable, and the rest are listed under "Unlisted tabs" below.
+        val stripShown = navigationLayout.showsTabStrip
+        val activeTabId = viewActiveTabId()
+        val tabCallbacks = buildTabCallbacks()
+        val allTabs = viewTabs()
+        val drawnTabs = allTabs.filter {
+            !it.isHiddenFromSidebar || (!stripShown && it.id == activeTabId)
+        }
+        for (tab in drawnTabs) {
             // Sort sidebar rows by the controller's paneOrder so the
             // list reflects the user's drag-to-reorder. Panes not yet
             // tracked by the controller (e.g. just-created in this
@@ -3865,7 +3973,38 @@ private class ShellState(
             if (tab.id == viewActiveTabId()) {
                 section.classList.add("active-tab")
             }
+            if (tab.isHiddenFromSidebar) {
+                section.classList.add(SidebarTabMenuClassNames.SECTION_UNLISTED)
+            }
+            // The tab's actions — the strip's dot-menu rows, behind a `⋮` in
+            // the header and a right-click on it — and drag-to-reorder by the
+            // header. Both self-gate on an app-defined tab set, whose
+            // callbacks offer nothing to edit.
+            val tabSpec = tabSpecFor(tab)
+            attachSidebarTabMenu(section, tabSpec, tabCallbacks)
+            wireSidebarTabReorder(section, tabSpec, tabCallbacks)
             content.appendChild(section)
+        }
+
+        // No tab strip → no strip overflow list either, so list the tabs
+        // hidden from the sidebar here (the active one is already drawn
+        // above). A row activates its tab; right-clicking it opens the tab's
+        // menu, where "Show in side bar" lists it again.
+        if (!stripShown) {
+            val unlisted = allTabs.filter { it.isHiddenFromSidebar && it.id != activeTabId }
+            if (unlisted.isNotEmpty()) {
+                val sectionId = "unlisted-tabs"
+                val section = renderSidebarSection(
+                    SidebarSectionSpec(
+                        title = "Unlisted tabs",
+                        isOpen = sectionId !in collapsedSections,
+                        items = unlisted.map { buildSidebarUnlistedTabRow(tabSpecFor(it), tabCallbacks) },
+                        onToggle = { toggleSection(sectionId) },
+                    )
+                )
+                section.classList.add(SidebarTabMenuClassNames.UNLISTED_SECTION)
+                content.appendChild(section)
+            }
         }
 
         // App-supplied extra sections after the default tree.
@@ -5220,10 +5359,11 @@ private fun isSidebarPaneRowDrag(dynamicEv: dynamic): Boolean {
 /**
  * Vertical-axis sibling of the tab bar's `isCursorBeforeMidpoint`:
  * decides whether the cursor is in the top half of [el] (drop *before*
- * this row) or the bottom half (drop *after*). Used by the sidebar
- * reorder drag to choose the insertion side.
+ * this row) or the bottom half (drop *after*). Used by the sidebar's
+ * pane-row reorder drag and its tab-section reorder drag
+ * ([wireSidebarTabReorder]) to choose the insertion side.
  */
-private fun isCursorAboveMidpointY(el: HTMLElement, dynamicEv: dynamic): Boolean {
+internal fun isCursorAboveMidpointY(el: HTMLElement, dynamicEv: dynamic): Boolean {
     val rect = el.asDynamic().getBoundingClientRect()
     val midpoint = (rect.top as Double) + (rect.height as Double) / 2.0
     return (dynamicEv.clientY as Double) < midpoint

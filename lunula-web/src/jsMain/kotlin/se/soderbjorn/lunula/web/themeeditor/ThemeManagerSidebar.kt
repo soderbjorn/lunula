@@ -225,7 +225,8 @@ private fun teardownAppearanceTabEsc() {
  *   empty element to fill). `null` (the default) mounts the Theme Manager
  *   alone, as before.
  * @param appearanceTabs   the tabs the Appearance pane shows, in order; a tab
- *   with nothing in it (Behaviour outside Electron) is left out. Themes is
+ *   with nothing in it (Behaviour, outside Electron in an app that opted out
+ *   of the sidebar or the tab strip) is left out. Themes is
  *   always shown. Ignored without [appearanceBody].
  * @return the freshly-mounted sidebar element.
  */

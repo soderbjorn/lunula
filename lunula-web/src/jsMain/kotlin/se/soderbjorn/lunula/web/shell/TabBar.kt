@@ -449,8 +449,9 @@ fun renderTabBar(spec: TabBarSpec): HTMLElement {
 
 /**
  * Bind [StandardHotkeys.NextTab] / [StandardHotkeys.PreviousTab] against
- * [spec], cycling through the spec's non-hidden tabs and firing
- * [TabBarCallbacks.onSelect] for the new id.
+ * [spec], cycling through the tabs [isListed] keeps and firing
+ * [TabBarCallbacks.onSelect] for the new id, and the Cmd/Ctrl+`<digit>`
+ * chords ([installTabNumberHotkeys]) against the same tabs.
  *
  * Uses [HotkeyRegistry]'s replace-on-register semantics: each call to
  * [renderTabBar] overwrites the prior binding so the action always
@@ -470,22 +471,44 @@ fun renderTabBar(spec: TabBarSpec): HTMLElement {
  * Anchorless start: when [TabBarSpec.activeTabId] is null or refers to
  * a hidden tab, Next picks the first visible tab and Previous picks
  * the last.
+ *
+ * Called by [renderTabBar] for the tabs the strip shows, and by the shell
+ * (`ShellState.buildTopBar`) whenever it draws no strip: the bindings close
+ * over the spec they were given, so without a strip to re-render them they
+ * would keep acting on the tab list from the last time one was drawn.
+ *
+ * @param spec     the tabs, the active tab and [TabBarCallbacks.onSelect].
+ * @param isListed which tabs the chords walk: by default those the strip
+ *   shows (not [TabSpec.isHidden]); the shell passes the sidebar's when the
+ *   sidebar is the only navigation.
  */
-private fun installTabNavigationHotkeys(spec: TabBarSpec) {
+internal fun installTabNavigationHotkeys(
+    spec: TabBarSpec,
+    isListed: (TabSpec) -> Boolean = { !it.isHidden },
+) {
     // Registered through [HotkeyBindings] (not the raw registry) so the
     // user's custom chords override the defaults; re-registration on
     // every render keeps the handler closing over the latest spec.
     HotkeyBindings.registerAction(
         HotkeyActionSpec(ToolkitHotkeyIds.TAB_NEXT, "Next tab", listOf(StandardHotkeys.NextTab))
-    ) { cycleTab(spec, forward = true) }
+    ) { cycleTab(spec, forward = true, isListed) }
     HotkeyBindings.registerAction(
         HotkeyActionSpec(ToolkitHotkeyIds.TAB_PREVIOUS, "Previous tab", listOf(StandardHotkeys.PreviousTab))
-    ) { cycleTab(spec, forward = false) }
-    installTabNumberHotkeys(spec)
+    ) { cycleTab(spec, forward = false, isListed) }
+    installTabNumberHotkeys(spec, isListed)
 }
 
-private fun cycleTab(spec: TabBarSpec, forward: Boolean) {
-    val visible = spec.tabs.filterNot { it.isHidden }
+/**
+ * Select the tab after (or before) the active one among those [isListed]
+ * keeps, wrapping at either end. The action behind
+ * [StandardHotkeys.NextTab] / [StandardHotkeys.PreviousTab].
+ *
+ * @param spec     the tabs, the active tab and [TabBarCallbacks.onSelect].
+ * @param forward  `true` for the next tab, `false` for the previous one.
+ * @param isListed which tabs take part; see [installTabNavigationHotkeys].
+ */
+private fun cycleTab(spec: TabBarSpec, forward: Boolean, isListed: (TabSpec) -> Boolean) {
+    val visible = spec.tabs.filter(isListed)
     if (visible.size < 2) return
     val activeIdx = visible.indexOfFirst { it.id == spec.activeTabId }
     val nextIdx = when {
@@ -519,9 +542,11 @@ private fun cycleTab(spec: TabBarSpec, forward: Boolean) {
  *
  * @param spec the current tab-bar spec (its visible tabs and
  *   [TabBarCallbacks.onSelect] are read each time a chord fires).
+ * @param isListed which tabs the positions count; see
+ *   [installTabNavigationHotkeys].
  * @see resolveTabSwitchIndex
  */
-private fun installTabNumberHotkeys(spec: TabBarSpec) {
+private fun installTabNumberHotkeys(spec: TabBarSpec, isListed: (TabSpec) -> Boolean) {
     val electron = isElectronPlatform()
     for (position in 1..9) {
         val chord = if (electron) {
@@ -530,7 +555,7 @@ private fun installTabNumberHotkeys(spec: TabBarSpec) {
             StandardHotkeys.webTabSwitchHotkey(position)
         }
         HotkeyRegistry.register(chord) {
-            switchToTabByPosition(spec, position)
+            switchToTabByPosition(spec, position, isListed)
         }
         // Not user-configurable (nine chords behind one conceptual
         // action), but the config dialog must still refuse to hand these
@@ -551,9 +576,11 @@ private fun installTabNumberHotkeys(spec: TabBarSpec) {
  *
  * @param spec the current tab-bar spec.
  * @param digit the pressed number key, `1`..`9`.
+ * @param isListed which tabs the positions count; see
+ *   [installTabNavigationHotkeys].
  */
-private fun switchToTabByPosition(spec: TabBarSpec, digit: Int) {
-    val visible = spec.tabs.filterNot { it.isHidden }
+private fun switchToTabByPosition(spec: TabBarSpec, digit: Int, isListed: (TabSpec) -> Boolean) {
+    val visible = spec.tabs.filter(isListed)
     val index = resolveTabSwitchIndex(digit = digit, tabCount = visible.size) ?: return
     val target = visible[index].id
     if (target == spec.activeTabId) return
@@ -801,9 +828,10 @@ private fun isPaneDragOver(dynamicEv: dynamic): Boolean {
  * Returns `true` when the drag event's `dataTransfer.types` includes the
  * toolkit's tab-drag MIME type. Used to filter out foreign drags so
  * dragging text or files into the tab bar doesn't trigger reorder
- * indicators.
+ * indicators. The sidebar's tab sections ([wireSidebarTabReorder]) filter
+ * on it too, so a tab dragged from either surface lands on the other.
  */
-private fun isTabDrag(dynamicEv: dynamic): Boolean {
+internal fun isTabDrag(dynamicEv: dynamic): Boolean {
     val types = dynamicEv.dataTransfer?.types ?: return false
     val len = (types.length as? Number)?.toInt() ?: return false
     for (i in 0 until len) if (types[i] == DT_TAB_DRAG_MIME) return true
@@ -871,13 +899,44 @@ private fun wireInlineRename(label: HTMLElement, tab: TabSpec, spec: TabBarSpec)
  * @param tab   tab metadata for seeding the input + identifying the tab
  *   in the rename callback
  * @param spec  parent spec, used to fire [TabBarCallbacks.onRename]
+ * @see startInlineLabelEdit
  */
 internal fun triggerInlineRename(label: HTMLElement, tab: TabSpec, spec: TabBarSpec) {
+    startInlineLabelEdit(label, tab.label, TabBarClassNames.TAB_LABEL_INPUT) { newLabel ->
+        spec.callbacks.onRename?.invoke(tab.id, newLabel)
+    }
+}
+
+/**
+ * Swap [label] for an editable input seeded with [current], and report a
+ * changed, non-blank value through [onCommit]. Enter or blur commits;
+ * Escape — or a blank or unchanged value — puts [label] back untouched.
+ *
+ * The surface-neutral half of inline rename: [triggerInlineRename] uses it
+ * for a strip tab's label, [attachSidebarTabMenu] for a sidebar tab header's
+ * title. Neither mutates the host's model; [onCommit] reports the new value
+ * and the host's re-render replaces the transient input.
+ *
+ * Clicks and presses inside the input stop there, so they neither start a
+ * drag of the element being renamed nor fire its own click (selecting the
+ * tab, or collapsing a sidebar section).
+ *
+ * @param label      the element showing the label, swapped out while editing.
+ * @param current    the label's current text, seeding the input.
+ * @param inputClass the class the input wears, styled per surface.
+ * @param onCommit   receives the trimmed new label.
+ */
+internal fun startInlineLabelEdit(
+    label: HTMLElement,
+    current: String,
+    inputClass: String,
+    onCommit: (String) -> Unit,
+) {
     val parent = label.parentElement ?: return
     val input = document.createElement("input") as HTMLInputElement
     input.type = "text"
-    input.className = TabBarClassNames.TAB_LABEL_INPUT
-    input.value = tab.label
+    input.className = inputClass
+    input.value = current
     // Suppress the parent .dt-tab's drag handler while editing so a
     // mouse-down inside the input doesn't initiate a drag.
     input.setAttribute("draggable", "false")
@@ -889,8 +948,8 @@ internal fun triggerInlineRename(label: HTMLElement, tab: TabSpec, spec: TabBarS
         if (committed) return
         committed = true
         val trimmed = value.trim()
-        if (trimmed.isNotEmpty() && trimmed != tab.label) {
-            spec.callbacks.onRename?.invoke(tab.id, trimmed)
+        if (trimmed.isNotEmpty() && trimmed != current) {
+            onCommit(trimmed)
         } else {
             // Restore the label in place since the host won't
             // re-render for a no-op rename.
